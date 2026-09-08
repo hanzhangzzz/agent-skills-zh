@@ -1,24 +1,25 @@
 ---
 name: repo-tidy
 description: |
-  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees; `--new <task>` does tidy + create a task branch in one command and auto-creates a parallel worktree when the main checkout is busy; a SessionStart hook injects repo status when a session starts. Use when starting a new task, when [repo-status] shows the repo is off master or has cleanable items, or when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
+  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees; `--new <task>` does tidy + create a task branch in one command and auto-creates a parallel worktree when the main checkout is busy; a SessionStart hook injects repo status when a session starts. Use before a new repository-changing task or when the user explicitly requests cleanup. Read-only audits, questions, continued tasks, and [repo-status] alone do not trigger mutations. Also use when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
 
 ---
 
 # repo-tidy
 
-把本地仓库恢复到「master = 远端最新、无僵尸分支、无废弃 worktree」的基线状态。归位发生在**下一个任务开始时**（push 完 MR 未合，任务结束时无收尾时机）。
+把本地仓库恢复到「默认分支与远端一致、无可安全回收的遗留分支/worktree」的基线状态。默认分支优先读取 origin/HEAD，缺少该引用时才兼容 master/main。归位发生在**下一个任务开始时**（push 完 MR 未合，任务结束时无收尾时机）。
 
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
 - `scripts/git-repo-status.sh` —— SessionStart hook，开局注入一行 `[repo-status]`（分支/ahead-behind/脏净）。注册到 `~/.claude/settings.json` 的 `hooks.SessionStart`：`{"matcher": "*", "hooks": [{"type": "command", "command": "<skill绝对路径>/scripts/git-repo-status.sh", "timeout": 10}]}`
-- `tests/test_repo_tidy.sh <scratch目录>` —— 对抗测试（7 组场景 27 断言），改脚本后必须跑
+- `tests/test_repo_tidy.sh <scratch目录>` —— 对抗测试（含双默认分支与非标准默认分支的对抗场景），改脚本后必须跑
 
 ## 何时用
 
 - 用户说「归位」「整理仓库」「清理分支/worktree」
-- 新任务开工前，SessionStart 注入的 `[repo-status]` 显示：不在 master、master 落后远端、或存在可清理分支
-- commit-and-push 完成后用户想收尾
+- 需要修改仓库的新任务开工前；只读审计、问答、续任务不归位，`[repo-status]` 本身不触发动作
+- 显式调用 do-something 时遵循该 skill 的 do/main 续做规则，不额外开普通任务分支
+- 用户明确要求提交后的仓库整理
 
 ## 执行步骤
 
@@ -49,22 +50,22 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 ```
 
 - 先对该仓库执行一次归位（等价 `--apply`，安全边界相同）
-- 主检出空闲（在 master 且无 tracked 改动）→ 原地 `switch -c task/<task> origin/master`
-- 主检出被占用（停在进行中分支或有改动）→ 自动创建 sibling worktree `<仓库>--<task>`（基于最新 origin/master）并输出 `cd` 路径 —— 同项目多任务并行就靠这个：一任务一目录一 session，MR 合并后 tidy 自动回收
+- 主检出空闲（在默认分支且无 tracked 改动）→ 原地 `switch -c task/<task> origin/<默认分支>`
+- 主检出被占用（停在进行中分支或有改动）→ 自动创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径 —— 同项目多任务并行就靠这个：一任务一目录一 session，MR 合并后 tidy 自动回收
 - `<task>` 含 `/` 时按原样作分支名，否则加 `task/` 前缀
 
 ## 脚本行为（安全边界）
 
 | 对象 | 条件 | 动作 |
 |------|------|------|
-| 本地分支 | 已合并进 origin/master | 删除 |
+| 本地分支 | 已合并进 origin/<默认分支> | 删除 |
 | 本地分支 | upstream 已删除（squash 合并后的常态） | 删除 |
 | 本地分支 | 有未推提交 / 从未推送 / MR 进行中 | **保留并报告** |
-| 本地分支 | 与 origin/master 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |
-| 本地分支 | 空且已落后 origin/master（切出后从未动过） | 删除（无内容可丢，重切才是正确归位） |
-| 当前分支 | 可清理且工作区无 tracked 改动 | 切回 master 再删 |
-| master | 落后远端 | ff-only 前进 |
-| master | 与远端分叉 | **不动，报告** |
+| 本地分支 | 与 origin/<默认分支> 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |
+| 本地分支 | 空且已落后 origin/<默认分支>（切出后从未动过） | 删除（无内容可丢，重切才是正确归位） |
+| 当前分支 | 可清理且工作区无 tracked 改动 | 切回默认分支再删 |
+| 默认分支 | 落后远端 | ff-only 前进 |
+| 默认分支 | 与远端分叉 | **不动，报告** |
 | worktree | 分支可清理且工作区干净 | 移除 |
 | worktree | 工作区脏 / detached | **保留并报告** |
 
