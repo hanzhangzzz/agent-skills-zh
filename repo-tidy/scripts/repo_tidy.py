@@ -68,7 +68,13 @@ def find_repos(root: Path, max_depth=3):
 
 
 def master_ref(repo):
-    """返回 (远端master分支名, 是否有远端)。"""
+    """优先采用 origin/HEAD；旧仓库缺少该引用时兼容 master/main。"""
+    rc, remote_head, _ = git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    if rc == 0 and remote_head.startswith("origin/"):
+        name = remote_head.removeprefix("origin/")
+        rc, _, _ = git(repo, "show-ref", "-q", f"refs/remotes/origin/{name}")
+        if rc == 0:
+            return name, True
     for name in ("master", "main"):
         rc, _, _ = git(repo, "show-ref", "-q", f"refs/remotes/origin/{name}")
         if rc == 0:

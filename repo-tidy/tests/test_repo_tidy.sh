@@ -95,5 +95,33 @@ ok "verb 是「将删」不是「已删」" 'grep -q "将删分支 feat/x" <<<"$
 ok "feat/x 实际未删"          'git -C "$T/p2" show-ref -q refs/heads/feat/x'
 ok "本地 master 未被动过"     '[ "$(git -C "$T/p2" log --format=%s -1 master)" = local ]'
 
+echo "== T8 origin/HEAD 优先：main/master 同时存在不选错基线 =="
+git -c init.defaultBranch=main init --bare -q "$T/r3.git"
+git clone -q "$T/r3.git" "$T/p3" 2>/dev/null
+git -C "$T/p3" config user.email t@t.t
+git -C "$T/p3" config user.name t
+echo initial > "$T/p3/base.txt"
+git -C "$T/p3" add base.txt
+git -C "$T/p3" commit -qm initial
+git -C "$T/p3" push -qu origin main
+git -C "$T/p3" branch master
+git -C "$T/p3" push -q origin master
+echo current >> "$T/p3/base.txt"
+git -C "$T/p3" commit -qam current-main
+git -C "$T/p3" push -q origin main
+git -C "$T/p3" remote set-head origin -a >/dev/null
+OUT=$($TIDY "$T/p3" --new default-main); echo "$OUT"
+ok "main/master 并存时从 main 创建" '[ "$(git -C "$T/p3" rev-parse HEAD)" = "$(git -C "$T/p3" rev-parse origin/main)" ]'
+ok "没有误用旧 master" '[ "$(git -C "$T/p3" rev-parse HEAD)" != "$(git -C "$T/p3" rev-parse origin/master)" ]'
+ok "任务检出留在主目录" '[ "$(git -C "$T/p3" branch --show-current)" = task/default-main ]'
+
+echo "== T9 非标准默认分支 trunk 同样可用 =="
+git --git-dir="$T/r3.git" symbolic-ref HEAD refs/heads/trunk
+git -C "$T/p3" push -q origin main:trunk
+git clone -q "$T/r3.git" "$T/p4"
+OUT=$($TIDY "$T/p4" --new default-trunk); echo "$OUT"
+ok "从 trunk 创建任务" '[ "$(git -C "$T/p4" branch --show-current)" = task/default-trunk ]'
+ok "trunk 基线正确" '[ "$(git -C "$T/p4" rev-parse HEAD)" = "$(git -C "$T/p4" rev-parse origin/trunk)" ]'
+
 echo; echo "结果: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
