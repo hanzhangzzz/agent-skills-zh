@@ -2,6 +2,8 @@
 
 本仓库（GitHub: hanzhangzzz/agent-skills-zh，原名 my-skill）是一个面向中文开发者的 Agent Skills 集合。任何 AI Agent 都可以为它贡献新的 skills。
 
+本文件是项目指令的唯一事实源。`CLAUDE.md` 使用普通文件中的 `@AGENTS.md` 导入，兼容禁用符号链接的 Git 检出；项目规则统一修改本文件。
+
 ## 添加新 Skill 的流程
 
 ### 1. 理解 Skill 结构

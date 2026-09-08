@@ -17,6 +17,7 @@ run() {
   echo "::endgroup::"
 }
 
+run "agent instruction checkout" python3 .github/scripts/test_agent_instruction_checkout.py
 run "git-push-guard" bash git-push-guard/scripts/test_hook.sh
 run "repo-tidy status hook" bash repo-tidy/scripts/test_git_repo_status.sh
 run "repo-tidy CLI" bash repo-tidy/tests/test_repo_tidy.sh "$WORK/repo-tidy"
