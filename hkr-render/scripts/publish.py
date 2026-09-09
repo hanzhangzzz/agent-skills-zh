@@ -27,13 +27,6 @@ import tempfile
 
 import requests
 
-# 微信 API 为国内服务，必须直连。requests 默认读取 macOS 系统代理，
-# 系统代理会把 api.weixin.qq.com 分流到代理出口，导致出口 IP 与公众号
-# 白名单不符（errcode=40164），故此处显式禁用系统代理。
-# 注：download_external_image 下载外网图片时仍用默认 requests（可走代理）。
-_session = requests.Session()
-_session.trust_env = False
-
 # ── 路径 ──────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
 SKILL_DIR = SCRIPT_DIR.parent
@@ -42,16 +35,24 @@ with open(SKILL_DIR / "config.json", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
 
+def build_wechat_session(config):
+    """Use the configured API route without environment-proxy fallback.
+
+    trust_env=False alone does not bypass OS-level TUN routing. A local proxy
+    listener pinned to DIRECT can enforce a consistent direct path.
+    """
+    session = requests.Session()
+    session.trust_env = False
+    api_proxy = config.get("wechat", {}).get("api_proxy")
+    if api_proxy:
+        session.proxies = {"http": api_proxy, "https": api_proxy}
+    return session
+
+
+_session = build_wechat_session(CONFIG)
+
+
 # ── 微信 API ─────────────────────────────────────────────────────────
-def get_public_ip():
-    """获取当前出口 IP"""
-    try:
-        resp = _session.get("https://api.ipify.org", timeout=5)
-        return resp.text.strip()
-    except Exception:
-        return "未知"
-
-
 def get_access_token():
     """获取微信 API access_token"""
     wechat = CONFIG.get("wechat", {})
@@ -66,7 +67,13 @@ def get_access_token():
         "https://api.weixin.qq.com/cgi-bin/token"
         f"?grant_type=client_credential&appid={app_id}&secret={app_secret}"
     )
-    resp = _session.get(url, timeout=15)
+    try:
+        resp = _session.get(url, timeout=15)
+    except requests.RequestException as exc:
+        # Never print exception URLs: token requests include AppSecret.
+        print(f"错误: 微信 API 连接失败 ({type(exc).__name__})。"
+              "请检查配置的 api_proxy 入口及网络；不会自动切换出口。")
+        sys.exit(1)
     data = resp.json()
 
     if "access_token" in data:
@@ -75,11 +82,13 @@ def get_access_token():
     else:
         errcode = data.get("errcode", "?")
         errmsg = data.get("errmsg", "未知错误")
-        current_ip = get_public_ip()
         print(f"错误: 获取 access_token 失败 (errcode={errcode}: {errmsg})")
         if errcode == 40164:
-            print(f"  → 当前出口 IP: {current_ip}")
-            print(f"  → 请到公众号后台 → 设置与开发 → 基本配置 → IP 白名单，添加此 IP")
+            match = re.search(r"invalid ip\s+([0-9a-fA-F:.]+)", errmsg)
+            if match:
+                print(f"  → 微信实际识别的出口 IP: {match.group(1)}")
+            print("  → 请检查该公众号的 IP 白名单，以微信返回的 IP 为准；"
+                  "其他网站查询到的出口可能不同。")
         elif errcode in (40001, 40125):
             print("  → AppSecret 无效，请检查 config.json 中的 app_secret")
         sys.exit(1)
