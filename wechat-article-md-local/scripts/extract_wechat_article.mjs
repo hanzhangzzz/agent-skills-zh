@@ -7,7 +7,7 @@ if (!url) {
   process.exit(1);
 }
 
-const executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const executablePath = process.env.WECHAT_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const pageExtractor = () => {
   const q = s => document.querySelector(s);
