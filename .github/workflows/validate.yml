@@ -12,5 +12,5 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m pip install --quiet pyyaml
+      - run: python3 -m pip install --quiet pyyaml requests
       - run: bash .github/scripts/run_behavior_tests.sh

@@ -134,6 +134,16 @@ Edit `config.json`:
 - Get AppID/AppSecret from: WeChat Official Account Admin → Settings → Basic Configuration
 - **Important**: Add your public IP to the WeChat IP whitelist, otherwise API calls will fail with error 40164
 
+For a fixed API route, optionally set `wechat.api_proxy` in your local
+`config.json`, for example `http://127.0.0.1:17897`. All WeChat requests then
+use that proxy; an unavailable proxy fails instead of falling back to another
+route. With Mihomo, use a loopback-only listener pinned to `proxy: DIRECT`
+if you want your current ISP egress. Disabling environment proxies alone does
+not bypass TUN. This fixes the route, not the IP assigned by your ISP.
+Whitelist diagnostics use the IP reported by WeChat, not an unrelated IP-check
+website. Run `python3 hkr-render/scripts/test_publish_network.py` from the repo
+root to verify routing and failure behavior without credentials or uploads.
+
 ## Cover Image Generation
 
 This repo includes a complete cover image generator in `cover/`. It calls the Gemini Image API (or compatible third-party gateways) to produce WeChat cover images (2.35:1 ratio, Notion illustration style).
