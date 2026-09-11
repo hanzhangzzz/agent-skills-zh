@@ -1,0 +1,4 @@
+interface:
+  display_name: "扫描书 OCR"
+  short_description: "将扫描书 PDF 转为确定性、可审计的页级文本"
+  default_prompt: "使用 $scanned-book-ocr 将这本扫描 PDF 转为页码可追溯的文本并完成质量抽检。"

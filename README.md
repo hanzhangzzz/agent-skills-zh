@@ -9,7 +9,7 @@ Translate English docs into Chinese, archive WeChat / Xiaohongshu / X content as
 
 [![GitHub stars](https://img.shields.io/github/stars/hanzhangzzz/agent-skills-zh?style=flat&logo=github)](https://github.com/hanzhangzzz/agent-skills-zh/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Skills](https://img.shields.io/badge/skills-14-blue)](#skills)
+[![Skills](https://img.shields.io/badge/skills-15-blue)](#skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-8A2BE2)](#install)
 [![Codex](https://img.shields.io/badge/Codex-compatible-black)](#install)
 [![skills.sh](https://img.shields.io/badge/skills.sh-hanzhangzzz%2Fagent--skills--zh-orange)](https://skills.sh/hanzhangzzz/agent-skills-zh)
@@ -32,6 +32,7 @@ Then just talk to your agent — every skill lists its own trigger phrases (Engl
 | Skill | What it does · 做什么 | Use when · 何时用 | Trigger · 触发 |
 | --- | --- | --- | --- |
 | [doc-reader](./doc-reader/) | Translate an English article/PDF into Chinese section by section, keep 100% of images, build a 3-column preview (original · translation · AI slides). 英文技术文档/PDF 章节级精准翻译，图片全保留，三栏本地预览 | Reading long English blogs, papers, docs and wanting a faithful side-by-side Chinese version | `/doc-reader <URL or PDF>` · `翻译这篇文章` |
+| [scanned-book-ocr](./scanned-book-ocr/) | Local scanned PDF OCR → page-traceable text with deterministic concurrency checks and visual QA. 扫描书转文字，保留页码并校验质量 | Image-only books for AI reading; Apple Silicon macOS, Python 3.12+ | `$scanned-book-ocr` · `扫描 PDF 转文字` |
 | [wechat-article-md-local](./wechat-article-md-local/) | Save a WeChat Official Account article as local Markdown with images. 公众号文章下载为本地 Markdown，图片本地化 | You receive an `mp.weixin.qq.com` link and want to archive, quote or analyze it | auto on `mp.weixin.qq.com` links · `下载公众号文章` |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/) | Download a Xiaohongshu (RedNote) video and transcribe the voice-over with Whisper into Markdown. 小红书视频下载 + 口播逐字稿 | You receive a Xiaohongshu video link and need the spoken content as text | auto on `xiaohongshu.com` / `xhslink.com` links · `小红书视频转文字` |
 | [x-article-download](./x-article-download/) | Download a tweet, a long-form X article or a whole account to Markdown. X/Twitter 单条或整账号批量下载 | You receive an `x.com` link and want to archive or analyze it | auto on `x.com` links · `下载推文` |
@@ -81,8 +82,8 @@ Then just talk to your agent — every skill lists its own trigger phrases (Engl
 <td><a href="./hook-test-kit/"><img src="./assets/readme/cards/hook-test-kit.png" alt="hook-test-kit 展示卡"></a><br><b>hook-test-kit</b> · 给 hook 脚本生成行为矩阵测试，变异实验收尾</td>
 </tr>
 <tr>
+<td><a href="./scanned-book-ocr/"><img src="./assets/readme/cards/scanned-book-ocr.png" alt="scanned-book-ocr 展示卡"></a><br><b>scanned-book-ocr</b> · 扫描 PDF → 页码可追溯的本地文本</td>
 <td>飞轮实景：do-something 提出方向并实践 → ci-review 验证质量 → 下一轮先回应评论 → 人类只在想收割时出现。<br><br>本仓 PR #8 实录：机器人在审查规范的安装副本里发现一处逻辑矛盾（带失败场景与复现命令），开发者修复 push 后，增量审查确认"矛盾已由此 commit 消除"，零重复评论。</td>
-<td></td>
 </tr>
 </table>
 <!-- cards-gallery-end -->
