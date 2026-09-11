@@ -130,5 +130,15 @@
   "output": "test_git-repo-status.sh\n├── run/assert 协议（bash 坑位预修）\n├── 11 场景: trunk/无远端/空仓库/detached…\n└── <ok>变异实验</ok> 改坏必红、恢复复绿",
   "src": "狗粮全链路验证",
   "tagline": "给 hook 脚本生成行为矩阵测试，变异实验收尾"
+ },
+ {
+  "name": "scanned-book-ocr",
+  "tag": "扫描 PDF → 文字",
+  "one": "本地批量 OCR，保留页码；并发输出一致性检查 + 完整性校验 + 视觉抽检",
+  "input": "一本纯图片 PDF\n\n“把扫描书转成 AI 可读的文字”\n\nApple Silicon macOS\nPython 3.12+ / pdftoppm",
+  "out_label": "输出结构",
+  "output": "book.txt    整本原文 + 页码标记\npages/      每页独立文本\nmanifest.json    来源与逐页哈希\nquality-report.json    校验与抽检\n\n=== PDF_PAGE 0001 ===\n<该页 OCR 原文>\n\n校验通过后可复制为 book.md",
+  "src": "结构来自 scanned-book-ocr/SKILL.md；不包含用户书籍内容",
+  "tagline": "扫描 PDF → 页码可追溯的本地文本"
  }
 ]

@@ -186,6 +186,16 @@
       "skills": [
         "./hook-test-kit"
       ]
+    },
+    {
+      "name": "scanned-book-ocr",
+      "source": "./",
+      "strict": false,
+      "description": "扫描书 PDF 本地批量 OCR，输出页码可追溯的文本，含并发一致性基准、完整性校验和视觉抽检；支持 Apple Silicon macOS。",
+      "version": "1.0.0",
+      "skills": [
+        "./scanned-book-ocr"
+      ]
     }
   ]
 }

@@ -7,7 +7,7 @@ Translate English docs into Chinese, archive WeChat / Xiaohongshu / X content as
 
 [![GitHub stars](https://img.shields.io/github/stars/hanzhangzzz/agent-skills-zh?style=flat&logo=github)](https://github.com/hanzhangzzz/agent-skills-zh/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Skills](https://img.shields.io/badge/skills-14-blue)](#skills)
+[![Skills](https://img.shields.io/badge/skills-15-blue)](#skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-8A2BE2)](#install)
 [![Codex](https://img.shields.io/badge/Codex-compatible-black)](#install)
 [![skills.sh](https://img.shields.io/badge/skills.sh-hanzhangzzz%2Fagent--skills--zh-orange)](https://skills.sh/hanzhangzzz/agent-skills-zh)
@@ -30,6 +30,7 @@ Then just talk to your agent. Every skill lists its trigger phrases (English and
 | Skill | What it does | Use when | Trigger |
 | --- | --- | --- | --- |
 | [doc-reader](./doc-reader/) | Translate an English article or PDF into Chinese section by section with consistent terminology, keep 100% of images, build a 3-column preview (original · translation · AI slides) | Reading long English blogs, papers and docs and wanting a faithful side-by-side Chinese version | `/doc-reader <URL or PDF>` |
+| [scanned-book-ocr](./scanned-book-ocr/) | Local scanned PDF OCR → page-traceable text with deterministic concurrency checks and visual QA. 扫描书转文字，保留页码并校验质量 | Image-only books for AI reading; Apple Silicon macOS, Python 3.12+ | `$scanned-book-ocr` · `扫描 PDF 转文字` |
 | [wechat-article-md-local](./wechat-article-md-local/) | Save a WeChat Official Account article as local Markdown with images downloaded | You receive an `mp.weixin.qq.com` link and want to archive, quote or analyze it | auto on `mp.weixin.qq.com` links |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/) | Download a Xiaohongshu (RedNote) video and transcribe the voice-over with Whisper into Markdown | You receive a Xiaohongshu video link and need the spoken content as text | auto on `xiaohongshu.com` / `xhslink.com` links |
 | [x-article-download](./x-article-download/) | Download a tweet, a long-form X article or an entire account to Markdown | You receive an `x.com` link and want to archive or analyze it | auto on `x.com` links |

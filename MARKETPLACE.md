@@ -264,3 +264,27 @@ Natural-language request an agent understands · 自然语言安装请求：
 ```text
 Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-zh
 ```
+
+### scanned-book-ocr
+
+```json
+{
+  "name": "scanned-book-ocr",
+  "version": "1.0.0",
+  "description": "扫描书 PDF 本地批量 OCR，输出页码可追溯的文本，含并发一致性基准、完整性校验和视觉抽检；支持 Apple Silicon macOS。",
+  "trigger": "$scanned-book-ocr",
+  "keywords": [
+    "ocr",
+    "scanned pdf",
+    "book",
+    "text",
+    "扫描书",
+    "图片 PDF",
+    "文字提取"
+  ],
+  "compatibility": "Claude Code, Codex; Apple Silicon macOS, Python 3.12+, pdftoppm",
+  "install_path": "scanned-book-ocr/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
