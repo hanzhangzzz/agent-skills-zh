@@ -1,8 +1,6 @@
 ---
 name: repo-tidy
-description: |
-  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees; `--new <task>` does tidy + create a task branch in one command and auto-creates a parallel worktree when the main checkout is busy; a SessionStart hook injects repo status when a session starts. Use before a new repository-changing task or when the user explicitly requests cleanup. Read-only audits, questions, continued tasks, and [repo-status] alone do not trigger mutations. Also use when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
-
+description: "Prepare a branch/worktree for a new repository-changing task or perform requested cleanup. Read-only audits, continued tasks and repo-status alone do not trigger mutations. Preserve active or unverified work."
 ---
 
 # repo-tidy
@@ -35,15 +33,17 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path>
 python3 "$SKILL_DIR/scripts/repo_tidy.py" --all
 ```
 
-### 2. 确认后执行
+### 2. 核对范围后执行
 
-把 dry-run 清单展示给用户；**涉及删除分支/worktree 时必须等用户确认**（用户本轮已明确说「清理」「归位」的，单仓库可直接 `--apply`）。
+核对 dry-run 清单与授权范围。已授权的单仓库清理或按项目规则启动新任务，可直接处理已核实安全的对象，不因换轮次重复询问。未推送、未合并、脏工作区、活跃任务或归属不明的对象保留；范围扩大或存在数据丢失风险时说明影响并确认。
+
+`upstream 已删除` 本身不能证明工作已合并。脚本可能将此类对象列为删除候选；执行 `--apply` 或 `--new` 前须核实已合并或等价内容已保留。无法核实时不执行该清单，保留对象并用不含清理的等价安全 Git/worktree 操作推进新任务。
 
 ```bash
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --apply
 ```
 
-### 3. 开新任务（一条命令：归位 + 开分支/worktree）
+### 3. 开新任务（先核对上述 dry-run，再归位并开分支/worktree）
 
 ```bash
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
@@ -59,7 +59,7 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 | 对象 | 条件 | 动作 |
 |------|------|------|
 | 本地分支 | 已合并进 origin/<默认分支> | 删除 |
-| 本地分支 | upstream 已删除（squash 合并后的常态） | 删除 |
+| 本地分支 | upstream 已删除 | 脚本列为删除候选；执行前按上文核实合并或内容保留证据 |
 | 本地分支 | 有未推提交 / 从未推送 / MR 进行中 | **保留并报告** |
 | 本地分支 | 与 origin/<默认分支> 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |
 | 本地分支 | 空且已落后 origin/<默认分支>（切出后从未动过） | 删除（无内容可丢，重切才是正确归位） |
