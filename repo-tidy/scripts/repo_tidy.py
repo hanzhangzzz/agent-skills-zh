@@ -148,8 +148,8 @@ def analyze(repo: Path) -> RepoPlan:
             deletable.add(name)
             plan.del_branches.append((name, f"已合并进 {base}"))
         elif info["track"] == "[gone]":
-            deletable.add(name)
-            plan.del_branches.append((name, "upstream 已删除(通常为 squash 合并)"))
+            # 远端删分支不能证明内容已合并（也可能是误删或未保留的提交）。
+            plan.keep.append((name, "upstream 已删除但未证实合并，保留本地提交"))
         elif not info["upstream"]:
             plan.keep.append((name, "从未推送且未合并"))
         elif "ahead" in info["track"]:

@@ -21,7 +21,7 @@ git switch -q master; git merge -q --no-ff -m merge feat/done; git push -q origi
 # 进行中分支（已推送、未合并）
 git switch -qc feat/wip; echo c > c.txt; git add c.txt; git commit -qm c
 git push -qu origin feat/wip 2>/dev/null
-# gone 分支（未合并、远端已删 → 模拟 squash 合并后的常态）
+# gone 分支（未合并、远端已删；本地独有内容必须保留）
 git switch -qc feat/gone; echo d > d.txt; git add d.txt; git commit -qm d
 git push -qu origin feat/gone 2>/dev/null; git push -q origin :feat/gone
 # 第二个克隆推进远端 master（制造 behind）
@@ -30,12 +30,14 @@ cd "$T/clone2"; git config user.email t@t.t; git config user.name t
 echo e > e.txt; git add e.txt; git commit -qm e; git push -q origin master
 # 主检出停在已合并分支上（工作区干净）
 cd "$T/proj"; git switch -q feat/done
+GONE_TIP=$(git rev-parse feat/gone)
+git worktree add -q "$T/gone-wt" feat/gone
 
 echo "== T1 dry-run 计划正确性 =="
 OUT=$($TIDY "$T/proj"); echo "$OUT"
 ok "计划切回 master"        'grep -q "将切回 master" <<<"$OUT"'
 ok "删已合并 feat/done"      'grep -q "将删分支 feat/done" <<<"$OUT"'
-ok "删 gone 的 feat/gone"    'grep -q "将删分支 feat/gone" <<<"$OUT"'
+ok "保留未合并 feat/gone"    'grep -q "保留 feat/gone" <<<"$OUT"'
 ok "保留进行中 feat/wip"     'grep -q "保留 feat/wip" <<<"$OUT"'
 ok "计划 ff 前进"            'grep -q "ff 前进" <<<"$OUT"'
 
@@ -44,12 +46,15 @@ OUT=$($TIDY "$T/proj" --apply); echo "$OUT"
 ok "HEAD 回到 master"        '[ "$(git -C "$T/proj" rev-parse --abbrev-ref HEAD)" = master ]'
 ok "master 追平远端"         '[ "$(git -C "$T/proj" rev-parse master)" = "$(git -C "$T/proj" rev-parse origin/master)" ]'
 ok "feat/done 已删"          '! git -C "$T/proj" show-ref -q refs/heads/feat/done'
-ok "feat/gone 已删"          '! git -C "$T/proj" show-ref -q refs/heads/feat/gone'
+ok "feat/gone 提交仍在"      '[ "$(git -C "$T/proj" rev-parse feat/gone)" = "$GONE_TIP" ]'
+ok "gone worktree 内容保留" '[ -f "$T/gone-wt/d.txt" ] && [ "$(git -C "$T/gone-wt" rev-parse HEAD)" = "$GONE_TIP" ]'
 ok "feat/wip 仍在"           'git -C "$T/proj" show-ref -q refs/heads/feat/wip'
 
 echo "== T3 --new 主检出空闲 → 原地开分支 =="
 OUT=$($TIDY "$T/proj" --new t1); echo "$OUT"
 ok "原地创建 task/t1"        '[ "$(git -C "$T/proj" rev-parse --abbrev-ref HEAD)" = task/t1 ]'
+
+ok "--new 保留 gone 分支及 worktree" '[ "$(git -C "$T/proj" rev-parse feat/gone)" = "$GONE_TIP" ] && [ -f "$T/gone-wt/d.txt" ]'
 
 echo "== T4 --new 主检出被占用 → 自动建 worktree =="
 echo dirty >> "$T/proj/a.txt"   # 停在 task/t1 且工作区脏
