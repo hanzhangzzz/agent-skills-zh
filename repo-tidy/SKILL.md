@@ -20,12 +20,14 @@ description: |
 
 ## 安装
 
+前置：`python3`、`git`、可写的 `~/.claude/`。缺任一项先停下说明，不带病安装。
+
 私人配置（`settings.json` / `CLAUDE.md`）不进版本库，所以用脚本改——幂等、改前备份、只增不删，不碰用户已有的其它 hook：
 
 ```bash
-bash "$SKILL_DIR/scripts/install.sh"            # 安装（可反复跑）
-bash "$SKILL_DIR/scripts/install.sh" --check    # 只报告状态，不改
-bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的
+bash "$SKILL_DIR/scripts/install.sh"             # 安装（可反复跑）
+bash "$SKILL_DIR/scripts/install.sh" status      # 体检：依赖 / 核心层 / 增强层 / hook 注册
+bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的 hook
 ```
 
 装的是这几条（`CLAUDE_HOME` 可覆盖 `~/.claude`，测试用）：
@@ -39,7 +41,54 @@ bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的
 
 hook 热生效，装完不用重启 session。
 
-**编辑器快捷键（可选，但这是「随时看到 AI 在改什么」的关键）**：把 `scripts/editor-here.sh` 绑到快捷键（iTerm2：Preferences → Profiles → Advanced → Semantic History 或触发器协进程；也可用 Hammerspoon/Karabiner 调用）。直接绑 `code .` 是不行的——claude 运行期间终端的当前目录冻结在启动目录，子进程改不了父 shell 的 cwd，AI 切进 worktree 后 `code .` 打开的还是旧目录。默认开 VS Code，`EDITOR_HERE_APP` 可换别的。
+### 两层能力，各自独立可用
+
+**核心层**（仓库归位、任务 worktree、开工前 fetch、`[tasks]` 菜单）是纯 git 操作，**与平台和终端无关**，任何环境都能用。
+
+**增强层**（编辑器快捷键打开 AI 当前所在目录）需要「能报出当前是哪个终端标签页」，只有这层有环境要求。没有它不影响前面任何功能。
+
+### 增强层：绑编辑器快捷键
+
+把 `scripts/editor-here.sh` 绑到快捷键（iTerm2 用 Preferences → Keys 的 Send Text / Run Coprocess，或 Hammerspoon / Karabiner 调用）。
+
+**不能直接绑 `code .`**：claude 运行期间终端的当前目录冻结在启动目录，子进程改不了父 shell 的 cwd，AI 切进 worktree 后 `code .` 打开的还是旧目录。
+
+| 环境 | 状态 |
+|---|---|
+| macOS + iTerm2 | 已实测 |
+| macOS + Terminal.app | 已写支持（按 tty 匹配），**未实测** |
+| 其它终端（WezTerm / Alacritty / tmux / VS Code 内置） | 需设 `SESSION_KEY_CMD`，**未实测** |
+| Linux / WSL | 核心层可用；增强层需 `SESSION_KEY_CMD` + `EDITOR_HERE_CMD`，**未实测** |
+
+标「未实测」的是照着 API 文档写的，作者手上没有那些环境。能跑通或需要改，欢迎开 issue / PR。
+
+`session-cwd.sh` 按两个键各写一份位置文件，就是为了让不同终端各取所需：
+
+- `<UUID>` —— `TERM_SESSION_ID` 的 UUID 段，iTerm2 与 Terminal.app 都设这个变量
+- `tty-<name>` —— 控制终端名，POSIX 通用回退
+
+其它终端设 `SESSION_KEY_CMD` 指定一条输出「当前标签页唯一键」的命令，`editor-here.sh` 会拿它去查同名或 `tty-` 前缀的位置文件。例如 tmux：
+
+```bash
+export SESSION_KEY_CMD="tmux display-message -p '#{pane_id}'"
+```
+
+环境变量：`EDITOR_HERE_APP`（macOS 上要打开的应用，默认 VS Code）、`EDITOR_HERE_CMD`（直接指定打开命令，如 `cursor` / `zed`）、`EDITOR_HERE_DRY=1`（只打印路径不打开，排错用）。
+
+### 排错
+
+先跑 `install.sh status`，它会分层告诉你卡在哪一环：hook 没注册、终端认不出、位置文件不新鲜（hook 没在跑）、`editor-here.sh` 不可执行。
+
+快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash scripts/editor-here.sh` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`ai-session` 走的是位置文件，`terminal-path` 说明回退了）。
+
+### 卸载
+
+```bash
+bash "$SKILL_DIR/scripts/install.sh" --uninstall   # 移除 hook（备份已自动留下）
+rm -rf ~/.claude/session-cwd                        # 位置文件
+```
+
+再解绑编辑器快捷键、删除 skill 目录即可。`settings.json` 的备份在 `~/.claude/settings.json.bak-*`。
 
 ## 何时用
 
