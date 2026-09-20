@@ -30,16 +30,27 @@ bash "$SKILL_DIR/scripts/install.sh" status      # 体检：依赖 / 核心层 /
 bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的 hook
 ```
 
-装的是这几条（`CLAUDE_HOME` 可覆盖 `~/.claude`，测试用）：
+**Claude Code 与 Codex 都装**，检测到哪个装哪个（`CLAUDE_HOME` / `CODEX_HOME` 可覆盖路径，测试用）。两边的 hook 事件名与 stdin 格式一致（都是 `{"cwd":...,"hook_event_name":...}`），所以脚本是同一份。
 
-| 事件 | matcher | 脚本 |
-|---|---|---|
-| SessionStart | `*` | `git-repo-status.sh`、`session-cwd.sh` |
-| UserPromptSubmit | `*` | `session-cwd.sh` |
-| PostToolUse | `EnterWorktree\|ExitWorktree` | `session-cwd.sh` |
-| PreToolUse | `EnterWorktree` | `worktree-fetch.sh` |
+| 事件 | matcher | 脚本 | Claude Code | Codex |
+|---|---|---|---|---|
+| SessionStart | `*` | `git-repo-status.sh`、`session-cwd.sh` | ✓ | ✓ |
+| UserPromptSubmit | `*` | `session-cwd.sh` | ✓ | ✓ |
+| PostToolUse | `EnterWorktree\|ExitWorktree` | `session-cwd.sh` | ✓ | — |
+| PreToolUse | `EnterWorktree` | `worktree-fetch.sh` | ✓ | — |
 
-hook 热生效，装完不用重启 session。
+后两条只给 Claude Code：Codex 没有 `EnterWorktree` 工具，它用原生的 `codex --worktree`（启动时就进 worktree）和 `-C/--cd`。
+
+hook 热生效，装完不用重启 session。**Codex 首次运行会要求确认信任新 hook**。
+
+### Codex 的用法差异
+
+Codex 运行中不切工作目录，所以：
+
+- 开新任务 → `codex --worktree` 启动（原生支持，会在新 worktree 里跑）
+- 续某个任务 → `codex -C <worktree 路径>` 或先 `cd` 过去再启动
+- 位置文件照写（实测 stdin 带 `cwd`），所以编辑器快捷键对 Codex session 一样生效
+- Codex 侧拿不到 tty（hook 父进程无控制终端），只走 `TERM_SESSION_ID` 键——iTerm2 / Terminal.app 都设这个变量，够用
 
 ### 两层能力，各自独立可用
 
