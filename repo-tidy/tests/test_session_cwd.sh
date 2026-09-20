@@ -106,5 +106,39 @@ run_cwd "w0t0p1:GGG" "{\"cwd\":\"$TARGET\"}" >/dev/null
 [ ! -f "$FAKE_HOME/.claude/session-cwd/.unsupported" ] \
   && ok "环境可用时清掉旧的 .unsupported" || bad ".unsupported 清理" "文件仍在"
 
+# ── task-here.sh：显式声明任务目录（给不能切 cwd 的 agent，如 Codex）──
+TASK_HOOK="$DIR/../scripts/task-here.sh"
+EDITOR="$DIR/../scripts/editor-here.sh"
+TDIR="$SCRATCH/taskdir"; mkdir -p "$TDIR"
+SID="TESTSID"
+peek() { env HOME="$FAKE_HOME" SESSION_KEY_CMD="echo $SID" EDITOR_HERE_DRY=1 bash "$EDITOR" 2>/dev/null; }
+task() { env HOME="$FAKE_HOME" TERM_SESSION_ID="w0t0p1:$SID" bash "$TASK_HOOK" "$@"; }
+
+# 16. 声明后快捷键指向声明的目录
+run_cwd "w0t0p1:$SID" "{\"cwd\":\"$TARGET\"}" >/dev/null
+task "$TDIR" >/dev/null
+[ "$(peek)" = "$TDIR" ] && ok "声明任务目录后快捷键跟随" || bad "声明生效" "实际: $(peek)"
+
+# 17. hook 刷新 cwd 不会冲掉声明（每轮对话都会发生，这是关键）
+run_cwd "w0t0p1:$SID" "{\"cwd\":\"$TARGET\"}" >/dev/null
+[ "$(peek)" = "$TDIR" ] && ok "hook 刷新 cwd 不冲掉声明" || bad "声明被冲掉" "实际: $(peek)"
+
+# 18. --show 打印当前声明
+[ "$(task --show)" = "$TDIR" ] && ok "--show 打印当前声明" || bad "--show" "实际: $(task --show)"
+
+# 19. --clear 后回到 hook 记录的 cwd
+task --clear >/dev/null
+[ "$(peek)" = "$TARGET" ] && ok "--clear 后回到 session 工作目录" || bad "--clear" "实际: $(peek)"
+
+# 20. 目录不存在时拒绝声明
+task "/no/such/dir" >/dev/null 2>&1
+[ $? -ne 0 ] && ok "目录不存在时拒绝声明" || bad "不存在目录" "退出码 0"
+
+# 21. 拿不到会话 id 时明确报错，不静默
+out=$(env -u TERM_SESSION_ID -u ITERM_SESSION_ID HOME="$FAKE_HOME" bash "$TASK_HOOK" "$TDIR" 2>&1)
+rc=$?
+[ $rc -ne 0 ] && printf '%s' "$out" | grep -q "拿不到终端会话 id" \
+  && ok "无会话 id 时明确报错（不静默失败）" || bad "无会话 id 报错" "rc=$rc out=$out"
+
 echo "── 通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ]

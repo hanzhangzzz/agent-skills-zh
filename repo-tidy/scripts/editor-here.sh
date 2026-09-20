@@ -42,6 +42,13 @@ open_it() {  # open_it <目录> <来源标签>
 
 try_state() {  # try_state <键> <来源标签>；命中则打开
   [ -n "$1" ] || return 1
+  # 显式声明的任务目录优先：Codex 这类不能切 cwd 的 agent 靠它指路，
+  # 而 <键> 每轮对话都会被 hook 刷成 cwd，会把声明冲掉
+  local t="$STATE_DIR/$1.task"
+  if [ -f "$t" ]; then
+    local td; td="$(head -1 "$t" | tr -d '\r\n')"
+    [ -n "$td" ] && [ -d "$td" ] && open_it "$td" "$2-task"
+  fi
   local f="$STATE_DIR/$1"
   [ -f "$f" ] || return 1
   local d; d="$(head -1 "$f" | tr -d '\r\n')"

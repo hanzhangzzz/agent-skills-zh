@@ -16,6 +16,7 @@ description: |
 - `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
 - `scripts/install.sh` —— 一键注册上面几个 hook 到 `~/.claude/settings.json`；幂等、改前备份、只增不删
 - `scripts/editor-here.sh` —— 绑到编辑器快捷键：按前台标签页 id 读位置文件，打开 AI 当前所在目录；读不到再回退到终端路径
+- `scripts/task-here.sh` —— 声明「本 session 当前在做哪个任务目录」，给运行中不能切 cwd 的 agent（Codex）用；Claude Code 不需要
 - `tests/` —— `test_repo_tidy.sh`、`test_session_cwd.sh`、`test_install.sh`（另有 `scripts/test_git_repo_status.sh`），改脚本后必须跑
 
 ## 安装
@@ -43,14 +44,28 @@ bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的 
 
 hook 热生效，装完不用重启 session。**Codex 首次运行会要求确认信任新 hook**。
 
-### Codex 的用法差异
+### Codex：对话中决定任务目录，不必启动前就想好
 
-Codex 运行中不切工作目录，所以：
+Codex 运行中不能切工作目录，但**能用绝对路径在别的目录里干活**（已实测）。所以流程和 Claude Code 一样是「先聊、再决定」，只是多一步声明：
 
-- 开新任务 → `codex --worktree` 启动（原生支持，会在新 worktree 里跑）
-- 续某个任务 → `codex -C <worktree 路径>` 或先 `cd` 过去再启动
-- 位置文件照写（实测 stdin 带 `cwd`），所以编辑器快捷键对 Codex session 一样生效
-- Codex 侧拿不到 tty（hook 父进程无控制终端），只走 `TERM_SESSION_ID` 键——iTerm2 / Terminal.app 都设这个变量，够用
+1. 在项目主路径启动 `codex`，照常对话
+2. 判断是新任务且需要独立目录 → **先问用户**，同意后：
+   ```bash
+   python3 "$SKILL_DIR/scripts/repo_tidy.py" . --new <task>
+   ```
+   主检出空闲就原地切分支（此时 cwd 就是任务目录，第 3 步可跳过）；被占用则建 worktree 并输出路径
+3. 若拿到的是 worktree 路径，声明它，好让用户的编辑器快捷键跟过去：
+   ```bash
+   bash "$SKILL_DIR/scripts/task-here.sh" <worktree 路径>
+   ```
+   之后用绝对路径在那个 worktree 里读写、跑 `git -C <路径> ...`
+4. 任务结束 `task-here.sh --clear`
+
+**不要让用户用 `codex --worktree` 或 `-C` 启动**——那等于逼人在开口之前就想清楚要做什么，和「先聊再决定」是相反的。这两个参数只在用户主动要求时才提。
+
+声明存在 `<键>.task`，优先级高于 hook 写的 `<键>`：后者每轮对话都会被刷新成 cwd，不分开存会被冲掉。Claude Code 不需要声明——`EnterWorktree` 真的改了 cwd，hook 自动就写对了。
+
+Codex 侧拿不到 tty（hook 父进程无控制终端），只走 `TERM_SESSION_ID` 键——iTerm2 / Terminal.app 都设这个变量，够用。
 
 ### 两层能力，各自独立可用
 
