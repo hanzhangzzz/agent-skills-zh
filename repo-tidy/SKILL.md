@@ -14,9 +14,21 @@ description: |
 - `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
 - `scripts/session-cwd.sh` —— 把本 session 的 cwd 写到 `~/.claude/session-cwd/<iTerm 会话 id>`。用户的编辑器快捷键按前台标签页 id 读它，于是打开的永远是 AI 当前所在目录——**子进程改不了父 shell 的 cwd，所以不能靠 shell 的当前目录**。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
 - `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
-- `tests/` —— `test_repo_tidy.sh`、`test_git_repo_status.sh`、`test_session_cwd.sh`，改脚本后必须跑
+- `scripts/install.sh` —— 一键注册上面几个 hook 到 `~/.claude/settings.json`；幂等、改前备份、只增不删
+- `scripts/editor-here.sh` —— 绑到编辑器快捷键：按前台标签页 id 读位置文件，打开 AI 当前所在目录；读不到再回退到终端路径
+- `tests/` —— `test_repo_tidy.sh`、`test_session_cwd.sh`、`test_install.sh`（另有 `scripts/test_git_repo_status.sh`），改脚本后必须跑
 
-hook 注册（`~/.claude/settings.json`，命令用 skill 绝对路径）：
+## 安装
+
+私人配置（`settings.json` / `CLAUDE.md`）不进版本库，所以用脚本改——幂等、改前备份、只增不删，不碰用户已有的其它 hook：
+
+```bash
+bash "$SKILL_DIR/scripts/install.sh"            # 安装（可反复跑）
+bash "$SKILL_DIR/scripts/install.sh" --check    # 只报告状态，不改
+bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的
+```
+
+装的是这几条（`CLAUDE_HOME` 可覆盖 `~/.claude`，测试用）：
 
 | 事件 | matcher | 脚本 |
 |---|---|---|
@@ -24,6 +36,10 @@ hook 注册（`~/.claude/settings.json`，命令用 skill 绝对路径）：
 | UserPromptSubmit | `*` | `session-cwd.sh` |
 | PostToolUse | `EnterWorktree\|ExitWorktree` | `session-cwd.sh` |
 | PreToolUse | `EnterWorktree` | `worktree-fetch.sh` |
+
+hook 热生效，装完不用重启 session。
+
+**编辑器快捷键（可选，但这是「随时看到 AI 在改什么」的关键）**：把 `scripts/editor-here.sh` 绑到快捷键（iTerm2：Preferences → Profiles → Advanced → Semantic History 或触发器协进程；也可用 Hammerspoon/Karabiner 调用）。直接绑 `code .` 是不行的——claude 运行期间终端的当前目录冻结在启动目录，子进程改不了父 shell 的 cwd，AI 切进 worktree 后 `code .` 打开的还是旧目录。默认开 VS Code，`EDITOR_HERE_APP` 可换别的。
 
 ## 何时用
 
