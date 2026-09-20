@@ -1,7 +1,7 @@
 ---
 name: repo-tidy
 description: |
-  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees; `--new <task>` does tidy + create a task branch in one command and auto-creates a parallel worktree when the main checkout is busy; a SessionStart hook injects repo status when a session starts. Use before a new repository-changing task or when the user explicitly requests cleanup. Read-only audits, questions, continued tasks, and [repo-status] alone do not trigger mutations. Also use when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
+  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees. Ships four hooks: SessionStart injects repo status plus a [tasks] worktree menu; session-cwd records each session's working directory so the user's editor shortcut opens what the AI is actually working on; PreToolUse(EnterWorktree) fetches first so new task branches start from the latest default branch. In Claude Code, start tasks with EnterWorktree — `--new <task>` is the fallback for environments without it. Use before a new repository-changing task or when the user explicitly requests cleanup. Read-only audits, questions, continued tasks, and [repo-status] alone do not trigger mutations. Also use when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
 
 ---
 
@@ -11,8 +11,19 @@ description: |
 
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
-- `scripts/git-repo-status.sh` —— SessionStart hook，开局注入一行 `[repo-status]`（分支/ahead-behind/脏净）。注册到 `~/.claude/settings.json` 的 `hooks.SessionStart`：`{"matcher": "*", "hooks": [{"type": "command", "command": "<skill绝对路径>/scripts/git-repo-status.sh", "timeout": 10}]}`
-- `tests/test_repo_tidy.sh <scratch目录>` —— 对抗测试（含双默认分支与非标准默认分支的对抗场景），改脚本后必须跑
+- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
+- `scripts/session-cwd.sh` —— 把本 session 的 cwd 写到 `~/.claude/session-cwd/<iTerm 会话 id>`。用户的编辑器快捷键按前台标签页 id 读它，于是打开的永远是 AI 当前所在目录——**子进程改不了父 shell 的 cwd，所以不能靠 shell 的当前目录**。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
+- `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
+- `tests/` —— `test_repo_tidy.sh`、`test_git_repo_status.sh`、`test_session_cwd.sh`，改脚本后必须跑
+
+hook 注册（`~/.claude/settings.json`，命令用 skill 绝对路径）：
+
+| 事件 | matcher | 脚本 |
+|---|---|---|
+| SessionStart | `*` | `git-repo-status.sh`、`session-cwd.sh` |
+| UserPromptSubmit | `*` | `session-cwd.sh` |
+| PostToolUse | `EnterWorktree\|ExitWorktree` | `session-cwd.sh` |
+| PreToolUse | `EnterWorktree` | `worktree-fetch.sh` |
 
 ## 何时用
 
@@ -43,15 +54,26 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" --all
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --apply
 ```
 
-### 3. 开新任务（一条命令：归位 + 开分支/worktree）
+### 3. 开新任务
+
+**Claude Code 里走 `EnterWorktree`，不要用 `--new`。**读 SessionStart 注入的 `[tasks]` 菜单判断：
+
+- 续某个任务 → `EnterWorktree(path=<该 worktree 路径>)`
+- 新任务 → `EnterWorktree(name=<task>)`
+- 两个 session 共用一个 worktree（一个写、一个 review）→ 同样用 `path`
+- 进门前**向用户一句话确认**；用户说留在主检出就留。session 中途换新任务：`ExitWorktree(keep)` 再 `EnterWorktree(name=...)`，同样先确认
+
+配套 hook 保证两件事：进门前已 fetch（新分支基于最新远端默认分支），进门后位置文件已更新（用户快捷键看到的就是这里）。主检出因此恒定停在默认分支，只作阅读窗口——**不在主检出上开工**，否则第一个任务就会把它占走，后续任务被迫绕到 worktree，而没人再把它还回来。
+
+没有 `EnterWorktree` 的环境（如其他 CLI）才用回退命令：
 
 ```bash
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 ```
 
 - 先对该仓库执行一次归位（等价 `--apply`，安全边界相同）
-- 主检出空闲（在默认分支且无 tracked 改动）→ 原地 `switch -c task/<task> origin/<默认分支>`
-- 主检出被占用（停在进行中分支或有改动）→ 自动创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径 —— 同项目多任务并行就靠这个：一任务一目录一 session，MR 合并后 tidy 自动回收
+- 主检出空闲（在默认分支且无 tracked 改动）→ 原地 `switch -c task/<task> origin/<默认分支>`，**这会占用主检出**
+- 主检出被占用 → 创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径
 - `<task>` 含 `/` 时按原样作分支名，否则加 `task/` 前缀
 
 ## 脚本行为（安全边界）
