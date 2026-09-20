@@ -123,5 +123,41 @@ OUT=$($TIDY "$T/p4" --new default-trunk); echo "$OUT"
 ok "从 trunk 创建任务" '[ "$(git -C "$T/p4" branch --show-current)" = task/default-trunk ]'
 ok "trunk 基线正确" '[ "$(git -C "$T/p4" rev-parse HEAD)" = "$(git -C "$T/p4" rev-parse origin/trunk)" ]'
 
+echo "== T10 已合并的僵尸任务占着主检出：必须说出来，不能默默绕开 =="
+git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/p5"
+git -C "$T/p5" config user.email t@t.t; git -C "$T/p5" config user.name t
+git -C "$T/p5" switch -qc task/zombie
+echo z > "$T/p5/z.txt"; git -C "$T/p5" add z.txt
+git -C "$T/p5" commit -qm zombie-work
+git -C "$T/p5" push -qu origin task/zombie 2>/dev/null
+git -C "$T/p5" switch -q master
+git -C "$T/p5" merge -q --no-ff -m merge task/zombie
+git -C "$T/p5" push -q origin master
+git -C "$T/p5" switch -q task/zombie          # 停在已合并的分支上
+echo leftover > "$T/p5/leftover.txt"; git -C "$T/p5" add leftover.txt   # 做完没收拾的残留
+OUT=$($TIDY "$T/p5" --new after-zombie); echo "$OUT"
+ok "报出主检出被已合并分支占着" 'grep -q "该分支已合并进" <<<"$OUT"'
+ok "说明是任务做完没归位"       'grep -q "任务做完了没归位" <<<"$OUT"'
+ok "给出归位命令"               'grep -q "git switch master" <<<"$OUT"'
+ok "提示归位后可重跑"           'grep -q "归位后重跑" <<<"$OUT"'
+ok "仍建并行 worktree 不阻断"    '[ -d "$T/p5--after-zombie" ]'
+ok "worktree 基于最新 origin/master" \
+   '[ -d "$T/p5--after-zombie" ] && [ "$(git -C "$T/p5--after-zombie" rev-parse HEAD)" = "$(git -C "$T/p5" rev-parse origin/master)" ]'
+
+echo "== T11 主检出干净停在默认分支：不该有僵尸警告 =="
+git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/p6"
+OUT=$($TIDY "$T/p6" --new clean-start); echo "$OUT"
+ok "干净时无僵尸警告" '! grep -q "任务做完了没归位" <<<"$OUT"'
+ok "干净时原地切分支"  '[ "$(git -C "$T/p6" branch --show-current)" = task/clean-start ]'
+
+echo "== T12 停在未合并的进行中分支：不误报僵尸 =="
+git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/p7"
+git -C "$T/p7" config user.email t@t.t; git -C "$T/p7" config user.name t
+git -C "$T/p7" switch -qc task/alive
+echo w > "$T/p7/w.txt"; git -C "$T/p7" add w.txt; git -C "$T/p7" commit -qm alive
+OUT=$($TIDY "$T/p7" --new beside-alive); echo "$OUT"
+ok "进行中任务不被当僵尸" '! grep -q "任务做完了没归位" <<<"$OUT"'
+ok "为新任务另开 worktree"  '[ -d "$T/p7--beside-alive" ]'
+
 echo; echo "结果: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

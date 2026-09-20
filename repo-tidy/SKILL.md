@@ -165,6 +165,7 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 - 先对该仓库执行一次归位（等价 `--apply`，安全边界相同）
 - 主检出空闲（在默认分支且无 tracked 改动）→ 原地 `switch -c task/<task> origin/<默认分支>`，**这会占用主检出**
 - 主检出被占用 → 创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径
+- 若占用主检出的分支**已经合并进默认分支**（任务做完没归位的僵尸），会明确报出来并给归位命令，而不是默默绕开——绕开正是主检出被长期霸占的原因：每个新任务都躲去 worktree，没人回来收拾
 - `<task>` 含 `/` 时按原样作分支名，否则加 `task/` 前缀
 
 ## 脚本行为（安全边界）
