@@ -9,7 +9,7 @@ Translate English docs into Chinese, archive WeChat / Xiaohongshu / X content as
 
 [![GitHub stars](https://img.shields.io/github/stars/hanzhangzzz/agent-skills-zh?style=flat&logo=github)](https://github.com/hanzhangzzz/agent-skills-zh/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Skills](https://img.shields.io/badge/skills-15-blue)](#skills)
+[![Skills](https://img.shields.io/badge/skills-16-blue)](#skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-8A2BE2)](#install)
 [![Codex](https://img.shields.io/badge/Codex-compatible-black)](#install)
 [![skills.sh](https://img.shields.io/badge/skills.sh-hanzhangzzz%2Fagent--skills--zh-orange)](https://skills.sh/hanzhangzzz/agent-skills-zh)
@@ -46,6 +46,7 @@ Then just talk to your agent — every skill lists its own trigger phrases (Engl
 | [ci-review](./ci-review/) | Every PR/MR gets an execution verdict; configured bot branches also need a separate value verdict before deterministic auto-merge. Skill Markdown is reviewed as behavior code and failed verdicts are red checks. CI 里的验证型代码审查机器人，机器人分支价值与执行双门禁 | You want machine-verified execution, plus a value gate before unattended bot branches enter main | `/ci-review` · `装一个 CI 代码审查` |
 | [git-push-guard](./git-push-guard/) | Hook-only plugin: intercepts direct pushes to `master`/`main`, asks for confirmation, per-repo allowlist. 纯 hook：直推默认分支拦截 | You let an agent commit and want shared-branch discipline enforced | auto on `git push` to master/main (plugin install only) |
 | [hook-test-kit](./hook-test-kit/) | Scaffold behavior-matrix tests for Claude Code hooks: scratch fixtures, stdin JSON, EMPTY/! assertion protocol, mutation-experiment finish. 给 hook 脚本补行为测试 | 写了/改了 hook 脚本要测试 · `/hook-test-kit` |
+| [pdf-triptych](./pdf-triptych/) | Break a standard / spec / whitepaper PDF into a one-page triptych: skeleton, detail, worked example — three figures sharing one horizontal axis and one color system. 把读不动的标准 PDF 拆成一页三联图：骨架 · 细节 · 例子，共用一根横轴和一套颜色 | A long standard nobody finishes reading, that you still have to present or review | `/pdf-triptych <PDF>` · `把这份 PDF 画成图` · `标准拆解` |
 
 ## 效果一览 · Gallery
 

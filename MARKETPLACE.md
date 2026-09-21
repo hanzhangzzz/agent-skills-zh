@@ -1,7 +1,7 @@
 ---
 name: agent-skills-zh
 description: Agent Skills for Claude Code & Codex, Chinese-first — 面向中文开发者的 Agent Skills 注册表
-version: 1.1.0
+version: 1.2.0
 registry: https://github.com/hanzhangzzz/agent-skills-zh
 install: npx skills add hanzhangzzz/agent-skills-zh
 ---
@@ -284,6 +284,34 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
   ],
   "compatibility": "Claude Code, Codex; Apple Silicon macOS, Python 3.12+, pdftoppm",
   "install_path": "scanned-book-ocr/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
+### pdf-triptych
+
+```json
+{
+  "name": "pdf-triptych",
+  "version": "1.0.0",
+  "description": "把一份标准/规范/白皮书 PDF 拆成一页三联图 HTML：骨架、细节、例子三张图共用同一根横轴和同一套颜色。先派 subagent 通读全文挖出结构，再把结构翻译成视觉通道，最后才写代码；自带渲染检查（自动测高、运行时错误、溢出重叠字号、列归属声明）。",
+  "trigger": "/pdf-triptych",
+  "keywords": [
+    "pdf",
+    "standard",
+    "specification",
+    "infographic",
+    "visualization",
+    "iso",
+    "whitepaper",
+    "标准拆解",
+    "三联图",
+    "文档骨架图",
+    "PDF 可视化"
+  ],
+  "compatibility": "Claude Code, Codex; needs pdftotext, Chrome/Chromium, node, Python 3",
+  "install_path": "pdf-triptych/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
   "license": "MIT"
 }

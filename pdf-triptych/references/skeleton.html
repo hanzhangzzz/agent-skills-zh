@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title><!-- 文档名 --> 骨架图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* 色板与卡片结构继承 lieflat-charts 的 mono-tokens.js；字号下限按中文抬高到 9px */
+  :root { --ink:#1F1E1C; --paper:#F0EFEB; --page:#E7E6E1; --muted:#6F6E68; --faint:#A9A8A2; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font-family:Inter,"PingFang SC","Helvetica Neue",sans-serif; }
+  .wrap { max-width:1380px; margin:0 auto; padding:34px 28px 60px; }
+  h1 { font-size:22px; letter-spacing:-.02em; margin:0 0 6px; }
+  .lead { color:var(--muted); font-size:13px; line-height:1.6; max-width:1000px; margin:0 0 18px; }
+  .card { background:var(--paper); border-radius:24px; padding:28px 28px 20px; margin-bottom:24px; }
+  .card h2 { font-size:17px; letter-spacing:-.02em; margin:0 0 4px; }
+  .sub { font-size:12px; color:var(--muted); line-height:1.55; margin-bottom:10px; max-width:1100px; }
+  .sub code, .src code { font:11.5px ui-monospace,Menlo,monospace; }
+  .src { font-size:9.5px; letter-spacing:.08em; color:var(--faint); text-transform:uppercase; margin-top:10px; font-weight:500; }
+  svg { display:block; width:100%; height:auto; }
+  svg text { font-family:Inter,"PingFang SC",sans-serif; }   /* 不要在这里设 fill，否则盖掉每个 text 自己的颜色 */
+  .hl { outline:2.5px solid var(--hc,#2F6FED); outline-offset:1px; background:#fff !important; }
+  .dim { opacity:.28; }
+  [data-id],[data-maps] { transition:.12s; }
+  .fade { animation:fade .9s ease both; } @keyframes fade { from { opacity:0 } }
+  @media (prefers-reduced-motion:reduce) { .fade { animation:none } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><!-- 这份文档的骨架：一张图，两层读法 --></h1>
+  <p class="lead"><!-- 上层是全貌：…怎样一层层展开。下层是细节：…之间的准确关系。两层共用同一根横轴，沿着竖向虚线往下看，就是上层那一列在下层的展开。 --></p>
+
+  <div class="card">
+    <h2><!-- 写这张图讲什么，不写图型名 --></h2>
+    <div class="sub"><!-- 图例 · 单位 · 哪些是示意 · 颜色含义，用 · 分隔 --></div>
+    <svg id="fig1" viewBox="0 0 1260 1400" class="fade"></svg>
+    <div class="src"><!-- 依据 … 条款 · 哪些内容不来自这份文档 · 哪些是演示数据 --></div>
+  </div>
+
+  <div class="card">
+    <h2><!-- 同一套列，换成具体例子 --></h2>
+    <div class="sub"><!-- 竖向虚线与上图是同一组，例子里的每样东西落在哪一列，就对应哪一层 --></div>
+    <svg id="fig2" viewBox="0 0 1260 1100" class="fade"></svg>
+    <div class="src"></div>
+  </div>
+</div>
+
+<script>
+/* ═══ 公用 ═══ */
+const INK="#1F1E1C", MUT="#6F6E68", FAINT="#A9A8A2", GRID="#D4D3CC", PAPER="#F0EFEB";
+const LAD=["#1F1E1C","#4A4944","#6A6963","#8F8E88"];          // 灰阶：跨度条等结构元素
+const CAT={                                                     // 三类，全文统一；线用 c，字用 t，填充用 f
+  a:{c:"#2A9D58",t:"#1B7A41",f:"#D5EDDD",name:"第一类",d:"这一类包含什么"},
+  b:{c:"#C99412",t:"#7A5A08",f:"#F6EACB",name:"第二类",d:"这一类包含什么"},
+  c:{c:"#58402E",t:"#58402E",f:"#E7DED6",name:"第三类",d:"这一类包含什么"},
+};
+const X=[70,200,335,860,960,1080,1180];                         // 抽象层的横向位置，由最宽内容反推
+const NS="http://www.w3.org/2000/svg";
+let P;                                                          // 当前绘制目标 svg，切图时重新赋值
+
+function E(tag,attrs={},text){ const n=document.createElementNS(NS,tag);
+  for(const k in attrs) n.setAttribute(k,attrs[k]); if(text!==undefined) n.textContent=text; P.appendChild(n); return n; }
+function T(x,y,str,o={}){ const t=E("text",{x,y,"font-size":o.size||11,"font-weight":o.w||500,
+    fill:o.fill||INK,"text-anchor":o.anchor||"start"},str);
+  if(o.halo){ t.setAttribute("paint-order","stroke"); t.setAttribute("stroke",PAPER); t.setAttribute("stroke-width",4); } return t; }
+function marker(){ const d=E("defs"),m=document.createElementNS(NS,"marker");
+  Object.entries({id:"ah",viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:6,markerHeight:6,orient:"auto-start-reverse"})
+    .forEach(([k,v])=>m.setAttribute(k,v));
+  const p=document.createElementNS(NS,"path"); p.setAttribute("d","M0,0 L10,5 L0,10 z");
+  p.setAttribute("fill","context-stroke"); m.appendChild(p); d.appendChild(m); }
+const box=(x,y,w,h,lines,o={})=>{ if(o.cat){ const k=CAT[o.cat]; o={stroke:k.c,fill:o.frame?"none":k.f,tf:k.t,...o}; }
+  E("rect",{x,y,width:w,height:h,rx:o.rx??10,fill:o.fill||PAPER,stroke:o.stroke||INK,
+            "stroke-width":o.sw||1.2,"stroke-dasharray":o.dash||""});
+  if(lines)(Array.isArray(lines)?lines:[lines]).forEach((l,i,a)=>
+    T(x+w/2,y+h/2+4+(i-(a.length-1)/2)*13,l,{size:o.size||11,w:o.w||700,fill:o.tf||INK,anchor:"middle"})); };
+const arrow=(d,label,lx,ly,anchor)=>{ E("path",{d,fill:"none",stroke:INK,"stroke-width":1.1,"marker-end":"url(#ah)"});
+  if(label) T(lx,ly,label,{size:9.5,fill:MUT,anchor:anchor||"middle",halo:true}); };
+const link=(x1,y1,x2,y2,c,w)=>E("path",{d:`M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`,
+  fill:"none",stroke:c,"stroke-width":w||1});
+const chip=(x,y,t)=>{ const w=t.length*10.5+16; E("rect",{x,y:y-12,width:w,height:17,rx:8.5,fill:INK});
+  T(x+w/2,y,t,{size:9.5,w:700,fill:PAPER,anchor:"middle"}); };
+// 放置任何横向区块都走 place()：cols 是它对读者宣称的列归属，必须显式给。
+//   cols:[2,5] 跨第 2–5 列（含），这是默认的"按列读"
+//   cols:5     整块只属于第 5 列，但需要更宽才放得下 → 自动画归属线
+//   cols:null  不按列读（并列切面、全局词表、容器框）→ 自动用不透明底盖住虚线
+// 不给 cols 会直接抛错：横向跨度是在向读者承诺归属，没想清楚就不该画。
+function place(x, y, w, h, cols, o = {}) {
+  if (cols === undefined) throw new Error(`place() 缺少 cols：宽 ${w} 的区块必须声明列归属`);
+  const g = E("g", { "data-cols": cols === null ? "none" : String(cols) });
+  const keep = P; P = g;
+  if (cols === null) E("rect", { x: x-6, y: y-6, width: w+12, height: h+12, rx: o.rx ?? 12,
+                                 fill: o.cover || "#EFEEE9" });          // 盖住虚线
+  if (typeof cols === "number") {                                        // 只属于一列，画归属线
+    const cx = x + w / 2, top = y - 8;
+    E("path", { d:`M${cx},${top} V${top-14} H${X[cols-1]} V${o.railTop ?? 150}`,
+                fill:"none", stroke:MUT, "stroke-width":1, "stroke-dasharray":"3 3" });
+    T(cx, top-20, o.note || `这一整块都属于第 ${cols} 列，不按列读`,
+      { size:9, fill:MUT, anchor:"middle", halo:true });
+  }
+  P = keep; P.appendChild(g);
+  return g;                                                              // 后续内容画进 g 里：P = g
+}
+const rails=(y1,y2)=>X.forEach(x=>E("line",{x1:x,y1,x2:x,y2,stroke:"#A9A8A2","stroke-width":1.1,"stroke-dasharray":"4 4"}));
+const legend=(y,note)=>{ T(30,y,"颜色 = 这个东西属于哪一类（全图统一）",{size:11.5,w:700});
+  Object.values(CAT).forEach((k,i)=>{ const yy=y+18+i*24;
+    E("rect",{x:30,y:yy,width:26,height:15,rx:4,fill:k.f,stroke:k.c,"stroke-width":1.2});
+    T(64,yy+11.5,k.name,{size:10.5,w:700,fill:k.t}); T(124,yy+11.5,k.d,{size:9.5,fill:MUT}); });
+  const yy=y+18+Object.keys(CAT).length*24+8;
+  E("rect",{x:30,y:yy,width:26,height:3,fill:INK}); T(64,yy+5,"黑灰",{size:10.5,w:700});
+  T(124,yy+5,note||"结构与关系：抽象层的分界、箭头、跨度条、第三维度",{size:9.5,fill:MUT}); };
+
+/* ═══ 图一 · 骨架 ═══ */
+(function(){
+  P=document.getElementById("fig1"); marker();
+  rails(140, 1380);
+
+  // 第三维度：罩在整体之外
+  E("path",{d:`M${X[0]},44 V34 H${X[6]} V44`,fill:"none",stroke:INK,"stroke-width":1});
+  T(X[0],24,"第三个维度 · <条款>：<谁用、在哪些过程里用> —— 只消费，不改变",{w:600});
+
+  // 主线列头
+  [["1","<第一层>","<条款>"],["2","<第二层>","<条款>"],["3","<第三层>","<条款>"],["4","<第四层>","<条款>"]]
+    .forEach((h,i)=>{ const x=X[i];
+      E("circle",{cx:x-2,cy:84,r:8,fill:INK}); T(x-2,87.5,h[0],{size:10,w:800,fill:PAPER,anchor:"middle"});
+      T(x+11,83,h[1],{size:11.5,w:700,halo:true}); T(x+11,96,h[2],{size:9.5,fill:MUT,halo:true}); });
+
+  // 扇出树：先单线引出，再散开，避免线叠线形成黑楔子
+  // const fx = X[3]-150;
+  // link(X[1]+5, pY, X[2]-6, y, CAT.a.c, 2);
+  // E("line",{x1:X[2]+225,y1:y,x2:fx,y2:y,stroke:CAT.a.c,"stroke-width":1.8});
+  // for (…) link(fx, y, X[3]-2, ty, CAT.a.c, .9);
+
+  // 跨度条：条从哪一列开始，就从哪一层起作用
+  // SPANS.forEach((sp,i)=>{ const y=…, x1=X[sp.from];
+  //   E("rect",{x:x1,y,width:X[6]-x1,height:9,rx:4.5,fill:LAD[i+1]});
+  //   T(x1-8,y+8.5,sp.t,{size:10.5,w:700,anchor:"end",halo:true}); });
+
+  // 下层 · 细节：原文 figure 的完整重画，整块坐在对应列的正下方
+  // 并列的几张切面彼此不相交时：place(x, y, w, h, null) —— 底色会自动盖住虚线
+  // 某块只属于某一列却要横向展开时：place(x, y, w, h, 5) —— 会自动画归属线回第 5 列
+})();
+
+/* ═══ 图二 · 例子 ═══ */
+(function(){
+  P=document.getElementById("fig2"); marker();
+  rails(160, 700);
+  // 用同一组 X[]，自下而上读：有什么 → 怎么评价 → 拿来做什么
+  legend(960);
+})();
+</script>
+</body>
+</html>
