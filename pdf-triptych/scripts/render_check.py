@@ -77,6 +77,9 @@ def probe(path: Path, out: Path, scale: float, height: int) -> tuple:
           if (fs && fs < 8.4) bad.push(`[字号] ${sid}：「${s.slice(0,22)}」仅 ${fs.toFixed(1)}px`);
         });
 
+        // 泳道居中：虚线不是实体，两条虚线之间的区域才是实体，内容应在泳道内居中。
+        // 贴着某一边画（典型症状：左间距恒为 2–3px）是最常见的排版错误。
+        // 泳道居中与列归属共用同一组列线，先把列线算出来
         // 列归属：列位置从竖虚线本身推断（虚线就是列的可见载体，不必写死 X[]）
         // 只认贯穿性的长虚线：短的竖虚线可能是刻度、连接线、装饰，不是列
         const vbH = +(svg.getAttribute("viewBox") || "0 0 0 0").split(/\s+/)[3] || 1;
@@ -102,6 +105,31 @@ def probe(path: Path, out: Path, scale: float, height: int) -> tuple:
             }
           });
           if (undecl) bad.push(`[列归属] ${sid}：${undecl} 个横跨多列的区块没有声明 data-cols —— ${sample.join("；")}`);
+
+          // 泳道居中：完全落在单个泳道内的矩形，左右间距应大致相等
+          const edges = [...cols, +(svg.getAttribute("viewBox")||"0 0 0 0").split(/\s+/)[2]];
+          let off = 0, offSample = [];
+          svg.querySelectorAll("rect").forEach(r => {
+            const x = +r.getAttribute("x"), w = +r.getAttribute("width");
+            if (!(w > 24)) return;
+            const holder = r.closest("[data-cols]");
+            if (holder && holder.getAttribute("data-cols").match(/none|-/)) return;   // 不按列读 / 跨泳道
+            for (let i = 0; i < edges.length - 1; i++) {
+              const L = edges[i], R = edges[i+1], lw = R - L;
+              if (x >= L - 2 && x + w <= R + 2) {
+                const gl = x - L, gr = R - (x + w);
+                if (Math.abs(gl - gr) > lw * 0.18) {
+                  off++;
+                  if (offSample.length < 3) {
+                    const t = (r.parentNode.textContent || "").trim().slice(0, 14);
+                    offSample.push(`泳道${i+1} 左${Math.round(gl)}/右${Math.round(gr)}${t ? "「"+t+"」" : ""}`);
+                  }
+                }
+                break;
+              }
+            }
+          });
+          if (off) bad.push(`[泳道居中] ${sid}：${off} 个矩形没有在泳道内居中（虚线之间的区域才是实体）—— ${offSample.join("；")}`);
         }
 
         // 重叠：同一行（垂直中心差 < 该行高一半）且水平区间实际相交 > 2px

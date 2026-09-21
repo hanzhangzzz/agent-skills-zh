@@ -57,7 +57,14 @@ const CAT={                                                     // 三类，全�
   b:{c:"#C99412",t:"#7A5A08",f:"#F6EACB",name:"第二类",d:"这一类包含什么"},
   c:{c:"#58402E",t:"#58402E",f:"#E7DED6",name:"第三类",d:"这一类包含什么"},
 };
-const X=[70,200,335,860,960,1080,1180];                         // 抽象层的横向位置，由最宽内容反推
+const VW=1260;                                                  // 画布宽，最后一个泳道的右界
+// X 是【泳道的分界线】，不是"列的位置"。虚线本身没有实体，两条线之间的区域才是实体。
+// 所有内容都在泳道内居中，不要写 X[i]+偏移 —— 那等于把虚线当左基准，一定贴左。
+const X=[70,200,335,860,960,1080,1180];
+const lane=i=>{ const L=X[i-1], R=(i<X.length?X[i]:VW); return {L,R,cx:(L+R)/2,w:R-L}; };
+const span=(a,b)=>{ const L=lane(a).L, R=lane(b).R; return {L,R,cx:(L+R)/2,w:R-L}; };
+// 在泳道 i（或跨泳道 [a,b]）内居中放一个宽 w 的元素，返回它的左上角 x
+const cx=(i,w)=>{ const z=Array.isArray(i)?span(i[0],i[1]):lane(i); return z.cx-w/2; };
 const NS="http://www.w3.org/2000/svg";
 let P;                                                          // 当前绘制目标 svg，切图时重新赋值
 
@@ -82,26 +89,31 @@ const link=(x1,y1,x2,y2,c,w)=>E("path",{d:`M${x1},${y1} C${(x1+x2)/2},${y1} ${(x
   fill:"none",stroke:c,"stroke-width":w||1});
 const chip=(x,y,t)=>{ const w=t.length*10.5+16; E("rect",{x,y:y-12,width:w,height:17,rx:8.5,fill:INK});
   T(x+w/2,y,t,{size:9.5,w:700,fill:PAPER,anchor:"middle"}); };
-// 放置任何横向区块都走 place()：cols 是它对读者宣称的列归属，必须显式给。
-//   cols:[2,5] 跨第 2–5 列（含），这是默认的"按列读"
-//   cols:5     整块只属于第 5 列，但需要更宽才放得下 → 自动画归属线
-//   cols:null  不按列读（并列切面、全局词表、容器框）→ 自动用不透明底盖住虚线
+// 放置任何横向区块都走 place()：cols 声明它占哪个泳道，元素在泳道内自动居中。
+//   cols:3      占第 3 泳道
+//   cols:[2,5]  跨第 2–5 泳道
+//   cols:5, only:true  整块只属于第 5 泳道但需要更宽 → 自动画归属线
+//   cols:null   不按列读 → 自动用不透明底盖住虚线
 // 不给 cols 会直接抛错：横向跨度是在向读者承诺归属，没想清楚就不该画。
-function place(x, y, w, h, cols, o = {}) {
-  if (cols === undefined) throw new Error(`place() 缺少 cols：宽 ${w} 的区块必须声明列归属`);
-  const g = E("g", { "data-cols": cols === null ? "none" : String(cols) });
+function place(cols, y, w, h, o = {}) {
+  if (cols === undefined) throw new Error(`place() 缺少 cols：宽 ${w} 的区块必须声明泳道归属`);
+  const zone = cols === null ? {L:0, R:VW, cx:VW/2, w:VW}
+             : Array.isArray(cols) ? span(cols[0], cols[1]) : lane(cols);
+  const x = o.x !== undefined ? o.x : zone.cx - w / 2;     // 默认：泳道内居中
+  const tag = cols === null ? "none" : Array.isArray(cols) ? `${cols[0]}-${cols[1]}` : String(cols);
+  const g = E("g", { "data-cols": tag });
   const keep = P; P = g;
   if (cols === null) E("rect", { x: x-6, y: y-6, width: w+12, height: h+12, rx: o.rx ?? 12,
                                  fill: o.cover || "#EFEEE9" });          // 盖住虚线
-  if (typeof cols === "number") {                                        // 只属于一列，画归属线
-    const cx = x + w / 2, top = y - 8;
-    E("path", { d:`M${cx},${top} V${top-14} H${X[cols-1]} V${o.railTop ?? 150}`,
+  if (o.only) {                                                          // 只属于一个泳道，画归属线
+    const c = x + w / 2, top = y - 8;
+    E("path", { d:`M${c},${top} V${top-14} H${lane(cols).cx} V${o.railTop ?? 150}`,
                 fill:"none", stroke:MUT, "stroke-width":1, "stroke-dasharray":"3 3" });
-    T(cx, top-20, o.note || `这一整块都属于第 ${cols} 列，不按列读`,
+    T(c, top-20, o.note || `这一整块都属于第 ${cols} 个泳道`,
       { size:9, fill:MUT, anchor:"middle", halo:true });
   }
   P = keep; P.appendChild(g);
-  return g;                                                              // 后续内容画进 g 里：P = g
+  return { g, x, cx: x + w / 2, zone };                    // 后续内容画进 g 里：P = g
 }
 const rails=(y1,y2)=>X.forEach(x=>E("line",{x1:x,y1,x2:x,y2,stroke:"#A9A8A2","stroke-width":1.1,"stroke-dasharray":"4 4"}));
 const legend=(y,note)=>{ T(30,y,"颜色 = 这个东西属于哪一类（全图统一）",{size:11.5,w:700});
@@ -121,33 +133,37 @@ const legend=(y,note)=>{ T(30,y,"颜色 = 这个东西属于哪一类（全图�
   E("path",{d:`M${X[0]},44 V34 H${X[6]} V44`,fill:"none",stroke:INK,"stroke-width":1});
   T(X[0],24,"第三个维度 · <条款>：<谁用、在哪些过程里用> —— 只消费，不改变",{w:600});
 
-  // 主线列头
+  // 泳道头：也在泳道内居中 —— 它说的是"这一段区域是什么"，不是"这条虚线是什么"
   [["1","<第一层>","<条款>"],["2","<第二层>","<条款>"],["3","<第三层>","<条款>"],["4","<第四层>","<条款>"]]
-    .forEach((h,i)=>{ const x=X[i];
-      E("circle",{cx:x-2,cy:84,r:8,fill:INK}); T(x-2,87.5,h[0],{size:10,w:800,fill:PAPER,anchor:"middle"});
-      T(x+11,83,h[1],{size:11.5,w:700,halo:true}); T(x+11,96,h[2],{size:9.5,fill:MUT,halo:true}); });
+    .forEach((h,i)=>{ const c=lane(i+1).cx;
+      E("circle",{cx:c-46,cy:84,r:8,fill:INK}); T(c-46,87.5,h[0],{size:10,w:800,fill:PAPER,anchor:"middle"});
+      T(c-33,83,h[1],{size:11.5,w:700,halo:true}); T(c-33,96,h[2],{size:9.5,fill:MUT,halo:true}); });
+
+  // 元素一律在泳道内居中：先算左上角，再画
+  // const bw = 130, bx = cx(3, bw);            // 第 3 泳道内居中放一个宽 130 的框
+  // box(bx, 200, bw, 46, "…", {cat:"a"});
+
+  // 连接线连的是【矩形的边缘】，不是虚线 —— 端点用上一个框的右缘、下一个框的左缘
+  // arrow(`M${bx+bw},223 H${cx(4,140)}`);      // 从第 3 泳道框的右缘，到第 4 泳道框的左缘
 
   // 扇出树：先单线引出，再散开，避免线叠线形成黑楔子
-  // const fx = X[3]-150;
-  // link(X[1]+5, pY, X[2]-6, y, CAT.a.c, 2);
-  // E("line",{x1:X[2]+225,y1:y,x2:fx,y2:y,stroke:CAT.a.c,"stroke-width":1.8});
-  // for (…) link(fx, y, X[3]-2, ty, CAT.a.c, .9);
+  // const fx = cx(4,0)-150;
+  // for (…) link(fx, y, cx(4,tw), ty, CAT.a.c, .9);
 
-  // 跨度条：条从哪一列开始，就从哪一层起作用
-  // SPANS.forEach((sp,i)=>{ const y=…, x1=X[sp.from];
-  //   E("rect",{x:x1,y,width:X[6]-x1,height:9,rx:4.5,fill:LAD[i+1]});
-  //   T(x1-8,y+8.5,sp.t,{size:10.5,w:700,anchor:"end",halo:true}); });
+  // 跨度条：跨泳道的元素用 span()，同样居中；起止由它真实作用的范围决定
+  // SPANS.forEach((sp,i)=>{ const z=span(sp.from, X.length), y=…;
+  //   E("rect",{x:z.L,y,width:z.w,height:9,rx:4.5,fill:LAD[i+1]}); });
 
   // 下层 · 细节：原文 figure 的完整重画，整块坐在对应列的正下方
-  // 并列的几张切面彼此不相交时：place(x, y, w, h, null) —— 底色会自动盖住虚线
-  // 某块只属于某一列却要横向展开时：place(x, y, w, h, 5) —— 会自动画归属线回第 5 列
+  // 并列的几张切面彼此不相交时：place(null, y, w, h) —— 底色会自动盖住虚线
+  // 某块只属于一个泳道却要横向展开时：place(5, y, w, h, {only:true}) —— 会自动画归属线
 })();
 
 /* ═══ 图二 · 例子 ═══ */
 (function(){
   P=document.getElementById("fig2"); marker();
   rails(160, 700);
-  // 用同一组 X[]，自下而上读：有什么 → 怎么评价 → 拿来做什么
+  // 用同一组泳道，自下而上读：有什么 → 怎么评价 → 拿来做什么；一切用 cx(i,w) 定位
   legend(960);
 })();
 </script>
