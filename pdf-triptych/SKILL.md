@@ -149,10 +149,12 @@ subagent 返回后，把它纠正你的地方单独记下来。这些是后面�
 
 ### 5.1 先做一次纯视觉 review
 
+先把 `SKILL_DIR` 设为当前已加载的本 skill 目录；以下命令都相对该目录定位脚本，不假设全局安装位置。
+
 改文案之前，先当作没读过内容，只看形：
 
 ```bash
-python3 ~/.claude/skills/pdf-triptych/scripts/render_check.py out.html --scale 2 --slice --height 4800
+python3 "$SKILL_DIR/scripts/render_check.py" out.html --scale 2 --slice --height 4800
 ```
 
 脚本会做五件事：**自动测量页面真实高度**（不用手猜 `--height`）、`node --check` 语法、抓 Chrome console 的运行时错误、在页面里自检（文字溢出画布 / 同行重叠 / 字号低于 8.4px）、按真实高度截图并分块。**分块截图必须用 Read 工具逐张看**——脚本只能抓到机械问题，"这一块读起来别扭"只有眼睛能发现。本流程首次执行时这一步抓到四个问题：列虚线太淡看不见、标签被分叉线压住、扇出起点因线叠线形成黑楔子、左下角一大块空地没用。
@@ -187,7 +189,7 @@ python3 ~/.claude/skills/pdf-triptych/scripts/render_check.py out.html --scale 2
 ### 5.4 每次改动后验证
 
 ```bash
-python3 ~/.claude/skills/pdf-triptych/scripts/render_check.py out.html --height 4800
+python3 "$SKILL_DIR/scripts/render_check.py" out.html --height 4800
 ```
 
 **语法检查过不代表能跑。** 本流程首次执行时出过一次变量先用后定义，`node --check` 通过，但整张图画不出来——因为 `const` 的暂时性死区是运行时才触发的。脚本因此同时抓 console 错误。
@@ -226,7 +228,7 @@ python3 ~/.claude/skills/pdf-triptych/scripts/render_check.py out.html --height 
 **二、先诊断，再决定重做还是改。** 不要默认"在它基础上改"：
 
 ```bash
-python3 ~/.claude/skills/pdf-triptych/scripts/render_check.py 旧产物.html
+python3 "$SKILL_DIR/scripts/render_check.py" 旧产物.html
 ```
 
 - 报了 **[泳道居中]** → 它是旧坐标系统生成的，**重做**，不要在上面补丁
