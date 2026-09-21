@@ -33,7 +33,7 @@ fi
   || { echo "缺少 Python 依赖，请执行: pip install requests beautifulsoup4 markdownify" >&2; exit 1; }
 
 # ---- Run ----
-TMP_JSON="$(mktemp /tmp/wechat_article.XXXXXX).json"
+TMP_JSON="$(mktemp /tmp/wechat_article.XXXXXX)"
 trap 'rm -f "$TMP_JSON"' EXIT
 
 WECHAT_CHROME_PATH="$CHROME_PATH" node "$NODE_SCRIPT" "$URL" > "$TMP_JSON"
