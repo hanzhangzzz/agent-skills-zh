@@ -40,7 +40,7 @@ ci-review:
     - |
       API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID"; H="PRIVATE-TOKEN: $GITLAB_TOKEN"
       curl -sf -H "$H" "$API/notes?per_page=100" \
-        | jq -r '[.[] | select(.body | startswith("<!-- ci-review last="))] | last | .body // ""' \
+        | jq -r '[.[] | select((.body // "") | startswith("<!-- ci-review last="))] | last | .body // ""' \
         > /tmp/ci-review-sticky.md
       bash .gitlab/ci-review-verdict.sh check "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" "$CI_COMMIT_SHA" \
         /tmp/ci-review-sticky.md "$CI_REVIEW_MERGE_BRANCHES"
