@@ -1,8 +1,6 @@
 ---
 name: repo-tidy
-description: |
-  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees. Ships four hooks: SessionStart injects repo status plus a [tasks] worktree menu; session-cwd records each session's working directory so the user's editor shortcut opens what the AI is actually working on; PreToolUse(EnterWorktree) fetches first so new task branches start from the latest default branch. In Claude Code, start tasks with EnterWorktree — `--new <task>` is the fallback for environments without it. Use before a new repository-changing task or when the user explicitly requests cleanup. Read-only audits, questions, continued tasks, and [repo-status] alone do not trigger mutations. Also use when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
-
+description: "Prepare safe task branches/worktrees, preserve active or unverified work, and keep session working directories in sync. Use for new repository-changing tasks or requested cleanup; not for read-only audits, continued tasks, or status checks."
 ---
 
 # repo-tidy
@@ -137,24 +135,26 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path>
 python3 "$SKILL_DIR/scripts/repo_tidy.py" --all
 ```
 
-### 2. 确认后执行
+### 2. 核对范围后执行
 
-把 dry-run 清单展示给用户；**涉及删除分支/worktree 时必须等用户确认**（用户本轮已明确说「清理」「归位」的，单仓库可直接 `--apply`）。
+核对 dry-run 清单与授权范围。已授权的单仓库清理或按项目规则启动新任务，可直接处理已核实安全的对象，不因换轮次重复询问。未推送、未合并、脏工作区、活跃任务或归属不明的对象保留；范围扩大或存在数据丢失风险时说明影响并确认。
+
+`upstream 已删除` 本身不能证明工作已合并。脚本只自动清理已证实为默认分支祖先的分支；未证实合并的 gone 分支保留并报告；其关联 worktree 同样保留，但不单独列出目录。不阻塞 `--new` 创建新任务。squash 等不能由祖先关系证实的情况，也不自动删除；需要另行核实内容保留证据和清理授权。
 
 ```bash
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --apply
 ```
 
-### 3. 开新任务
+### 3. 开新任务（已有范围授权时直接执行）
 
 **Claude Code 里走 `EnterWorktree`，不要用 `--new`。**读 SessionStart 注入的 `[tasks]` 菜单判断：
 
 - 续某个任务 → `EnterWorktree(path=<该 worktree 路径>)`
 - 新任务 → `EnterWorktree(name=<task>)`
 - 两个 session 共用一个 worktree（一个写、一个 review）→ 同样用 `path`
-- 进门前**向用户一句话确认**；用户说留在主检出就留。session 中途换新任务：`ExitWorktree(keep)` 再 `EnterWorktree(name=...)`，同样先确认
+- 已有任务范围授权时直接进入工作树，不重复确认；只有工作位置会改变目标、范围或重大后果时才确认。用户明确要求留在主检出时遵循。session 中途换新任务：`ExitWorktree(keep)` 再 `EnterWorktree(name=...)`，同样复用已有授权
 
-配套 hook 保证两件事：进门前已 fetch（新分支基于最新远端默认分支），进门后位置文件已更新（用户快捷键看到的就是这里）。主检出因此恒定停在默认分支，只作阅读窗口——**不在主检出上开工**，否则第一个任务就会把它占走，后续任务被迫绕到 worktree，而没人再把它还回来。
+配套 hook 保证两件事：进门前已 fetch（新分支基于最新远端默认分支），进门后位置文件已更新（用户快捷键看到的就是这里）。主检出因此恒定停在默认分支，只作阅读窗口——**默认不在主检出上开工，用户明确要求时除外**，否则第一个任务就会把它占走，后续任务被迫绕到 worktree，而没人再把它还回来。
 
 没有 `EnterWorktree` 的环境（如其他 CLI）才用回退命令：
 
@@ -173,7 +173,7 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 | 对象 | 条件 | 动作 |
 |------|------|------|
 | 本地分支 | 已合并进 origin/<默认分支> | 删除 |
-| 本地分支 | upstream 已删除（squash 合并后的常态） | 删除 |
+| 本地分支 | upstream 已删除 | 已证实合并则按上一行清理，否则保留并报告 |
 | 本地分支 | 有未推提交 / 从未推送 / MR 进行中 | **保留并报告** |
 | 本地分支 | 与 origin/<默认分支> 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |
 | 本地分支 | 空且已落后 origin/<默认分支>（切出后从未动过） | 删除（无内容可丢，重切才是正确归位） |
