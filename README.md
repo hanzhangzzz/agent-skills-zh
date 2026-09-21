@@ -84,7 +84,11 @@ Then just talk to your agent — every skill lists its own trigger phrases (Engl
 </tr>
 <tr>
 <td><a href="./scanned-book-ocr/"><img src="./assets/readme/cards/scanned-book-ocr.png" alt="scanned-book-ocr 展示卡"></a><br><b>scanned-book-ocr</b> · 扫描 PDF → 页码可追溯的本地文本</td>
+<td><a href="./pdf-triptych/"><img src="./assets/readme/cards/pdf-triptych.png" alt="pdf-triptych 展示卡"></a><br><b>pdf-triptych</b> · 长标准 PDF → 可追溯的一页结构图</td>
+</tr>
+<tr>
 <td>飞轮实景：do-something 提出方向并实践 → ci-review 验证质量 → 下一轮先回应评论 → 人类只在想收割时出现。<br><br>本仓 PR #8 实录：机器人在审查规范的安装副本里发现一处逻辑矛盾（带失败场景与复现命令），开发者修复 push 后，增量审查确认"矛盾已由此 commit 消除"，零重复评论。</td>
+<td></td>
 </tr>
 </table>
 <!-- cards-gallery-end -->
