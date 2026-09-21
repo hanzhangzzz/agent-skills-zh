@@ -108,21 +108,27 @@ def probe(path: Path, out: Path, scale: float, height: int) -> tuple:
 
           // 泳道居中：完全落在单个泳道内的矩形，左右间距应大致相等
           const edges = [...cols, +(svg.getAttribute("viewBox")||"0 0 0 0").split(/\s+/)[2]];
+          const boxes = [...svg.querySelectorAll("rect")].map(r => ({
+            r, x: +r.getAttribute("x"), y: +r.getAttribute("y"),
+            w: +r.getAttribute("width"), h: +r.getAttribute("height") })).filter(b => b.w > 0);
+          // 嵌套在另一个矩形里的小格子是"框内布局"，不按泳道居中，先排掉
+          const nested = b => boxes.some(o => o.r !== b.r && o.w > b.w + 4 &&
+            o.x <= b.x + 1 && o.x + o.w >= b.x + b.w - 1 && o.y <= b.y + 1 && o.y + o.h >= b.y + b.h - 1);
           let off = 0, offSample = [];
-          svg.querySelectorAll("rect").forEach(r => {
-            const x = +r.getAttribute("x"), w = +r.getAttribute("width");
-            if (!(w > 24)) return;
+          boxes.forEach(b => {
+            const { r, x, w } = b;
+            if (!(w > 24) || nested(b)) return;
             const holder = r.closest("[data-cols]");
             if (holder && holder.getAttribute("data-cols").match(/none|-/)) return;   // 不按列读 / 跨泳道
             for (let i = 0; i < edges.length - 1; i++) {
               const L = edges[i], R = edges[i+1], lw = R - L;
               if (x >= L - 2 && x + w <= R + 2) {
                 const gl = x - L, gr = R - (x + w);
-                if (Math.abs(gl - gr) > lw * 0.18) {
+                if (Math.abs(gl - gr) > lw * 0.12) {
                   off++;
                   if (offSample.length < 3) {
-                    const t = (r.parentNode.textContent || "").trim().slice(0, 14);
-                    offSample.push(`泳道${i+1} 左${Math.round(gl)}/右${Math.round(gr)}${t ? "「"+t+"」" : ""}`);
+                    const t = (r.parentNode.textContent || "").trim().slice(0, 12);
+                    offSample.push(`泳道${i+1} 左${Math.round(gl)}/右${Math.round(gr)}（差${Math.round(Math.abs(gl-gr)/lw*100)}%）${t ? "「"+t+"」" : ""}`);
                   }
                 }
                 break;
