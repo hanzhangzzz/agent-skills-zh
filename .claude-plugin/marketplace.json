@@ -196,6 +196,16 @@
       "skills": [
         "./scanned-book-ocr"
       ]
+    },
+    {
+      "name": "pdf-triptych",
+      "source": "./",
+      "strict": false,
+      "description": "把标准、规范或长技术 PDF 整理成共用横轴和颜色的一页结构图：骨架、细节、例子，附渲染与视觉检查。",
+      "version": "1.0.0",
+      "skills": [
+        "./pdf-triptych"
+      ]
     }
   ]
 }
