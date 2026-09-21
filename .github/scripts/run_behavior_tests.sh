@@ -32,6 +32,7 @@ run "ci-review verdict gate" bash ci-review/tests/test_verdict_gate.sh
 run "ci-review policy" python3 ci-review/tests/test_review_policy.py
 run "ci-review installer" bash ci-review/tests/test_install.sh
 run "scanned-book-ocr" python3 -m unittest discover -s scanned-book-ocr/scripts -p 'test_*.py'
+run "README manual installation" python3 .github/scripts/test_readme_install.py
 run "README gallery generator" python3 assets/readme/cards-src/test_build_gallery.py
 run "marketplace mutations" python3 .github/scripts/test_validate_marketplace.py
 run "marketplace" python3 .github/scripts/validate_marketplace.py .

@@ -18,26 +18,21 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">do-something</span><span class="tag">无人值守 · 自主推进</span></div>
-  <div class="one">判断此刻杠杆最高的一件事并做完；所有运行续在 do/main 分支上，人类合并即收割</div>
+  <div class="one">有证据、推进目的、留下成果并完成验证才交付；无合格工作时 NO-OP</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>/do-something
 
 /loop 1h /do-something   # 每小时推进一次
 
 做点什么 / 自己看着办</pre></div>
-    <div class="pane"><h4>do/main 分支上的 DO.md</h4><pre># 目的
-&lt;一句话：这个项目为什么存在。人类可随时改写&gt;
+    <div class="pane"><h4>do/main 分支上的 DO.md</h4><pre>DO.md 有限状态
+├── 目的与约束
+├── 当前状态和证据指纹
+└── 风险与下一步
 
-# 约束
-&lt;人类留下的边界，如&quot;不要动 src/legacy&quot;、&quot;本周聚焦 X&quot;&gt;
-
-# 日志
-- 2026-08-24 09:00：&lt;做了什么、如何验证的、遗留的疑虑或下一步&gt;
-
-三层判断：有待办做待办 → 有目的第一性推理 → 没目的勇敢找一个
-禁止：不可逆动作（push、付款、删数据、调生产 API）
-结束自检：验证过了吗？产出在 do/main 上吗？日志写了吗？
-人类：<span class="ok">合并 = 收割</span>　<span class="warn">删分支 = 否决</span></pre><div class="src">DO.md 模板与规则来自 do-something/SKILL.md</div></div>
+默认不 push；MR 模式须单独启用。
+与 ci-review 配合时，机器人分支
+须通过 execution 与 value 双门禁。</pre><div class="src">规则来自 do-something/SKILL.md；此卡不是运行记录</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

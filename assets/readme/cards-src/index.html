@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8"><style>
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>技能流程与输出格式</title><style>
 *{box-sizing:border-box} body{margin:0;background:#F5F0E6;font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;color:#2B2622}
 .card{width:1200px;height:675px;padding:44px 52px;display:flex;flex-direction:column;position:relative;overflow:hidden}
 .top{display:flex;align-items:baseline;gap:18px;margin-bottom:8px}
@@ -15,18 +15,21 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 .foot{position:absolute;right:52px;bottom:26px;font-size:15px;color:#9A8B7E}
 .arrow{position:absolute;left:calc(5fr);}
 .src{font-size:13px;color:#9A8B7E;margin-top:auto;padding-top:8px}
- body{width:1200px}</style>
+ body{width:1200px} header{padding:24px 52px}</style><header><h1>流程与输出格式</h1><p>这些说明卡包含格式约定和标注来源的历史摘录，不是运行截图。使用条件请看仓库 README 与各技能说明。</p></header>
 <div class="card">
   <div class="top"><span class="name">doc-reader</span><span class="tag">英文文档 → 中文精译</span></div>
-  <div class="one">章节级精准翻译英文技术文档/PDF，图片 100% 保留，本地三栏预览（原文·译文·AI 幻灯）</div>
+  <div class="one">英文网页/PDF 逐节翻译与对照预览；图片下载失败时保留原始链接</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>https://blog.example.com/post
 （或本地 PDF）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>translation.md   逐节对照
-├── images/   <span class="ok">图片 100% 保留</span>
-└── preview.html  原文·译文·AI 幻灯 三栏</pre><div class="src">doc-reader</div></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>original.md      原文
+translated.md    译文
+combined.md      对照文本
+preview.html     本地预览
+images/          已下载的原文图片
+slides/          可选生成的概要图</pre><div class="src">格式来自 doc-reader/SKILL.md；此卡不是运行截图</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">wechat-article-md-local</span><span class="tag">公众号 → Markdown</span></div>
@@ -36,7 +39,7 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 
 （收到公众号链接即自动触发，
  也可说：下载这篇公众号文章）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>Claude-Code-Skills-完全指南-从零打造…/
+    <div class="pane"><h4>历史运行输出摘录</h4><pre>Claude-Code-Skills-完全指南-从零打造…/
 ├── Claude Code Skills 完全指南….md    <span class="ok">11,026 字</span>
 ├── Claude Code Skills 完全指南….html  （备份）
 ├── source.json
@@ -51,7 +54,7 @@ source_url: &quot;https://mp.weixin.qq.com/s/M-K8…&quot;
 你好，我是《Redis 高手心法》畅销书作者码哥，可以叫我靓仔。
 我用了三个月的 Claude Code，有一个时期非常难受…</pre><div class="src">真实运行 · 2026-09-01 · 公开文章</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">xiaohongshu-downloader</span><span class="tag">小红书视频 → 逐字稿</span></div>
@@ -73,7 +76,7 @@ https://www.xiaohongshu.com/explore/…
 
 中文口播直接保存；英文口播翻译后保存</pre><div class="src">输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">x-article-download</span><span class="tag">X / Twitter → Markdown</span></div>
@@ -96,70 +99,67 @@ https://www.xiaohongshu.com/explore/…
 整账号：遍历全部推文，跳过需登录的 X Article，
 靠含代码块的推文拿到真实提示词</pre><div class="src">输出结构来自 x-article-download/SKILL.md（视频路径需 yt-dlp / whisper）</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">hkr-render</span><span class="tag">Markdown → 公众号排版</span></div>
-  <div class="one">一键排成微信合规的内联样式 HTML：7 主题、外链自动转脚注、多图文直推草稿箱</div>
+  <div class="one">Markdown 转为微信兼容 HTML；可选封面和草稿推送，后者需账号权限</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>一篇 md
 
 （&quot;公众号排版，用含彰主题&quot;）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>preview.html
-├── 内联样式，无外链样式表（微信合规）
-├── 7 主题: 含彰/墨韵/赤陶/杂志…
-└── 外链自动转脚注 · <span class="ok">多图文直推草稿箱</span></pre><div class="src">7 主题 × 样例全过</div></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>排版 HTML
+├── 微信兼容内联样式
+├── 7 个主题
+└── 可选草稿推送：需 AppID/Secret、API 权限和 IP 白名单</pre><div class="src">格式来自 hkr-render/SKILL.md；此卡不是运行截图</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">md2view</span><span class="tag">Markdown → 可读视图</span></div>
-  <div class="one">把又长又臭的 md 重编码成左原文·右重组·滚动同步的双栏视图，每个字都能一键回到原文出处</div>
+  <div class="one">把 Markdown 整理为原文与重组视图，使用来源锚点辅助复核</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>一篇复盘/报告/规格/长 README
 
 （&quot;把这篇变成能读的视图&quot;）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>reader.html  <span class="ok">53KB 自包含</span>
-├── 左栏: 原文（分块锚点）
-├── 右栏: 信息重组（表格/矩阵/标注条）
-└── <span class="ok">机器验证</span> 溯源不过不产出 · 防垫字检查</pre><div class="src">单测 27/27 · 真实管线冒烟通过</div></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>reader.html
+├── 左栏：原文与来源锚点
+├── 右栏：模型设计的重组视图
+└── 验证锚点、文本与数字；仍需语义和视觉复核</pre><div class="src">格式来自 md2view/SKILL.md；此卡不是运行截图</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">gpt-image2-prompt-director</span><span class="tag">弱想法 → 生图 brief</span></div>
-  <div class="one">把模糊想法变成高质量 gpt-image-2 生成提示词：头像/表情包/信息图/海报/产品图，附专家提示词集基准评测</div>
+  <div class="one">把想法写成可复制的图片生成提示词；实际出图需另用图片工具</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>&quot;我想要一个赛博朋克风头像&quot;
 
 （或: 修一下这个 prompt）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>prompt-brief.md
+    <div class="pane"><h4>输出格式示例</h4><pre>prompt-brief.md
 ├── 视觉框架 + 工件规格
 ├── 平台参数（尺寸/风格约束）
-└── <span class="ok">专家提示词集基准评测</span></pre><div class="src">gpt-image2-prompt-director</div></div>
+└── <span class="ok">专家提示词集基准评测</span></pre><div class="src">格式来自 gpt-image2-prompt-director/SKILL.md；提示词检查不保证出图质量</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">repo-tidy</span><span class="tag">Git 归位 · 并行任务</span></div>
-  <div class="one">一条命令：清掉已合并分支和废弃 worktree，切回最新主分支，再开任务分支</div>
+  <div class="one">准备分支与工作树；未证实合并的分支保留，已有授权内的安全操作直接执行</div>
   <div class="grid">
-    <div class="pane in"><h4>输入 · 触发</h4><pre>python3 repo_tidy.py . --new imagegen-text-budget
+    <div class="pane in"><h4>输入 · 触发</h4><pre>说出任务与仓库，例如：
+“为当前仓库的新修复准备工作树”
 
-或直接说：
-归位 / 开新任务 / 清理分支</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre><span class="ok">✅</span> ~/Desktop/Works/code/doc-reader
-  🧹 已移除 worktree doc-reader--doc-reader-codex-imagegen-no-upload
-     (分支 task/doc-reader-codex-imagegen-no-upload)
-  🗑️ 已删分支 task/doc-reader-codex-imagegen-no-upload —— 已合并进 origin/main
-<span class="ok">✅</span> 主检出被占用（main），已建并行 worktree
-   （分支 task/imagegen-text-budget，基于 origin/main）
-cd ~/Desktop/Works/code/doc-reader--imagegen-text-budget
+Claude Code：按说明使用 EnterWorktree
+其他环境：repo_tidy.py --new &lt;task&gt;</pre></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>读取远端默认分支并核对状态
+├── 已证实合并且可安全回收：清理
+├── 未合并、未推送或活跃工作：保留
+└── 为新任务准备分支 / 工作树
 
-SessionStart hook 每次开局自动注入：
-<span class="hl">[repo-status] my-skill | 分支: main | 工作区改动: 0 | vs origin/main: ahead 0 / behind 0</span></pre><div class="src">真实输出 · 2026-09-01 本机（路径已缩写）</div></div>
+hook 集成需另行安装和检查</pre><div class="src">流程来自 repo-tidy/SKILL.md；此卡不是运行截图</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">repo-map</span><span class="tag">本地仓库地图 · 自动注入</span></div>
@@ -170,7 +170,7 @@ SessionStart hook 每次开局自动注入：
 「把这个改动同步到 doc-reader」
 
 不用再贴路径</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>UserPromptSubmit hook 自动注入：
+    <div class="pane"><h4>历史注入文本摘录</h4><pre>UserPromptSubmit hook 自动注入：
 
 <span class="hl">本地仓库地图命中（repo-map 自动注入）:</span>
 - doc-reader → ~/Desktop/Works/code/doc-reader（自研·可写） —— Doc Reader 📖
@@ -181,29 +181,26 @@ SessionStart hook 每次开局自动注入：
 
 索引增量自愈；可选 launchd 定时同步，新仓库自动进图</pre><div class="src">真实注入文本 · 2026-09-01 本机（路径已缩写）</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">git-push-guard</span><span class="tag">纯 hook · 分支保护</span></div>
-  <div class="one">Agent 想直推 master/main 时拦下来问一句；可按仓库路径永久放行</div>
+  <div class="one">Claude Code hook 对 Agent 直推 main/master 请求确认；不是 Git 服务端保护</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>Agent 执行：
 
 git push origin main
 
 （PreToolUse hook 匹配 Bash）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>permissionDecision: <span class="warn">&quot;ask&quot;</span>
+    <div class="pane"><h4>hook 返回格式</h4><pre>permissionDecision: &quot;ask&quot;
 
-<span class="warn">⚠</span> 即将直推默认分支 master/main。
-  共享项目请走分支+MR；个人/小型项目确认后放行。
-  （永久放行本仓库：将仓库根路径加入
-   ~/.claude/hooks/push-default-branch-allowlist.txt）
+匹配到 Agent 的 Bash 工具执行 git push 时，
+对直推 main/master 请求确认。
 
-        [ 允许 ]        [ 拒绝 ]
-
-覆盖：git push origin main · git push origin HEAD:main · 设了 upstream 的裸 git push</pre><div class="src">hook 真实文案 · git-push-guard/block-push-default-branch.sh</div></div>
+支持按仓库路径放行。
+独立终端操作和服务端保护不由此 hook 负责。</pre><div class="src">返回格式来自 git-push-guard/block-push-default-branch.sh；此卡不是实际权限弹窗</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">harness</span><span class="tag">Inspector → Worker → Reviewer</span></div>
@@ -229,66 +226,60 @@ bash worker-reviewer.sh --loop</pre></div>
 
 领取顺序：Priority 0 &gt; 1 &gt; 2 &gt; 3；先 [被拒绝] 再 [待领取]</pre><div class="src">看板格式与状态机来自 harness/prompts/worker.md</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">do-something</span><span class="tag">无人值守 · 自主推进</span></div>
-  <div class="one">判断此刻杠杆最高的一件事并做完；所有运行续在 do/main 分支上，人类合并即收割</div>
+  <div class="one">有证据、推进目的、留下成果并完成验证才交付；无合格工作时 NO-OP</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>/do-something
 
 /loop 1h /do-something   # 每小时推进一次
 
 做点什么 / 自己看着办</pre></div>
-    <div class="pane"><h4>do/main 分支上的 DO.md</h4><pre># 目的
-&lt;一句话：这个项目为什么存在。人类可随时改写&gt;
+    <div class="pane"><h4>do/main 分支上的 DO.md</h4><pre>DO.md 有限状态
+├── 目的与约束
+├── 当前状态和证据指纹
+└── 风险与下一步
 
-# 约束
-&lt;人类留下的边界，如&quot;不要动 src/legacy&quot;、&quot;本周聚焦 X&quot;&gt;
-
-# 日志
-- 2026-08-24 09:00：&lt;做了什么、如何验证的、遗留的疑虑或下一步&gt;
-
-三层判断：有待办做待办 → 有目的第一性推理 → 没目的勇敢找一个
-禁止：不可逆动作（push、付款、删数据、调生产 API）
-结束自检：验证过了吗？产出在 do/main 上吗？日志写了吗？
-人类：<span class="ok">合并 = 收割</span>　<span class="warn">删分支 = 否决</span></pre><div class="src">DO.md 模板与规则来自 do-something/SKILL.md</div></div>
+默认不 push；MR 模式须单独启用。
+与 ci-review 配合时，机器人分支
+须通过 execution 与 value 双门禁。</pre><div class="src">规则来自 do-something/SKILL.md；此卡不是运行记录</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">ci-review</span><span class="tag">CI 里 · 验证型 CR</span></div>
-  <div class="one">每次 push 亲自复现 PR 声明、找有失败场景的缺陷；只验执行不评方向，不占订阅额度</div>
+  <div class="one">每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查</div>
   <div class="grid">
-    <div class="pane in"><h4>安装 · 模型接入</h4><pre>/ci-review
+    <div class="pane in"><h4>设置条件</h4><pre>在目标仓库启用 ci-review
 
-# 模型走任意 Anthropic 兼容网关：
-gh secret   set CI_REVIEW_API_KEY
-gh variable set CI_REVIEW_BASE_URL \
-  --body https://open.bigmodel.cn/api/anthropic
-gh variable set CI_REVIEW_MODEL --body glm-5.3</pre></div>
-    <div class="pane"><h4>PR #8 上的真实评论（GLM-5.3）</h4><pre>**&quot;范围为空（例如只改了 DO.md）&quot;与上一行的机械规则矛盾**
-失败场景：DO.md 随分支进入 diff → diff 非空 → 捷径分支永不触发
-复现：git diff &lt;base&gt;...t --stat → DO.md | 1 +
+配置 CI、模型服务和凭据
+选择只审查或显式开启自动合并</pre></div>
+    <div class="pane"><h4>裁决格式示例</h4><pre>普通分支：
+  execution=pass|fail
+  value=na
 
-→ 开发者修复 push → 增量审查（sticky）：
-<span class="ok">无代码改动 —— 范围只含两个 *.md，按捷径分支只更新 sticky</span>
-<span class="ok">&quot;修正逻辑矛盾&quot;成立 —— 本条 sticky 正是新捷径分支的首次真实触发</span>
-发现 0 条重复评论；改规范 = 改 .github/ci-review.md，下次 push 生效</pre><div class="src">评论原文来自 agent-skills-zh PR #8，模型经智谱 Anthropic 兼容网关</div></div>
+机器人分支（默认 do/*）：
+  execution=pass|fail
+  value=pass|fail
+
+自动合并须显式开启，并满足最新 SHA、
+双门禁及无未解决审查线程等条件。</pre><div class="src">格式来自 ci-review/SKILL.md；此卡不是已执行的审查</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">hook-test-kit</span><span class="tag">hook → 行为测试</span></div>
   <div class="one">给 Claude Code hook 脚本生成行为矩阵测试骨架——scratch 隔离、EMPTY/!否定协议、变异实验收尾</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>&quot;给 repo-tidy 的 hook 补测试&quot;</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>test_git-repo-status.sh
-├── run/assert 协议（bash 坑位预修）
-├── 11 场景: trunk/无远端/空仓库/detached…
-└── <span class="ok">变异实验</span> 改坏必红、恢复复绿</pre><div class="src">狗粮全链路验证</div></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>行为测试脚本
+├── 隔离 fixture
+├── 按 hook 行为设计的输入与断言
+└── 变异实验：破坏规则后确认测试失败</pre><div class="src">流程来自 hook-test-kit/SKILL.md；测试数量由具体 hook 决定</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">scanned-book-ocr</span><span class="tag">扫描 PDF → 文字</span></div>
@@ -310,7 +301,7 @@ quality-report.json    校验与抽检
 
 校验通过后可复制为 book.md</pre><div class="src">结构来自 scanned-book-ocr/SKILL.md；不包含用户书籍内容</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
   <div class="top"><span class="name">pdf-triptych</span><span class="tag">长 PDF → 结构图</span></div>
@@ -331,5 +322,5 @@ quality-report.json    校验与抽检
 
 渲染检查 → 逐块视觉复核 → 一页 HTML</pre><div class="src">流程来自 pdf-triptych/SKILL.md；不包含用户 PDF 内容</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
-</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div></html>

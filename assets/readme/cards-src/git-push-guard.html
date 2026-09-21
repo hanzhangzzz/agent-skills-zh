@@ -18,23 +18,20 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">git-push-guard</span><span class="tag">纯 hook · 分支保护</span></div>
-  <div class="one">Agent 想直推 master/main 时拦下来问一句；可按仓库路径永久放行</div>
+  <div class="one">Claude Code hook 对 Agent 直推 main/master 请求确认；不是 Git 服务端保护</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>Agent 执行：
 
 git push origin main
 
 （PreToolUse hook 匹配 Bash）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>permissionDecision: <span class="warn">&quot;ask&quot;</span>
+    <div class="pane"><h4>hook 返回格式</h4><pre>permissionDecision: &quot;ask&quot;
 
-<span class="warn">⚠</span> 即将直推默认分支 master/main。
-  共享项目请走分支+MR；个人/小型项目确认后放行。
-  （永久放行本仓库：将仓库根路径加入
-   ~/.claude/hooks/push-default-branch-allowlist.txt）
+匹配到 Agent 的 Bash 工具执行 git push 时，
+对直推 main/master 请求确认。
 
-        [ 允许 ]        [ 拒绝 ]
-
-覆盖：git push origin main · git push origin HEAD:main · 设了 upstream 的裸 git push</pre><div class="src">hook 真实文案 · git-push-guard/block-push-default-branch.sh</div></div>
+支持按仓库路径放行。
+独立终端操作和服务端保护不由此 hook 负责。</pre><div class="src">返回格式来自 git-push-guard/block-push-default-branch.sh；此卡不是实际权限弹窗</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

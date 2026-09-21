@@ -30,6 +30,30 @@ def validate(repo: Path) -> subprocess.CompletedProcess[str]:
 
 
 class MarketplaceMutationTest(unittest.TestCase):
+    def test_malformed_catalog_row_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = copy_repo(Path(tmp))
+            path = repo / "README.md"
+            text = path.read_text()
+            line = next(line for line in text.splitlines() if line.startswith("| [hook-test-kit]"))
+            path.write_text(text.replace(line, line.rsplit("|", 1)[0]))
+            self.assertNotEqual(0, validate(repo).returncode)
+
+    def test_stale_english_gallery_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = copy_repo(Path(tmp))
+            path = repo / "README.en.md"
+            text = path.read_text().replace("Original article, Chinese translation", "outdated claim")
+            path.write_text(text)
+            self.assertNotEqual(0, validate(repo).returncode)
+
+    def test_missing_readme_target_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = copy_repo(Path(tmp))
+            path = repo / "README.md"
+            path.write_text(path.read_text().replace("./AGENTS.md", "./missing-instructions.md"))
+            self.assertNotEqual(0, validate(repo).returncode)
+
     def test_wrong_badge_count_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = copy_repo(Path(tmp))

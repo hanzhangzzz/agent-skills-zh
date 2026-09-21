@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""生成 README 用的 skill 展示卡（HTML），随后由 Playwright 截图。
-每张卡 = 标题行（skill 名 + 一句话）+ 左"输入/触发" + 右"真实产出"。内容来自 cards.json。"""
+"""生成可本地打开的流程与输出格式说明卡；不是运行截图。
+内容来自 cards.json，真实结果截图由 build_gallery.py 单独选入 README。"""
 import json, html
 from pathlib import Path
 HERE = Path(__file__).resolve().parent
@@ -38,9 +38,9 @@ for c in cards:
   <div class="one">{esc(c['one'])}</div>
   <div class="grid">
     <div class="pane in"><h4>{esc(c.get('in_label','输入 · 触发'))}</h4><pre>{esc(c['input'])}</pre></div>
-    <div class="pane"><h4>{esc(c.get('out_label','真实产出'))}</h4><pre>{esc(c['output'])}</pre><div class="src">{esc(c.get('src',''))}</div></div>
+    <div class="pane"><h4>{esc(c.get('out_label','输出格式示例'))}</h4><pre>{esc(c['output'])}</pre><div class="src">{esc(c.get('src',''))}</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>"""
     (HERE / f"{c['name']}.html").write_text(body, encoding="utf-8")
 parts=[]; css=None
@@ -48,5 +48,5 @@ for c in cards:
     h=(HERE / f"{c['name']}.html").read_text(encoding="utf-8")
     if css is None: css=h.split("<style>")[1].split("</style>")[0]
     parts.append(h.split("</style>",1)[1])
-(HERE / "index.html").write_text(f'<!doctype html><meta charset="utf-8"><style>{css} body{{width:1200px}}</style>'+"".join(parts), encoding="utf-8")
+(HERE / "index.html").write_text(f'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>技能流程与输出格式</title><style>{css} body{{width:1200px}} header{{padding:24px 52px}}</style><header><h1>流程与输出格式</h1><p>这些说明卡包含格式约定和标注来源的历史摘录，不是运行截图。使用条件请看仓库 README 与各技能说明。</p></header>'+"".join(parts)+'</html>', encoding="utf-8")
 print("built", len(cards), "cards + index.html")

@@ -22,11 +22,11 @@ AI 生成的文档越来越多,也越来越又长又臭。而人在任务之间�
 
 **2. 人类该读什么 = 信息重编码,不是加样式。** 按信息类型选最优编码:结构关系 → 图,对比 → 矩阵,流程 → 链,契约告警 → 标注条,不值得视觉化的 → 老实的散文。这件事有个古老的名字,叫**信息设计**。
 
-**3. 有损压缩 + 可回溯 = 无损。** 视图敢大胆压缩,是因为每个视图元素都带 **source map**——点击下钻、双栏滚动,一键回到原文出处。左原文、右重组、锚定同步,随时对照。
+**3. 压缩视图，保留可回溯的原文。** 每个视图元素通过 **source map** 回到来源，左原文、右重组，便于随时对照。来源锚点只能帮助核验出处，不能证明重组没有遗漏、误解或错误推断；交付前仍需语义复核。
 
 **4. 表达归模型,核证归机器。** 把"什么值得表达、用什么形式"交给模板渲染器,得到的只会是"两个框一根箭头"的机械图——设计判断不可形式化。v4 让模型**自由设计并手写右栏 HTML**(组件词汇 + 设计系统),机器只负责可核证性:每个语义元素必须有 `data-sources` 锚点、可见文本必须保留词法锚点、数字必须逐字抄录、每个来源块必须被投影。**形式自由,锚点强制,自审闭环。**
 
-**5. 看不见作品的设计师不可能及格。** 生产者必须在真实浏览器里截图、亲眼看、亲手改,至少两轮。机器门管"有没有撒谎",自审管"好不好看"——不再用结构合法性冒充表达价值。
+**5. 看不见作品的设计师不可能及格。** 生产者必须在真实浏览器里截图、亲眼看、亲手改,至少两轮。机器检查可验证的锚点、文字与数字约束，自审检查表达和语义——不再用结构合法性冒充表达价值。
 
 ## 设计状态
 
@@ -50,8 +50,10 @@ python3 scripts/build_reader.py blocks.json right-pane.html reader.html  # 5. �
 
 ```bash
 git clone https://github.com/hanzhangzzz/agent-skills-zh.git
-cp -r agent-skills-zh/md2view ~/.claude/skills/     # Claude Code
-# 或 ~/.codex/skills/ (Codex)
+mkdir -p ~/.claude/skills/md2view
+cp -R agent-skills-zh/md2view/. ~/.claude/skills/md2view/
+test -f ~/.claude/skills/md2view/SKILL.md
+# Codex 或其他安装方式见仓库根 README
 ```
 
 `scripts/` 里的 Python 脚本零第三方依赖;截图环的 `shot.js` 需要 `@playwright/test` 或 `playwright` + Chromium(也可用 chrome-devtools / playwright MCP 代替)。

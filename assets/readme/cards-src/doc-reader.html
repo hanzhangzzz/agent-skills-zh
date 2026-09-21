@@ -18,13 +18,16 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">doc-reader</span><span class="tag">英文文档 → 中文精译</span></div>
-  <div class="one">章节级精准翻译英文技术文档/PDF，图片 100% 保留，本地三栏预览（原文·译文·AI 幻灯）</div>
+  <div class="one">英文网页/PDF 逐节翻译与对照预览；图片下载失败时保留原始链接</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>https://blog.example.com/post
 （或本地 PDF）</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre>translation.md   逐节对照
-├── images/   <span class="ok">图片 100% 保留</span>
-└── preview.html  原文·译文·AI 幻灯 三栏</pre><div class="src">doc-reader</div></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>original.md      原文
+translated.md    译文
+combined.md      对照文本
+preview.html     本地预览
+images/          已下载的原文图片
+slides/          可选生成的概要图</pre><div class="src">格式来自 doc-reader/SKILL.md；此卡不是运行截图</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
