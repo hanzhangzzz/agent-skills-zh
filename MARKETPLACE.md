@@ -132,7 +132,7 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 {
   "name": "repo-tidy",
   "version": "1.0.0",
-  "description": "Git tidy-up and parallel-task base: back to latest master/main, prune merged or upstream-gone branches, remove stale worktrees; --new <task> does tidy + task branch in one command (parallel worktree when the checkout is busy); SessionStart hook injects repo status. 仓库归位与并行任务底座",
+  "description": "Prepare branches and worktrees from the remote default branch; retain active or unverified work. Optional hooks and terminal integrations have separate setup. 安全准备任务分支与工作树，保留未证实合并的工作",
   "trigger": "归位 / 开新任务 / repo tidy",
   "keywords": ["git", "branch", "worktree", "cleanup", "tidy", "parallel tasks", "hook", "session start", "归位", "整理仓库", "清理分支", "开新任务"],
   "compatibility": "Claude Code (hook), Codex (commands)",

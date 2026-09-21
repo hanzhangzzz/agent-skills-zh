@@ -18,22 +18,19 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">repo-tidy</span><span class="tag">Git 归位 · 并行任务</span></div>
-  <div class="one">一条命令：清掉已合并分支和废弃 worktree，切回最新主分支，再开任务分支</div>
+  <div class="one">准备分支与工作树；未证实合并的分支保留，已有授权内的安全操作直接执行</div>
   <div class="grid">
-    <div class="pane in"><h4>输入 · 触发</h4><pre>python3 repo_tidy.py . --new imagegen-text-budget
+    <div class="pane in"><h4>输入 · 触发</h4><pre>说出任务与仓库，例如：
+“为当前仓库的新修复准备工作树”
 
-或直接说：
-归位 / 开新任务 / 清理分支</pre></div>
-    <div class="pane"><h4>真实产出</h4><pre><span class="ok">✅</span> ~/Desktop/Works/code/doc-reader
-  🧹 已移除 worktree doc-reader--doc-reader-codex-imagegen-no-upload
-     (分支 task/doc-reader-codex-imagegen-no-upload)
-  🗑️ 已删分支 task/doc-reader-codex-imagegen-no-upload —— 已合并进 origin/main
-<span class="ok">✅</span> 主检出被占用（main），已建并行 worktree
-   （分支 task/imagegen-text-budget，基于 origin/main）
-cd ~/Desktop/Works/code/doc-reader--imagegen-text-budget
+Claude Code：按说明使用 EnterWorktree
+其他环境：repo_tidy.py --new &lt;task&gt;</pre></div>
+    <div class="pane"><h4>输出格式示例</h4><pre>读取远端默认分支并核对状态
+├── 已证实合并且可安全回收：清理
+├── 未合并、未推送或活跃工作：保留
+└── 为新任务准备分支 / 工作树
 
-SessionStart hook 每次开局自动注入：
-<span class="hl">[repo-status] my-skill | 分支: main | 工作区改动: 0 | vs origin/main: ahead 0 / behind 0</span></pre><div class="src">真实输出 · 2026-09-01 本机（路径已缩写）</div></div>
+hook 集成需另行安装和检查</pre><div class="src">流程来自 repo-tidy/SKILL.md；此卡不是运行截图</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

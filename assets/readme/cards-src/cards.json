@@ -1,154 +1,173 @@
 [
- {
-  "name": "doc-reader",
-  "tag": "英文文档 → 中文精译",
-  "one": "章节级精准翻译英文技术文档/PDF，图片 100% 保留，本地三栏预览（原文·译文·AI 幻灯）",
-  "input": "https://blog.example.com/post\n（或本地 PDF）",
-  "output": "translation.md   逐节对照\n├── images/   <ok>图片 100% 保留</ok>\n└── preview.html  原文·译文·AI 幻灯 三栏",
-  "src": "doc-reader",
-  "tagline": "英文文章 → 三栏中文预览 + AI 幻灯片"
- },
- {
-  "name": "wechat-article-md-local",
-  "tag": "公众号 → Markdown",
-  "one": "收到 mp.weixin.qq.com 链接自动触发：整篇文章、元信息、图片全部落到本地",
-  "input": "https://mp.weixin.qq.com/s/M-K8cDwLhpID1gkcZOdUkQ\n\n（收到公众号链接即自动触发，\n 也可说：下载这篇公众号文章）",
-  "output": "Claude-Code-Skills-完全指南-从零打造…/\n├── Claude Code Skills 完全指南….md    <ok>11,026 字</ok>\n├── Claude Code Skills 完全指南….html  （备份）\n├── source.json\n└── images/  001.png  002.png\n\n---\ntitle: \"Claude Code Skills 完全指南：从零打造你的生产级别 AI 编程助理工作流\"\naccount: \"码哥跳动\"      author: \"码哥字节\"\npublish_time: \"2026年3月30日 09:00\"\nsource_url: \"https://mp.weixin.qq.com/s/M-K8…\"\n---\n你好，我是《Redis 高手心法》畅销书作者码哥，可以叫我靓仔。\n我用了三个月的 Claude Code，有一个时期非常难受…",
-  "src": "真实运行 · 2026-09-01 · 公开文章",
-  "tagline": "公众号文章 → 本地 Markdown"
- },
- {
-  "name": "xiaohongshu-downloader",
-  "tag": "小红书视频 → 逐字稿",
-  "one": "收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中",
-  "input": "https://xhslink.com/…\nhttps://www.xiaohongshu.com/explore/…\n\n（收到小红书链接即自动触发，\n 也可说：小红书视频转文字）",
-  "out_label": "输出结构",
-  "output": "<OUTPUT_DIR>/小红书-Obsidian加CloudCode打造个人生活操作系统/\n├── transcript.md          口播逐字稿（Markdown）\n├── videos/\n│   └── video.mp4\n└── transcripts/\n    ├── audio.srt          带时间轴\n    ├── audio.txt\n    └── audio-zh.md        英文视频附中文翻译\n\n中文口播直接保存；英文口播翻译后保存",
-  "src": "输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）",
-  "tagline": "小红书视频 → 口播逐字稿"
- },
- {
-  "name": "x-article-download",
-  "tag": "X / Twitter → Markdown",
-  "one": "单条推文、X 长文或整个账号批量下载；自动识别纯文字帖 / 视频帖 / GitHub 推荐帖",
-  "input": "https://x.com/<user>/status/<id>\n\n自动判型：\n• 纯文字 + 图片 → 路径 A\n• 视频帖 → yt-dlp + Whisper\n• GitHub 推荐帖 → 逐仓库抓 README",
-  "out_label": "输出结构",
-  "output": "<OUTPUT_DIR>/{清理后的标题}/\n├── {清理后的标题}.md\n│     元信息（作者 / 日期 / 原文链接）\n│     正文；英文自动译中，文末附英文原文\n└── images/\n    ├── 01-xxx.jpg        ?format=jpg&name=large 原图\n    └── ...\n\n整账号：遍历全部推文，跳过需登录的 X Article，\n靠含代码块的推文拿到真实提示词",
-  "src": "输出结构来自 x-article-download/SKILL.md（视频路径需 yt-dlp / whisper）",
-  "tagline": "推文 / X 长文 / 整账号 → Markdown"
- },
- {
-  "name": "hkr-render",
-  "tag": "Markdown → 公众号排版",
-  "one": "一键排成微信合规的内联样式 HTML：7 主题、外链自动转脚注、多图文直推草稿箱",
-  "input": "一篇 md\n\n（\"公众号排版，用含彰主题\"）",
-  "output": "preview.html\n├── 内联样式，无外链样式表（微信合规）\n├── 7 主题: 含彰/墨韵/赤陶/杂志…\n└── 外链自动转脚注 · <ok>多图文直推草稿箱</ok>",
-  "src": "7 主题 × 样例全过",
-  "tagline": "Markdown → 公众号排版（7 主题）→ 草稿箱"
- },
- {
-  "name": "md2view",
-  "tag": "Markdown → 可读视图",
-  "one": "把又长又臭的 md 重编码成左原文·右重组·滚动同步的双栏视图，每个字都能一键回到原文出处",
-  "input": "一篇复盘/报告/规格/长 README\n\n（\"把这篇变成能读的视图\"）",
-  "output": "reader.html  <ok>53KB 自包含</ok>\n├── 左栏: 原文（分块锚点）\n├── 右栏: 信息重组（表格/矩阵/标注条）\n└── <ok>机器验证</ok> 溯源不过不产出 · 防垫字检查",
-  "src": "单测 27/27 · 真实管线冒烟通过",
-  "tagline": "Markdown → 可溯源的双栏阅读视图"
- },
- {
-  "name": "gpt-image2-prompt-director",
-  "tag": "弱想法 → 生图 brief",
-  "one": "把模糊想法变成高质量 gpt-image-2 生成提示词：头像/表情包/信息图/海报/产品图，附专家提示词集基准评测",
-  "input": "\"我想要一个赛博朋克风头像\"\n\n（或: 修一下这个 prompt）",
-  "output": "prompt-brief.md\n├── 视觉框架 + 工件规格\n├── 平台参数（尺寸/风格约束）\n└── <ok>专家提示词集基准评测</ok>",
-  "src": "gpt-image2-prompt-director",
-  "tagline": "一句话点子 → 可出图的完整 brief（真实出图）"
- },
- {
-  "name": "repo-tidy",
-  "tag": "Git 归位 · 并行任务",
-  "one": "一条命令：清掉已合并分支和废弃 worktree，切回最新主分支，再开任务分支",
-  "input": "python3 repo_tidy.py . --new imagegen-text-budget\n\n或直接说：\n归位 / 开新任务 / 清理分支",
-  "output": "<ok>✅</ok> ~/Desktop/Works/code/doc-reader\n  🧹 已移除 worktree doc-reader--doc-reader-codex-imagegen-no-upload\n     (分支 task/doc-reader-codex-imagegen-no-upload)\n  🗑️ 已删分支 task/doc-reader-codex-imagegen-no-upload —— 已合并进 origin/main\n<ok>✅</ok> 主检出被占用（main），已建并行 worktree\n   （分支 task/imagegen-text-budget，基于 origin/main）\ncd ~/Desktop/Works/code/doc-reader--imagegen-text-budget\n\nSessionStart hook 每次开局自动注入：\n<hl>[repo-status] my-skill | 分支: main | 工作区改动: 0 | vs origin/main: ahead 0 / behind 0</hl>",
-  "src": "真实输出 · 2026-09-01 本机（路径已缩写）",
-  "tagline": "归位 + 一条命令开任务分支"
- },
- {
-  "name": "repo-map",
-  "tag": "本地仓库地图 · 自动注入",
-  "one": "扫描全部本地 git 仓库建索引；提到仓库名，hook 自动把路径和读写角色注入给 Agent",
-  "input": "你只需要说仓库名：\n\n「把这个改动同步到 doc-reader」\n\n不用再贴路径",
-  "output": "UserPromptSubmit hook 自动注入：\n\n<hl>本地仓库地图命中（repo-map 自动注入）:</hl>\n- doc-reader → ~/Desktop/Works/code/doc-reader（自研·可写） —— Doc Reader 📖\n\n约定: 引用时优先读该仓库 README/知识入口而非全库遍历；\n\"第三方·只读\"仓库禁止写入；为当前项目任务修改其他仓库时，\n改动在对方仓库独立成 commit、独立授权，不与当前仓库改动混杂……\n\n索引增量自愈；可选 launchd 定时同步，新仓库自动进图",
-  "src": "真实注入文本 · 2026-09-01 本机（路径已缩写）",
-  "tagline": "提到仓库名，自动注入路径与角色"
- },
- {
-  "name": "git-push-guard",
-  "tag": "纯 hook · 分支保护",
-  "one": "Agent 想直推 master/main 时拦下来问一句；可按仓库路径永久放行",
-  "input": "Agent 执行：\n\ngit push origin main\n\n（PreToolUse hook 匹配 Bash）",
-  "output": "permissionDecision: <warn>\"ask\"</warn>\n\n<warn>⚠</warn> 即将直推默认分支 master/main。\n  共享项目请走分支+MR；个人/小型项目确认后放行。\n  （永久放行本仓库：将仓库根路径加入\n   ~/.claude/hooks/push-default-branch-allowlist.txt）\n\n        [ 允许 ]        [ 拒绝 ]\n\n覆盖：git push origin main · git push origin HEAD:main · 设了 upstream 的裸 git push",
-  "src": "hook 真实文案 · git-push-guard/block-push-default-branch.sh",
-  "tagline": "直推 master/main 时拦下来问一句"
- },
- {
-  "name": "harness",
-  "tag": "Inspector → Worker → Reviewer",
-  "one": "三角色通过一份 TODO.md 看板协作：巡检拆任务、领取修复、复审验证，可单次可循环可定时",
-  "input": "/harness 这轮重点关注静默数据丢失\n和缺少验证的代码路径\n\nbash inspector.sh\nbash worker-reviewer.sh --loop",
-  "out_label": "TODO.md 看板格式",
-  "output": "- [ ] <hl>[待领取]</hl> 任务标题\n      inspector-note: 补充信息\n- [ ] <hl>[进行中]</hl> 任务标题\n      started: YYYY-MM-DD HH:MM by worker\n- [ ] <hl>[待审查]</hl> 任务标题\n- [ ] <warn>[被拒绝]</warn> 任务标题\n      reviewer-note: 打回原因\n\n[待领取] → 未领取（你可以领取）\n[进行中] → 你正在做（别人不要动）\n[待审查] → 你完成了，交给 Reviewer\n[被拒绝] → Reviewer 打回来了，你需要重新修\n\n领取顺序：Priority 0 > 1 > 2 > 3；先 [被拒绝] 再 [待领取]",
-  "src": "看板格式与状态机来自 harness/prompts/worker.md",
-  "tagline": "Inspector → Worker → Reviewer 看板循环"
- },
- {
-  "name": "do-something",
-  "tag": "无人值守 · 自主推进",
-  "one": "判断此刻杠杆最高的一件事并做完；所有运行续在 do/main 分支上，人类合并即收割",
-  "input": "/do-something\n\n/loop 1h /do-something   # 每小时推进一次\n\n做点什么 / 自己看着办",
-  "out_label": "do/main 分支上的 DO.md",
-  "output": "# 目的\n<一句话：这个项目为什么存在。人类可随时改写>\n\n# 约束\n<人类留下的边界，如\"不要动 src/legacy\"、\"本周聚焦 X\">\n\n# 日志\n- 2026-08-24 09:00：<做了什么、如何验证的、遗留的疑虑或下一步>\n\n三层判断：有待办做待办 → 有目的第一性推理 → 没目的勇敢找一个\n禁止：不可逆动作（push、付款、删数据、调生产 API）\n结束自检：验证过了吗？产出在 do/main 上吗？日志写了吗？\n人类：<ok>合并 = 收割</ok>　<warn>删分支 = 否决</warn>",
-  "src": "DO.md 模板与规则来自 do-something/SKILL.md",
-  "tagline": "无人值守自主推进，合并即收割"
- },
- {
-  "name": "ci-review",
-  "tag": "CI 里 · 验证型 CR",
-  "one": "每次 push 亲自复现 PR 声明、找有失败场景的缺陷；只验执行不评方向，不占订阅额度",
-  "input": "/ci-review\n\n# 模型走任意 Anthropic 兼容网关：\ngh secret   set CI_REVIEW_API_KEY\ngh variable set CI_REVIEW_BASE_URL \\\n  --body https://open.bigmodel.cn/api/anthropic\ngh variable set CI_REVIEW_MODEL --body glm-5.3",
-  "in_label": "安装 · 模型接入",
-  "out_label": "PR #8 上的真实评论（GLM-5.3）",
-  "output": "**\"范围为空（例如只改了 DO.md）\"与上一行的机械规则矛盾**\n失败场景：DO.md 随分支进入 diff → diff 非空 → 捷径分支永不触发\n复现：git diff <base>...t --stat → DO.md | 1 +\n\n→ 开发者修复 push → 增量审查（sticky）：\n<ok>无代码改动 —— 范围只含两个 *.md，按捷径分支只更新 sticky</ok>\n<ok>\"修正逻辑矛盾\"成立 —— 本条 sticky 正是新捷径分支的首次真实触发</ok>\n发现 0 条重复评论；改规范 = 改 .github/ci-review.md，下次 push 生效",
-  "src": "评论原文来自 agent-skills-zh PR #8，模型经智谱 Anthropic 兼容网关",
-  "tagline": "CI 里的验证型 CR，只验执行不评方向"
- },
- {
-  "name": "hook-test-kit",
-  "tag": "hook → 行为测试",
-  "one": "给 Claude Code hook 脚本生成行为矩阵测试骨架——scratch 隔离、EMPTY/!否定协议、变异实验收尾",
-  "input": "\"给 repo-tidy 的 hook 补测试\"",
-  "output": "test_git-repo-status.sh\n├── run/assert 协议（bash 坑位预修）\n├── 11 场景: trunk/无远端/空仓库/detached…\n└── <ok>变异实验</ok> 改坏必红、恢复复绿",
-  "src": "狗粮全链路验证",
-  "tagline": "给 hook 脚本生成行为矩阵测试，变异实验收尾"
- },
- {
-  "name": "scanned-book-ocr",
-  "tag": "扫描 PDF → 文字",
-  "one": "本地批量 OCR，保留页码；并发输出一致性检查 + 完整性校验 + 视觉抽检",
-  "input": "一本纯图片 PDF\n\n“把扫描书转成 AI 可读的文字”\n\nApple Silicon macOS\nPython 3.12+ / pdftoppm",
-  "out_label": "输出结构",
-  "output": "book.txt    整本原文 + 页码标记\npages/      每页独立文本\nmanifest.json    来源与逐页哈希\nquality-report.json    校验与抽检\n\n=== PDF_PAGE 0001 ===\n<该页 OCR 原文>\n\n校验通过后可复制为 book.md",
-  "src": "结构来自 scanned-book-ocr/SKILL.md；不包含用户书籍内容",
-  "tagline": "扫描 PDF → 页码可追溯的本地文本"
- },
- {
-  "name": "pdf-triptych",
-  "tag": "长 PDF → 结构图",
-  "one": "骨架、细节、例子共用横轴与颜色，让长标准可以讲清和评审",
-  "input": "一份标准 / 规范 / 白皮书 PDF\n\n/pdf-triptych <PDF>\n\n“把这份 PDF 画成可评审的一页图”",
-  "out_label": "流程与输出约定",
-  "output": "全文结构探针 → 视觉骨架\n\n骨架：结构怎样逐层展开\n细节：概念之间的准确关系\n例子：具体场景对应哪一列\n\n同一横轴 · 同一颜色系统 · 条款可追溯\n\n渲染检查 → 逐块视觉复核 → 一页 HTML",
-  "src": "流程来自 pdf-triptych/SKILL.md；不包含用户 PDF 内容",
-  "tagline": "长标准 PDF → 可追溯的一页结构图"
- }
+  {
+    "name": "doc-reader",
+    "tag": "英文文档 → 中文精译",
+    "one": "英文网页/PDF 逐节翻译与对照预览；图片下载失败时保留原始链接",
+    "input": "https://blog.example.com/post\n（或本地 PDF）",
+    "output": "original.md      原文\ntranslated.md    译文\ncombined.md      对照文本\npreview.html     本地预览\nimages/          已下载的原文图片\nslides/          可选生成的概要图",
+    "src": "格式来自 doc-reader/SKILL.md；此卡不是运行截图",
+    "tagline": "英文文章 → 三栏中文预览 + AI 幻灯片",
+    "out_label": "输出格式示例",
+    "preview": {
+      "image": "assets/readme/doc-reader-preview.jpg",
+      "zh": "英文技术文章的原文、中文译文与 AI 幻灯片。仓库已有案例来自 [Anthropic 客户文章](https://claude.com/blog/how-warp-builds-self-improving-agents-on-claude)；幻灯片需要额外生图权限，也可用 `--no-ppt` 跳过。",
+      "en": "Original article, Chinese translation, and AI slides from an existing [Anthropic customer article](https://claude.com/blog/how-warp-builds-self-improving-agents-on-claude) example. Slides require image-generation access; `--no-ppt` skips them."
+    }
+  },
+  {
+    "name": "wechat-article-md-local",
+    "tag": "公众号 → Markdown",
+    "one": "收到 mp.weixin.qq.com 链接自动触发：整篇文章、元信息、图片全部落到本地",
+    "input": "https://mp.weixin.qq.com/s/M-K8cDwLhpID1gkcZOdUkQ\n\n（收到公众号链接即自动触发，\n 也可说：下载这篇公众号文章）",
+    "output": "Claude-Code-Skills-完全指南-从零打造…/\n├── Claude Code Skills 完全指南….md    <ok>11,026 字</ok>\n├── Claude Code Skills 完全指南….html  （备份）\n├── source.json\n└── images/  001.png  002.png\n\n---\ntitle: \"Claude Code Skills 完全指南：从零打造你的生产级别 AI 编程助理工作流\"\naccount: \"码哥跳动\"      author: \"码哥字节\"\npublish_time: \"2026年3月30日 09:00\"\nsource_url: \"https://mp.weixin.qq.com/s/M-K8…\"\n---\n你好，我是《Redis 高手心法》畅销书作者码哥，可以叫我靓仔。\n我用了三个月的 Claude Code，有一个时期非常难受…",
+    "src": "真实运行 · 2026-09-01 · 公开文章",
+    "tagline": "公众号文章 → 本地 Markdown",
+    "out_label": "历史运行输出摘录"
+  },
+  {
+    "name": "xiaohongshu-downloader",
+    "tag": "小红书视频 → 逐字稿",
+    "one": "收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中",
+    "input": "https://xhslink.com/…\nhttps://www.xiaohongshu.com/explore/…\n\n（收到小红书链接即自动触发，\n 也可说：小红书视频转文字）",
+    "out_label": "输出结构",
+    "output": "<OUTPUT_DIR>/小红书-Obsidian加CloudCode打造个人生活操作系统/\n├── transcript.md          口播逐字稿（Markdown）\n├── videos/\n│   └── video.mp4\n└── transcripts/\n    ├── audio.srt          带时间轴\n    ├── audio.txt\n    └── audio-zh.md        英文视频附中文翻译\n\n中文口播直接保存；英文口播翻译后保存",
+    "src": "输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）",
+    "tagline": "小红书视频 → 口播逐字稿"
+  },
+  {
+    "name": "x-article-download",
+    "tag": "X / Twitter → Markdown",
+    "one": "单条推文、X 长文或整个账号批量下载；自动识别纯文字帖 / 视频帖 / GitHub 推荐帖",
+    "input": "https://x.com/<user>/status/<id>\n\n自动判型：\n• 纯文字 + 图片 → 路径 A\n• 视频帖 → yt-dlp + Whisper\n• GitHub 推荐帖 → 逐仓库抓 README",
+    "out_label": "输出结构",
+    "output": "<OUTPUT_DIR>/{清理后的标题}/\n├── {清理后的标题}.md\n│     元信息（作者 / 日期 / 原文链接）\n│     正文；英文自动译中，文末附英文原文\n└── images/\n    ├── 01-xxx.jpg        ?format=jpg&name=large 原图\n    └── ...\n\n整账号：遍历全部推文，跳过需登录的 X Article，\n靠含代码块的推文拿到真实提示词",
+    "src": "输出结构来自 x-article-download/SKILL.md（视频路径需 yt-dlp / whisper）",
+    "tagline": "推文 / X 长文 / 整账号 → Markdown"
+  },
+  {
+    "name": "hkr-render",
+    "tag": "Markdown → 公众号排版",
+    "one": "Markdown 转为微信兼容 HTML；可选封面和草稿推送，后者需账号权限",
+    "input": "一篇 md\n\n（\"公众号排版，用含彰主题\"）",
+    "output": "排版 HTML\n├── 微信兼容内联样式\n├── 7 个主题\n└── 可选草稿推送：需 AppID/Secret、API 权限和 IP 白名单",
+    "src": "格式来自 hkr-render/SKILL.md；此卡不是运行截图",
+    "tagline": "Markdown → 公众号排版（7 主题）→ 草稿箱",
+    "out_label": "输出格式示例"
+  },
+  {
+    "name": "md2view",
+    "tag": "Markdown → 可读视图",
+    "one": "把 Markdown 整理为原文与重组视图，使用来源锚点辅助复核",
+    "input": "一篇复盘/报告/规格/长 README\n\n（\"把这篇变成能读的视图\"）",
+    "output": "reader.html\n├── 左栏：原文与来源锚点\n├── 右栏：模型设计的重组视图\n└── 验证锚点、文本与数字；仍需语义和视觉复核",
+    "src": "格式来自 md2view/SKILL.md；此卡不是运行截图",
+    "tagline": "Markdown → 可溯源的双栏阅读视图",
+    "out_label": "输出格式示例",
+    "preview": {
+      "image": "md2view/assets/demo-split.png",
+      "zh": "仓库既有双栏阅读器示例：左侧保留原文，右侧重组信息，并通过来源锚点对照。截图展示阅读方式；内容完整性仍需人工复核。",
+      "en": "An existing split-reader example: source text on the left, reorganized information on the right, connected by source anchors. The screenshot shows the reading layout; content completeness still needs review."
+    }
+  },
+  {
+    "name": "gpt-image2-prompt-director",
+    "tag": "弱想法 → 生图 brief",
+    "one": "把想法写成可复制的图片生成提示词；实际出图需另用图片工具",
+    "input": "\"我想要一个赛博朋克风头像\"\n\n（或: 修一下这个 prompt）",
+    "output": "prompt-brief.md\n├── 视觉框架 + 工件规格\n├── 平台参数（尺寸/风格约束）\n└── <ok>专家提示词集基准评测</ok>",
+    "src": "格式来自 gpt-image2-prompt-director/SKILL.md；提示词检查不保证出图质量",
+    "tagline": "一句话点子 → 完整生图提示词",
+    "out_label": "输出格式示例"
+  },
+  {
+    "name": "repo-tidy",
+    "tag": "Git 归位 · 并行任务",
+    "one": "准备分支与工作树；未证实合并的分支保留，已有授权内的安全操作直接执行",
+    "input": "说出任务与仓库，例如：\n“为当前仓库的新修复准备工作树”\n\nClaude Code：按说明使用 EnterWorktree\n其他环境：repo_tidy.py --new <task>",
+    "output": "读取远端默认分支并核对状态\n├── 已证实合并且可安全回收：清理\n├── 未合并、未推送或活跃工作：保留\n└── 为新任务准备分支 / 工作树\n\nhook 集成需另行安装和检查",
+    "src": "流程来自 repo-tidy/SKILL.md；此卡不是运行截图",
+    "tagline": "安全准备任务分支与工作树",
+    "out_label": "输出格式示例"
+  },
+  {
+    "name": "repo-map",
+    "tag": "本地仓库地图 · 自动注入",
+    "one": "扫描全部本地 git 仓库建索引；提到仓库名，hook 自动把路径和读写角色注入给 Agent",
+    "input": "你只需要说仓库名：\n\n「把这个改动同步到 doc-reader」\n\n不用再贴路径",
+    "output": "UserPromptSubmit hook 自动注入：\n\n<hl>本地仓库地图命中（repo-map 自动注入）:</hl>\n- doc-reader → ~/Desktop/Works/code/doc-reader（自研·可写） —— Doc Reader 📖\n\n约定: 引用时优先读该仓库 README/知识入口而非全库遍历；\n\"第三方·只读\"仓库禁止写入；为当前项目任务修改其他仓库时，\n改动在对方仓库独立成 commit、独立授权，不与当前仓库改动混杂……\n\n索引增量自愈；可选 launchd 定时同步，新仓库自动进图",
+    "src": "真实注入文本 · 2026-09-01 本机（路径已缩写）",
+    "tagline": "提到仓库名，自动注入路径与角色",
+    "out_label": "历史注入文本摘录"
+  },
+  {
+    "name": "git-push-guard",
+    "tag": "纯 hook · 分支保护",
+    "one": "Claude Code hook 对 Agent 直推 main/master 请求确认；不是 Git 服务端保护",
+    "input": "Agent 执行：\n\ngit push origin main\n\n（PreToolUse hook 匹配 Bash）",
+    "output": "permissionDecision: \"ask\"\n\n匹配到 Agent 的 Bash 工具执行 git push 时，\n对直推 main/master 请求确认。\n\n支持按仓库路径放行。\n独立终端操作和服务端保护不由此 hook 负责。",
+    "src": "返回格式来自 git-push-guard/block-push-default-branch.sh；此卡不是实际权限弹窗",
+    "tagline": "直推 master/main 时拦下来问一句",
+    "out_label": "hook 返回格式"
+  },
+  {
+    "name": "harness",
+    "tag": "Inspector → Worker → Reviewer",
+    "one": "三角色通过一份 TODO.md 看板协作：巡检拆任务、领取修复、复审验证，可单次可循环可定时",
+    "input": "/harness 这轮重点关注静默数据丢失\n和缺少验证的代码路径\n\nbash inspector.sh\nbash worker-reviewer.sh --loop",
+    "out_label": "TODO.md 看板格式",
+    "output": "- [ ] <hl>[待领取]</hl> 任务标题\n      inspector-note: 补充信息\n- [ ] <hl>[进行中]</hl> 任务标题\n      started: YYYY-MM-DD HH:MM by worker\n- [ ] <hl>[待审查]</hl> 任务标题\n- [ ] <warn>[被拒绝]</warn> 任务标题\n      reviewer-note: 打回原因\n\n[待领取] → 未领取（你可以领取）\n[进行中] → 你正在做（别人不要动）\n[待审查] → 你完成了，交给 Reviewer\n[被拒绝] → Reviewer 打回来了，你需要重新修\n\n领取顺序：Priority 0 > 1 > 2 > 3；先 [被拒绝] 再 [待领取]",
+    "src": "看板格式与状态机来自 harness/prompts/worker.md",
+    "tagline": "Inspector → Worker → Reviewer 看板循环"
+  },
+  {
+    "name": "do-something",
+    "tag": "无人值守 · 自主推进",
+    "one": "有证据、推进目的、留下成果并完成验证才交付；无合格工作时 NO-OP",
+    "input": "/do-something\n\n/loop 1h /do-something   # 每小时推进一次\n\n做点什么 / 自己看着办",
+    "out_label": "do/main 分支上的 DO.md",
+    "output": "DO.md 有限状态\n├── 目的与约束\n├── 当前状态和证据指纹\n└── 风险与下一步\n\n默认不 push；MR 模式须单独启用。\n与 ci-review 配合时，机器人分支\n须通过 execution 与 value 双门禁。",
+    "src": "规则来自 do-something/SKILL.md；此卡不是运行记录",
+    "tagline": "有价值且完成才交付，无合格工作则 NO-OP"
+  },
+  {
+    "name": "ci-review",
+    "tag": "CI 里 · 验证型 CR",
+    "one": "每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查",
+    "input": "在目标仓库启用 ci-review\n\n配置 CI、模型服务和凭据\n选择只审查或显式开启自动合并",
+    "in_label": "设置条件",
+    "out_label": "裁决格式示例",
+    "output": "普通分支：\n  execution=pass|fail\n  value=na\n\n机器人分支（默认 do/*）：\n  execution=pass|fail\n  value=pass|fail\n\n自动合并须显式开启，并满足最新 SHA、\n双门禁及无未解决审查线程等条件。",
+    "src": "格式来自 ci-review/SKILL.md；此卡不是已执行的审查",
+    "tagline": "执行审查 + 机器人分支价值门禁"
+  },
+  {
+    "name": "hook-test-kit",
+    "tag": "hook → 行为测试",
+    "one": "给 Claude Code hook 脚本生成行为矩阵测试骨架——scratch 隔离、EMPTY/!否定协议、变异实验收尾",
+    "input": "\"给 repo-tidy 的 hook 补测试\"",
+    "output": "行为测试脚本\n├── 隔离 fixture\n├── 按 hook 行为设计的输入与断言\n└── 变异实验：破坏规则后确认测试失败",
+    "src": "流程来自 hook-test-kit/SKILL.md；测试数量由具体 hook 决定",
+    "tagline": "给 hook 脚本生成行为矩阵测试，变异实验收尾",
+    "out_label": "输出格式示例"
+  },
+  {
+    "name": "scanned-book-ocr",
+    "tag": "扫描 PDF → 文字",
+    "one": "本地批量 OCR，保留页码；并发输出一致性检查 + 完整性校验 + 视觉抽检",
+    "input": "一本纯图片 PDF\n\n“把扫描书转成 AI 可读的文字”\n\nApple Silicon macOS\nPython 3.12+ / pdftoppm",
+    "out_label": "输出结构",
+    "output": "book.txt    整本原文 + 页码标记\npages/      每页独立文本\nmanifest.json    来源与逐页哈希\nquality-report.json    校验与抽检\n\n=== PDF_PAGE 0001 ===\n<该页 OCR 原文>\n\n校验通过后可复制为 book.md",
+    "src": "结构来自 scanned-book-ocr/SKILL.md；不包含用户书籍内容",
+    "tagline": "扫描 PDF → 页码可追溯的本地文本"
+  },
+  {
+    "name": "pdf-triptych",
+    "tag": "长 PDF → 结构图",
+    "one": "骨架、细节、例子共用横轴与颜色，让长标准可以讲清和评审",
+    "input": "一份标准 / 规范 / 白皮书 PDF\n\n/pdf-triptych <PDF>\n\n“把这份 PDF 画成可评审的一页图”",
+    "out_label": "流程与输出约定",
+    "output": "全文结构探针 → 视觉骨架\n\n骨架：结构怎样逐层展开\n细节：概念之间的准确关系\n例子：具体场景对应哪一列\n\n同一横轴 · 同一颜色系统 · 条款可追溯\n\n渲染检查 → 逐块视觉复核 → 一页 HTML",
+    "src": "流程来自 pdf-triptych/SKILL.md；不包含用户 PDF 内容",
+    "tagline": "长标准 PDF → 可追溯的一页结构图"
+  }
 ]

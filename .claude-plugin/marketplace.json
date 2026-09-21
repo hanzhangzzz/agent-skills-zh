@@ -5,7 +5,7 @@
     "url": "https://github.com/hanzhangzzz/agent-skills-zh"
   },
   "metadata": {
-    "description": "agent-skills-zh — Agent Skills for Claude Code & Codex, Chinese-first: doc translation, WeChat/Xiaohongshu/X archiving, repo hygiene, GPT-image prompts, autonomous loops. One plugin = one skill, install what you need.",
+    "description": "面向中文开发者的 Agent Skills 与 hook 插件：文档阅读、内容整理和代码维护。按需安装，各项运行环境与权限要求见 README。",
     "version": "1.0.0"
   },
   "plugins": [
@@ -13,7 +13,7 @@
       "name": "repo-tidy",
       "source": "./",
       "strict": false,
-      "description": "Git tidy-up + parallel-task base: back to latest master, prune merged branches/stale worktrees, --new opens a task branch (parallel worktree when busy); SessionStart hook injects repo status. 仓库归位与并行任务底座",
+      "description": "Prepare branches and worktrees from the remote default branch; retain active or unverified work. Optional hooks and terminal integrations have separate setup. 安全准备任务分支与工作树，保留未证实合并的工作",
       "version": "1.0.0",
       "skills": [
         "./repo-tidy"

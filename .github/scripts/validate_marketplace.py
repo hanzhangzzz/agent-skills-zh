@@ -13,8 +13,8 @@ description 非字符串如实上报）。依赖：python3 -m pip install pyyaml
 - SKILL.md 内无硬编码安装路径（~/.claude/skills/、/Users/、/home/；README 是给人看的文档，不检查）
 - SKILL.md 里反引号引用的 scripts/、references/ 路径真实存在
 - scripts/ 下的 .sh/.py 有可执行位
-- 索引一致：README/README.en/MARKETPLACE/画廊的 skill 集合与 marketplace.json 完全一致，
-  README badge 数量等于 plugin entry 数；hook-only entry 也不能从索引消失
+- 索引一致：README/README.en/MARKETPLACE/说明卡与 marketplace.json 完全一致；
+  Skills 与 hook-only plugin 分别计数，首页案例允许精选
 """
 
 import json
@@ -174,15 +174,30 @@ check_exact_index("README.en.md Skills 表格", readme_en_names)
 check_exact_index("MARKETPLACE.md", mkt_names)
 
 def check_badge(label, text):
-    badges = re.findall(r"skills-(\d+)-blue", text)
-    if len(badges) != 1:
-        fail(f"{label} skill badge 数量应为 1，实际 {len(badges)}")
-    elif int(badges[0]) != len(entry_names):
-        fail(f"{label} skill badge={badges[0]}，实际 plugin entry={len(entry_names)}")
+    for pattern, count, kind in (
+        (r"skills-(\d+)-blue", len(skill_dirs), "Skills"),
+        (r"hook_plugins-(\d+)-purple", len(hook_only), "hook-only plugins"),
+    ):
+        badges = re.findall(pattern, text)
+        if len(badges) != 1 or int(badges[0]) != count:
+            fail(f"{label} {kind} badge 不准确：应恰好一个且数量为 {count}")
+
+
+def check_readme(label, text):
+    for number, line in enumerate(text.splitlines(), 1):
+        if re.match(r"^\| \[[\w-]+\]\(\./", line) and line.count("|") != 4:
+            fail(f"{label}:{number} 技能目录必须恰好三列")
+    # 只查本地目标；外链可访问性及文案语义仍需实际 review。
+    for link in re.findall(r"\]\((\./[^)]+)\)", text):
+        path = link.split("#", 1)[0]
+        if not os.path.exists(os.path.join(root, path)):
+            fail(f"{label} 本地链接不存在：{path}")
 
 
 check_badge("README.md", readme)
 check_badge("README.en.md", readme_en)
+check_readme("README.md", readme)
+check_readme("README.en.md", readme_en)
 
 cards_path = os.path.join(root, "assets/readme/cards-src/cards.json")
 try:

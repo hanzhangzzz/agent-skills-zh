@@ -18,23 +18,22 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">ci-review</span><span class="tag">CI 里 · 验证型 CR</span></div>
-  <div class="one">每次 push 亲自复现 PR 声明、找有失败场景的缺陷；只验执行不评方向，不占订阅额度</div>
+  <div class="one">每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查</div>
   <div class="grid">
-    <div class="pane in"><h4>安装 · 模型接入</h4><pre>/ci-review
+    <div class="pane in"><h4>设置条件</h4><pre>在目标仓库启用 ci-review
 
-# 模型走任意 Anthropic 兼容网关：
-gh secret   set CI_REVIEW_API_KEY
-gh variable set CI_REVIEW_BASE_URL \
-  --body https://open.bigmodel.cn/api/anthropic
-gh variable set CI_REVIEW_MODEL --body glm-5.3</pre></div>
-    <div class="pane"><h4>PR #8 上的真实评论（GLM-5.3）</h4><pre>**&quot;范围为空（例如只改了 DO.md）&quot;与上一行的机械规则矛盾**
-失败场景：DO.md 随分支进入 diff → diff 非空 → 捷径分支永不触发
-复现：git diff &lt;base&gt;...t --stat → DO.md | 1 +
+配置 CI、模型服务和凭据
+选择只审查或显式开启自动合并</pre></div>
+    <div class="pane"><h4>裁决格式示例</h4><pre>普通分支：
+  execution=pass|fail
+  value=na
 
-→ 开发者修复 push → 增量审查（sticky）：
-<span class="ok">无代码改动 —— 范围只含两个 *.md，按捷径分支只更新 sticky</span>
-<span class="ok">&quot;修正逻辑矛盾&quot;成立 —— 本条 sticky 正是新捷径分支的首次真实触发</span>
-发现 0 条重复评论；改规范 = 改 .github/ci-review.md，下次 push 生效</pre><div class="src">评论原文来自 agent-skills-zh PR #8，模型经智谱 Anthropic 兼容网关</div></div>
+机器人分支（默认 do/*）：
+  execution=pass|fail
+  value=pass|fail
+
+自动合并须显式开启，并满足最新 SHA、
+双门禁及无未解决审查线程等条件。</pre><div class="src">格式来自 ci-review/SKILL.md；此卡不是已执行的审查</div></div>
   </div>
-  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
