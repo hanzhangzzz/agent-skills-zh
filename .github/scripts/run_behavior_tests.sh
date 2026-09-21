@@ -24,6 +24,7 @@ run "repo-tidy CLI" bash repo-tidy/tests/test_repo_tidy.sh "$WORK/repo-tidy"
 run "repo-map" bash repo-map/scripts/test_repo_map.sh
 run "harness" bash harness/scripts/test_harness.sh
 run "hkr-render network" python3 hkr-render/scripts/test_publish_network.py
+run "wechat article wrapper" python3 wechat-article-md-local/tests/test_download_wrapper.py
 run "md2view" bash -c 'cd md2view/scripts && python3 -m unittest test_build_reader test_parse_blocks test_verify_anchors'
 run "do-something contracts" python3 do-something/tests/test_mr_title_contract.py
 run "do-something value policy" python3 do-something/tests/test_flywheel_policy.py
