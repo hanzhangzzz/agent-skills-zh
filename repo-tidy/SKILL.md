@@ -1,24 +1,127 @@
 ---
 name: repo-tidy
 description: |
-  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees; `--new <task>` does tidy + create a task branch in one command and auto-creates a parallel worktree when the main checkout is busy; a SessionStart hook injects repo status when a session starts. Use when starting a new task, when [repo-status] shows the repo is off master or has cleanable items, or when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
+  Git repository tidy-up and parallel-task base: switch back to the latest master/main, delete merged or upstream-gone branches, remove stale worktrees. Ships four hooks: SessionStart injects repo status plus a [tasks] worktree menu; session-cwd records each session's working directory so the user's editor shortcut opens what the AI is actually working on; PreToolUse(EnterWorktree) fetches first so new task branches start from the latest default branch. In Claude Code, start tasks with EnterWorktree — `--new <task>` is the fallback for environments without it. Use before a new repository-changing task or when the user explicitly requests cleanup. Read-only audits, questions, continued tasks, and [repo-status] alone do not trigger mutations. Also use when the user says 归位, 整理仓库, 清理分支, 清理 worktree, 开新任务, repo tidy, tidy repo, clean branches.
 
 ---
 
 # repo-tidy
 
-把本地仓库恢复到「master = 远端最新、无僵尸分支、无废弃 worktree」的基线状态。归位发生在**下一个任务开始时**（push 完 MR 未合，任务结束时无收尾时机）。
+把本地仓库恢复到「默认分支与远端一致、无可安全回收的遗留分支/worktree」的基线状态。默认分支优先读取 origin/HEAD，缺少该引用时才兼容 master/main。归位发生在**下一个任务开始时**（push 完 MR 未合，任务结束时无收尾时机）。
 
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
-- `scripts/git-repo-status.sh` —— SessionStart hook，开局注入一行 `[repo-status]`（分支/ahead-behind/脏净）。注册到 `~/.claude/settings.json` 的 `hooks.SessionStart`：`{"matcher": "*", "hooks": [{"type": "command", "command": "<skill绝对路径>/scripts/git-repo-status.sh", "timeout": 10}]}`
-- `tests/test_repo_tidy.sh <scratch目录>` —— 对抗测试（7 组场景 27 断言），改脚本后必须跑
+- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
+- `scripts/session-cwd.sh` —— 把本 session 的 cwd 写到 `~/.claude/session-cwd/<iTerm 会话 id>`。用户的编辑器快捷键按前台标签页 id 读它，于是打开的永远是 AI 当前所在目录——**子进程改不了父 shell 的 cwd，所以不能靠 shell 的当前目录**。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
+- `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
+- `scripts/install.sh` —— 一键注册上面几个 hook 到 `~/.claude/settings.json`；幂等、改前备份、只增不删
+- `scripts/editor-here.sh` —— 绑到编辑器快捷键：按前台标签页 id 读位置文件，打开 AI 当前所在目录；读不到再回退到终端路径
+- `scripts/task-here.sh` —— 声明「本 session 当前在做哪个任务目录」，给运行中不能切 cwd 的 agent（Codex）用；Claude Code 不需要
+- `tests/` —— `test_repo_tidy.sh`、`test_session_cwd.sh`、`test_install.sh`（另有 `scripts/test_git_repo_status.sh`），改脚本后必须跑
+
+## 安装
+
+前置：`python3`、`git`、可写的 `~/.claude/`。缺任一项先停下说明，不带病安装。
+
+私人配置（`settings.json` / `CLAUDE.md`）不进版本库，所以用脚本改——幂等、改前备份、只增不删，不碰用户已有的其它 hook：
+
+```bash
+bash "$SKILL_DIR/scripts/install.sh"             # 安装（可反复跑）
+bash "$SKILL_DIR/scripts/install.sh" status      # 体检：依赖 / 核心层 / 增强层 / hook 注册
+bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的 hook
+```
+
+**Claude Code 与 Codex 都装**，检测到哪个装哪个（`CLAUDE_HOME` / `CODEX_HOME` 可覆盖路径，测试用）。两边的 hook 事件名与 stdin 格式一致（都是 `{"cwd":...,"hook_event_name":...}`），所以脚本是同一份。
+
+| 事件 | matcher | 脚本 | Claude Code | Codex |
+|---|---|---|---|---|
+| SessionStart | `*` | `git-repo-status.sh`、`session-cwd.sh` | ✓ | ✓ |
+| UserPromptSubmit | `*` | `session-cwd.sh` | ✓ | ✓ |
+| PostToolUse | `EnterWorktree\|ExitWorktree` | `session-cwd.sh` | ✓ | — |
+| PreToolUse | `EnterWorktree` | `worktree-fetch.sh` | ✓ | — |
+
+后两条只给 Claude Code：Codex 没有 `EnterWorktree` 工具，它用原生的 `codex --worktree`（启动时就进 worktree）和 `-C/--cd`。
+
+hook 热生效，装完不用重启 session。**Codex 首次运行会要求确认信任新 hook**。
+
+### Codex：对话中决定任务目录，不必启动前就想好
+
+Codex 运行中不能切工作目录，但**能用绝对路径在别的目录里干活**（已实测）。所以流程和 Claude Code 一样是「先聊、再决定」，只是多一步声明：
+
+1. 在项目主路径启动 `codex`，照常对话
+2. 判断是新任务且需要独立目录 → **先问用户**，同意后：
+   ```bash
+   python3 "$SKILL_DIR/scripts/repo_tidy.py" . --new <task>
+   ```
+   主检出空闲就原地切分支（此时 cwd 就是任务目录，第 3 步可跳过）；被占用则建 worktree 并输出路径
+3. 若拿到的是 worktree 路径，声明它，好让用户的编辑器快捷键跟过去：
+   ```bash
+   bash "$SKILL_DIR/scripts/task-here.sh" <worktree 路径>
+   ```
+   之后用绝对路径在那个 worktree 里读写、跑 `git -C <路径> ...`
+4. 任务结束 `task-here.sh --clear`
+
+**不要让用户用 `codex --worktree` 或 `-C` 启动**——那等于逼人在开口之前就想清楚要做什么，和「先聊再决定」是相反的。这两个参数只在用户主动要求时才提。
+
+声明存在 `<键>.task`，优先级高于 hook 写的 `<键>`：后者每轮对话都会被刷新成 cwd，不分开存会被冲掉。Claude Code 不需要声明——`EnterWorktree` 真的改了 cwd，hook 自动就写对了。
+
+Codex 侧拿不到 tty（hook 父进程无控制终端），只走 `TERM_SESSION_ID` 键——iTerm2 / Terminal.app 都设这个变量，够用。
+
+### 两层能力，各自独立可用
+
+**核心层**（仓库归位、任务 worktree、开工前 fetch、`[tasks]` 菜单）是纯 git 操作，**与平台和终端无关**，任何环境都能用。
+
+**增强层**（编辑器快捷键打开 AI 当前所在目录）需要「能报出当前是哪个终端标签页」，只有这层有环境要求。没有它不影响前面任何功能。
+
+### 增强层：绑编辑器快捷键
+
+把 `scripts/editor-here.sh` 绑到快捷键（iTerm2 用 Preferences → Keys 的 Send Text / Run Coprocess，或 Hammerspoon / Karabiner 调用）。
+
+**不能直接绑 `code .`**：claude 运行期间终端的当前目录冻结在启动目录，子进程改不了父 shell 的 cwd，AI 切进 worktree 后 `code .` 打开的还是旧目录。
+
+| 环境 | 状态 |
+|---|---|
+| macOS + iTerm2 | 已实测 |
+| macOS + Terminal.app | 已写支持（按 tty 匹配），**未实测** |
+| 其它终端（WezTerm / Alacritty / tmux / VS Code 内置） | 需设 `SESSION_KEY_CMD`，**未实测** |
+| Linux / WSL | 核心层可用；增强层需 `SESSION_KEY_CMD` + `EDITOR_HERE_CMD`，**未实测** |
+
+标「未实测」的是照着 API 文档写的，作者手上没有那些环境。能跑通或需要改，欢迎开 issue / PR。
+
+`session-cwd.sh` 按两个键各写一份位置文件，就是为了让不同终端各取所需：
+
+- `<UUID>` —— `TERM_SESSION_ID` 的 UUID 段，iTerm2 与 Terminal.app 都设这个变量
+- `tty-<name>` —— 控制终端名，POSIX 通用回退
+
+其它终端设 `SESSION_KEY_CMD` 指定一条输出「当前标签页唯一键」的命令，`editor-here.sh` 会拿它去查同名或 `tty-` 前缀的位置文件。例如 tmux：
+
+```bash
+export SESSION_KEY_CMD="tmux display-message -p '#{pane_id}'"
+```
+
+环境变量：`EDITOR_HERE_APP`（macOS 上要打开的应用，默认 VS Code）、`EDITOR_HERE_CMD`（直接指定打开命令，如 `cursor` / `zed`）、`EDITOR_HERE_DRY=1`（只打印路径不打开，排错用）。
+
+### 排错
+
+先跑 `install.sh status`，它会分层告诉你卡在哪一环：hook 没注册、终端认不出、位置文件不新鲜（hook 没在跑）、`editor-here.sh` 不可执行。
+
+快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash scripts/editor-here.sh` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`ai-session` 走的是位置文件，`terminal-path` 说明回退了）。
+
+### 卸载
+
+```bash
+bash "$SKILL_DIR/scripts/install.sh" --uninstall   # 移除 hook（备份已自动留下）
+rm -rf ~/.claude/session-cwd                        # 位置文件
+```
+
+再解绑编辑器快捷键、删除 skill 目录即可。`settings.json` 的备份在 `~/.claude/settings.json.bak-*`。
 
 ## 何时用
 
 - 用户说「归位」「整理仓库」「清理分支/worktree」
-- 新任务开工前，SessionStart 注入的 `[repo-status]` 显示：不在 master、master 落后远端、或存在可清理分支
-- commit-and-push 完成后用户想收尾
+- 需要修改仓库的新任务开工前；只读审计、问答、续任务不归位，`[repo-status]` 本身不触发动作
+- 显式调用 do-something 时遵循该 skill 的 do/main 续做规则，不额外开普通任务分支
+- 用户明确要求提交后的仓库整理
 
 ## 执行步骤
 
@@ -42,29 +145,41 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" --all
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --apply
 ```
 
-### 3. 开新任务（一条命令：归位 + 开分支/worktree）
+### 3. 开新任务
+
+**Claude Code 里走 `EnterWorktree`，不要用 `--new`。**读 SessionStart 注入的 `[tasks]` 菜单判断：
+
+- 续某个任务 → `EnterWorktree(path=<该 worktree 路径>)`
+- 新任务 → `EnterWorktree(name=<task>)`
+- 两个 session 共用一个 worktree（一个写、一个 review）→ 同样用 `path`
+- 进门前**向用户一句话确认**；用户说留在主检出就留。session 中途换新任务：`ExitWorktree(keep)` 再 `EnterWorktree(name=...)`，同样先确认
+
+配套 hook 保证两件事：进门前已 fetch（新分支基于最新远端默认分支），进门后位置文件已更新（用户快捷键看到的就是这里）。主检出因此恒定停在默认分支，只作阅读窗口——**不在主检出上开工**，否则第一个任务就会把它占走，后续任务被迫绕到 worktree，而没人再把它还回来。
+
+没有 `EnterWorktree` 的环境（如其他 CLI）才用回退命令：
 
 ```bash
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 ```
 
 - 先对该仓库执行一次归位（等价 `--apply`，安全边界相同）
-- 主检出空闲（在 master 且无 tracked 改动）→ 原地 `switch -c task/<task> origin/master`
-- 主检出被占用（停在进行中分支或有改动）→ 自动创建 sibling worktree `<仓库>--<task>`（基于最新 origin/master）并输出 `cd` 路径 —— 同项目多任务并行就靠这个：一任务一目录一 session，MR 合并后 tidy 自动回收
+- 主检出空闲（在默认分支且无 tracked 改动）→ 原地 `switch -c task/<task> origin/<默认分支>`，**这会占用主检出**
+- 主检出被占用 → 创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径
+- 若占用主检出的分支**已经合并进默认分支**（任务做完没归位的僵尸），会明确报出来并给归位命令，而不是默默绕开——绕开正是主检出被长期霸占的原因：每个新任务都躲去 worktree，没人回来收拾
 - `<task>` 含 `/` 时按原样作分支名，否则加 `task/` 前缀
 
 ## 脚本行为（安全边界）
 
 | 对象 | 条件 | 动作 |
 |------|------|------|
-| 本地分支 | 已合并进 origin/master | 删除 |
+| 本地分支 | 已合并进 origin/<默认分支> | 删除 |
 | 本地分支 | upstream 已删除（squash 合并后的常态） | 删除 |
 | 本地分支 | 有未推提交 / 从未推送 / MR 进行中 | **保留并报告** |
-| 本地分支 | 与 origin/master 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |
-| 本地分支 | 空且已落后 origin/master（切出后从未动过） | 删除（无内容可丢，重切才是正确归位） |
-| 当前分支 | 可清理且工作区无 tracked 改动 | 切回 master 再删 |
-| master | 落后远端 | ff-only 前进 |
-| master | 与远端分叉 | **不动，报告** |
+| 本地分支 | 与 origin/<默认分支> 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |
+| 本地分支 | 空且已落后 origin/<默认分支>（切出后从未动过） | 删除（无内容可丢，重切才是正确归位） |
+| 当前分支 | 可清理且工作区无 tracked 改动 | 切回默认分支再删 |
+| 默认分支 | 落后远端 | ff-only 前进 |
+| 默认分支 | 与远端分叉 | **不动，报告** |
 | worktree | 分支可清理且工作区干净 | 移除 |
 | worktree | 工作区脏 / detached | **保留并报告** |
 

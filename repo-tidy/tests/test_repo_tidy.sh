@@ -7,6 +7,7 @@ PASS=0; FAIL=0
 ok(){ if eval "$2"; then PASS=$((PASS+1)); echo "  ✓ $1"; else FAIL=$((FAIL+1)); echo "  ✗ $1"; fi; }
 
 rm -rf "$T"; mkdir -p "$T"
+T_REAL="$(cd "$T" && pwd -P)"  # macOS 的 /var 是 /private/var 软链，输出使用真实路径
 git -c init.defaultBranch=master init --bare -q "$T/remote.git"
 git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/proj" 2>/dev/null
 cd "$T/proj"
@@ -56,7 +57,7 @@ OUT=$($TIDY "$T/proj" --new t2); echo "$OUT"
 ok "sibling worktree 目录存在" '[ -d "$T/proj--t2" ]'
 ok "worktree 在 task/t2"      '[ "$(git -C "$T/proj--t2" rev-parse --abbrev-ref HEAD)" = task/t2 ]'
 ok "基于最新远端 master"      '[ "$(git -C "$T/proj--t2" rev-parse HEAD)" = "$(git -C "$T/proj" rev-parse origin/master)" ]'
-ok "输出含 cd 路径"           'grep -q "cd $T/proj--t2" <<<"$OUT"'
+ok "输出含 cd 路径"           'grep -Fq "cd $T_REAL/proj--t2" <<<"$OUT"'
 
 echo "== T5 任务合并后 tidy 自动回收 worktree =="
 cd "$T/proj--t2"; git config user.email t@t.t; git config user.name t
@@ -93,6 +94,70 @@ ok "报告分叉并跳过"           'grep -q "分叉" <<<"$OUT" && grep -q "跳
 ok "verb 是「将删」不是「已删」" 'grep -q "将删分支 feat/x" <<<"$OUT"'
 ok "feat/x 实际未删"          'git -C "$T/p2" show-ref -q refs/heads/feat/x'
 ok "本地 master 未被动过"     '[ "$(git -C "$T/p2" log --format=%s -1 master)" = local ]'
+
+echo "== T8 origin/HEAD 优先：main/master 同时存在不选错基线 =="
+git -c init.defaultBranch=main init --bare -q "$T/r3.git"
+git clone -q "$T/r3.git" "$T/p3" 2>/dev/null
+git -C "$T/p3" config user.email t@t.t
+git -C "$T/p3" config user.name t
+echo initial > "$T/p3/base.txt"
+git -C "$T/p3" add base.txt
+git -C "$T/p3" commit -qm initial
+git -C "$T/p3" push -qu origin main
+git -C "$T/p3" branch master
+git -C "$T/p3" push -q origin master
+echo current >> "$T/p3/base.txt"
+git -C "$T/p3" commit -qam current-main
+git -C "$T/p3" push -q origin main
+git -C "$T/p3" remote set-head origin -a >/dev/null
+OUT=$($TIDY "$T/p3" --new default-main); echo "$OUT"
+ok "main/master 并存时从 main 创建" '[ "$(git -C "$T/p3" rev-parse HEAD)" = "$(git -C "$T/p3" rev-parse origin/main)" ]'
+ok "没有误用旧 master" '[ "$(git -C "$T/p3" rev-parse HEAD)" != "$(git -C "$T/p3" rev-parse origin/master)" ]'
+ok "任务检出留在主目录" '[ "$(git -C "$T/p3" branch --show-current)" = task/default-main ]'
+
+echo "== T9 非标准默认分支 trunk 同样可用 =="
+git --git-dir="$T/r3.git" symbolic-ref HEAD refs/heads/trunk
+git -C "$T/p3" push -q origin main:trunk
+git clone -q "$T/r3.git" "$T/p4"
+OUT=$($TIDY "$T/p4" --new default-trunk); echo "$OUT"
+ok "从 trunk 创建任务" '[ "$(git -C "$T/p4" branch --show-current)" = task/default-trunk ]'
+ok "trunk 基线正确" '[ "$(git -C "$T/p4" rev-parse HEAD)" = "$(git -C "$T/p4" rev-parse origin/trunk)" ]'
+
+echo "== T10 已合并的僵尸任务占着主检出：必须说出来，不能默默绕开 =="
+git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/p5"
+git -C "$T/p5" config user.email t@t.t; git -C "$T/p5" config user.name t
+git -C "$T/p5" switch -qc task/zombie
+echo z > "$T/p5/z.txt"; git -C "$T/p5" add z.txt
+git -C "$T/p5" commit -qm zombie-work
+git -C "$T/p5" push -qu origin task/zombie 2>/dev/null
+git -C "$T/p5" switch -q master
+git -C "$T/p5" merge -q --no-ff -m merge task/zombie
+git -C "$T/p5" push -q origin master
+git -C "$T/p5" switch -q task/zombie          # 停在已合并的分支上
+echo leftover > "$T/p5/leftover.txt"; git -C "$T/p5" add leftover.txt   # 做完没收拾的残留
+OUT=$($TIDY "$T/p5" --new after-zombie); echo "$OUT"
+ok "报出主检出被已合并分支占着" 'grep -q "该分支已合并进" <<<"$OUT"'
+ok "说明是任务做完没归位"       'grep -q "任务做完了没归位" <<<"$OUT"'
+ok "给出归位命令"               'grep -q "git switch master" <<<"$OUT"'
+ok "提示归位后可重跑"           'grep -q "归位后重跑" <<<"$OUT"'
+ok "仍建并行 worktree 不阻断"    '[ -d "$T/p5--after-zombie" ]'
+ok "worktree 基于最新 origin/master" \
+   '[ -d "$T/p5--after-zombie" ] && [ "$(git -C "$T/p5--after-zombie" rev-parse HEAD)" = "$(git -C "$T/p5" rev-parse origin/master)" ]'
+
+echo "== T11 主检出干净停在默认分支：不该有僵尸警告 =="
+git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/p6"
+OUT=$($TIDY "$T/p6" --new clean-start); echo "$OUT"
+ok "干净时无僵尸警告" '! grep -q "任务做完了没归位" <<<"$OUT"'
+ok "干净时原地切分支"  '[ "$(git -C "$T/p6" branch --show-current)" = task/clean-start ]'
+
+echo "== T12 停在未合并的进行中分支：不误报僵尸 =="
+git -c init.defaultBranch=master clone -q "$T/remote.git" "$T/p7"
+git -C "$T/p7" config user.email t@t.t; git -C "$T/p7" config user.name t
+git -C "$T/p7" switch -qc task/alive
+echo w > "$T/p7/w.txt"; git -C "$T/p7" add w.txt; git -C "$T/p7" commit -qm alive
+OUT=$($TIDY "$T/p7" --new beside-alive); echo "$OUT"
+ok "进行中任务不被当僵尸" '! grep -q "任务做完了没归位" <<<"$OUT"'
+ok "为新任务另开 worktree"  '[ -d "$T/p7--beside-alive" ]'
 
 echo; echo "结果: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -1,7 +1,6 @@
 name: validate
 
-# 市场质量门禁：SKILL.md 规范、索引一致性、脚本可执行位。
-# 检查逻辑见 .github/scripts/validate_marketplace.py，纯标准库，无外部依赖。
+# 全仓行为门禁：所有本地可复现测试共用 .github/scripts/run_behavior_tests.sh。
 on:
   pull_request:
   push:
@@ -10,7 +9,8 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m pip install --quiet pyyaml
-      - run: python3 .github/scripts/validate_marketplace.py .
+      - run: python3 -m pip install --quiet pyyaml requests
+      - run: bash .github/scripts/run_behavior_tests.sh

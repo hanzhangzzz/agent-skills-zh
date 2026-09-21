@@ -1,4 +1,4 @@
-# ci-review：MR 每次 push 做一次验证型代码审查，只验证"做对了没、做成了没"。
+# ci-review：MR 每次 push 审执行；do/* 机器人分支额外审价值，双通过才可自动合入。
 # 用法：在 .gitlab-ci.yml 里 `include: - local: .gitlab/ci-review.yml`。审查规范在 .gitlab/ci-review.md。
 # CI/CD Variables：
 #   ANTHROPIC_AUTH_TOKEN  网关或 Anthropic 的 API key（masked）；用订阅额度则改设 CLAUDE_CODE_OAUTH_TOKEN
@@ -28,23 +28,34 @@ ci-review:
       PROJECT_ID: $CI_PROJECT_ID
       MR: $CI_MERGE_REQUEST_IID
       HEAD_SHA: $CI_COMMIT_SHA
+      HEAD_REF: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
       BASE_SHA: $CI_MERGE_REQUEST_DIFF_BASE_SHA
       START_SHA: $CI_MERGE_REQUEST_DIFF_BASE_SHA
       BASE_REF: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+      VALUE_REVIEW_BRANCHES: $CI_REVIEW_MERGE_BRANCHES
       读取仓库里的 .gitlab/ci-review.md，严格按它执行。" \
         --allowedTools "Bash,Read,Grep,Glob" \
         --output-format json
-    # 合并由下面的脚本决定，不经模型：模型只在 sticky 里写 verdict，脚本核对四个条件后才合并。
+    # 先把失败 verdict 变成红 job；合并仍由确定性脚本决定。
+    - |
+      API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID"; H="PRIVATE-TOKEN: $GITLAB_TOKEN"
+      curl -sf -H "$H" "$API/notes?per_page=100" \
+        | jq -r '[.[] | select(.body | startswith("<!-- ci-review last="))] | last | .body // ""' \
+        > /tmp/ci-review-sticky.md
+      bash .gitlab/ci-review-verdict.sh check "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" "$CI_COMMIT_SHA" \
+        /tmp/ci-review-sticky.md "$CI_REVIEW_MERGE_BRANCHES"
     - |
       [ "$CI_REVIEW_MERGE" = "true" ] || exit 0
-      hit=0; for g in $CI_REVIEW_MERGE_BRANCHES; do case "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" in $g) hit=1;; esac; done
-      [ "$hit" = 1 ] || { echo "跳过：$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME 不在自动合并范围（${CI_REVIEW_MERGE_BRANCHES}）"; exit 0; }
       API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID"; H="PRIVATE-TOKEN: $GITLAB_TOKEN"
-      sticky="$(curl -sf -H "$H" "$API/notes?per_page=100" | jq -r '[.[] | select(.body | startswith("<!-- ci-review last="))] | last | .body // ""')"
-      grep -q "<!-- ci-review last=$CI_COMMIT_SHA verdict=pass -->" <<<"$sticky" \
-        || { echo "跳过：sticky 不是本 sha 的 verdict=pass"; exit 0; }
       unresolved="$(curl -sf -H "$H" "$API/discussions?per_page=100" | jq '[.[] | select(.notes[0].resolvable==true and .notes[0].resolved==false)] | length')"
-      [ "$unresolved" = 0 ] || { echo "跳过：$unresolved 条未解决线程，留人裁决"; exit 0; }
+      if output="$(bash .gitlab/ci-review-verdict.sh merge "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" "$CI_COMMIT_SHA" \
+          /tmp/ci-review-sticky.md "$CI_REVIEW_MERGE_BRANCHES" "$unresolved")"; then
+        echo "$output"
+      else
+        rc=$?; echo "$output"
+        [ "$rc" = 3 ] && exit 0
+        exit "$rc"
+      fi
       title="$(curl -sf -H "$H" "$API" | jq -r .title)"
       ready="$(sed -E 's/^(([[(]?(Draft|WIP)[])]?[-:]?) *)+//I' <<<"$title")"   # Draft: / [Draft] / (Draft) / Draft- / WIP:
       [ "$title" = "$ready" ] || curl -sf -H "$H" -X PUT "$API" --data-urlencode "title=$ready" >/dev/null

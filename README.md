@@ -9,7 +9,7 @@ Translate English docs into Chinese, archive WeChat / Xiaohongshu / X content as
 
 [![GitHub stars](https://img.shields.io/github/stars/hanzhangzzz/agent-skills-zh?style=flat&logo=github)](https://github.com/hanzhangzzz/agent-skills-zh/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Skills](https://img.shields.io/badge/skills-11-blue)](#skills)
+[![Skills](https://img.shields.io/badge/skills-16-blue)](#skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-8A2BE2)](#install)
 [![Codex](https://img.shields.io/badge/Codex-compatible-black)](#install)
 [![skills.sh](https://img.shields.io/badge/skills.sh-hanzhangzzz%2Fagent--skills--zh-orange)](https://skills.sh/hanzhangzzz/agent-skills-zh)
@@ -32,6 +32,7 @@ Then just talk to your agent — every skill lists its own trigger phrases (Engl
 | Skill | What it does · 做什么 | Use when · 何时用 | Trigger · 触发 |
 | --- | --- | --- | --- |
 | [doc-reader](./doc-reader/) | Translate an English article/PDF into Chinese section by section, keep 100% of images, build a 3-column preview (original · translation · AI slides). 英文技术文档/PDF 章节级精准翻译，图片全保留，三栏本地预览 | Reading long English blogs, papers, docs and wanting a faithful side-by-side Chinese version | `/doc-reader <URL or PDF>` · `翻译这篇文章` |
+| [scanned-book-ocr](./scanned-book-ocr/) | Local scanned PDF OCR → page-traceable text with deterministic concurrency checks and visual QA. 扫描书转文字，保留页码并校验质量 | Image-only books for AI reading; Apple Silicon macOS, Python 3.12+ | `$scanned-book-ocr` · `扫描 PDF 转文字` |
 | [wechat-article-md-local](./wechat-article-md-local/) | Save a WeChat Official Account article as local Markdown with images. 公众号文章下载为本地 Markdown，图片本地化 | You receive an `mp.weixin.qq.com` link and want to archive, quote or analyze it | auto on `mp.weixin.qq.com` links · `下载公众号文章` |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/) | Download a Xiaohongshu (RedNote) video and transcribe the voice-over with Whisper into Markdown. 小红书视频下载 + 口播逐字稿 | You receive a Xiaohongshu video link and need the spoken content as text | auto on `xiaohongshu.com` / `xhslink.com` links · `小红书视频转文字` |
 | [x-article-download](./x-article-download/) | Download a tweet, a long-form X article or a whole account to Markdown. X/Twitter 单条或整账号批量下载 | You receive an `x.com` link and want to archive or analyze it | auto on `x.com` links · `下载推文` |
@@ -41,45 +42,56 @@ Then just talk to your agent — every skill lists its own trigger phrases (Engl
 | [repo-tidy](./repo-tidy/) | Git tidy-up + parallel-task base: back to latest master, prune merged branches/worktrees, `--new` opens a task branch (parallel worktree when busy); SessionStart hook injects repo status. 仓库归位与并行任务底座 | Multi-repo + multi-task AI work where task branches pile up | `归位` · `开新任务` · `repo tidy` |
 | [repo-map](./repo-map/) | Local repository map: self-healing index of all local git repos; a hook injects path + read/write role whenever a repo name is mentioned. 本地仓库地图，提到仓库名自动注入路径 | Cross-repo references where the AI keeps asking for paths | `仓库地图` · `repo-map` |
 | [harness](./harness/) | Minimal Harness Engineering: Inspector → Worker → Reviewer loop driven by a shared `TODO.md`. 三角色 AI 自治改进循环 | You want an agent to continuously inspect, fix and review a repo, on demand or on a schedule | `/harness` · `启动 harness` |
-| [do-something](./do-something/) | Autonomously pick and finish the highest-leverage task in the project; all runs continue on one `do/main` branch, humans merge to harvest. MR mode keeps a living draft MR and answers CI/review feedback first. 自主推进项目，人类合并即收割；MR 模式与 ci-review 组成飞轮 | Spare tokens and an idle project — let the agent work while you sleep (cron/loop) | `/do-something` · `做点什么` · `自己看着办` |
-| [ci-review](./ci-review/) | Install a CI-triggered LLM reviewer: on every PR/MR push Claude reproduces the change's claims, hunts correctness bugs with failure scenarios, posts inline comments + one sticky summary with a verdict. Optional tier: auto-merge `do/*` branches when the verdict passes. CI 里的验证型代码审查机器人，只验证"做对了没"，可选审查通过自动合并 | You want every PR/MR verified by a machine before a human looks, or you run do-something in MR mode and want the flywheel to harvest itself | `/ci-review` · `装一个 CI 代码审查` |
+| [do-something](./do-something/) | Answer feedback, choose work backed by real value evidence, finish and verify a durable outcome, or return NO-OP. `do/*` auto-merge requires separate value and execution verdicts. 自主推进项目：有价值且真正完成才交付，无事可做就停 | An idle project where the agent may work unattended without manufacturing tasks to keep the loop busy | `/do-something` · `做点什么` · `自己看着办` |
+| [ci-review](./ci-review/) | Every PR/MR gets an execution verdict; configured bot branches also need a separate value verdict before deterministic auto-merge. Skill Markdown is reviewed as behavior code and failed verdicts are red checks. CI 里的验证型代码审查机器人，机器人分支价值与执行双门禁 | You want machine-verified execution, plus a value gate before unattended bot branches enter main | `/ci-review` · `装一个 CI 代码审查` |
 | [git-push-guard](./git-push-guard/) | Hook-only plugin: intercepts direct pushes to `master`/`main`, asks for confirmation, per-repo allowlist. 纯 hook：直推默认分支拦截 | You let an agent commit and want shared-branch discipline enforced | auto on `git push` to master/main (plugin install only) |
 | [hook-test-kit](./hook-test-kit/) | Scaffold behavior-matrix tests for Claude Code hooks: scratch fixtures, stdin JSON, EMPTY/! assertion protocol, mutation-experiment finish. 给 hook 脚本补行为测试 | 写了/改了 hook 脚本要测试 · `/hook-test-kit` |
+| [pdf-triptych](./pdf-triptych/) | Break a standard / spec / whitepaper PDF into a one-page triptych: skeleton, detail, worked example — three figures sharing one horizontal axis and one color system. 把读不动的标准 PDF 拆成一页三联图：骨架 · 细节 · 例子，共用一根横轴和一套颜色 | A long standard nobody finishes reading, that you still have to present or review | `/pdf-triptych <PDF>` · `把这份 PDF 画成图` · `标准拆解` |
 
 ## 效果一览 · Gallery
 
 每张图都是真实产出或 skill 自带的真实文案/看板，不是示意图。
 
+<!-- cards-gallery-start -->
 <table>
 <tr>
-<td width="50%"><a href="./doc-reader/"><img src="./assets/readme/doc-reader-preview.jpg" alt="doc-reader：原文 · 译文 · AI 幻灯片三栏预览"></a><br><b>doc-reader</b> · 英文文章 → 三栏中文预览 + AI 幻灯片</td>
-<td width="50%"><a href="./wechat-article-md-local/"><img src="./assets/readme/cards/wechat-article-md-local.png" alt="wechat-article-md-local 真实产出"></a><br><b>wechat-article-md-local</b> · 公众号文章 → 本地 Markdown</td>
+<td><a href="./doc-reader/"><img src="./assets/readme/cards/doc-reader.png" alt="doc-reader 展示卡"></a><br><b>doc-reader</b> · 英文文章 → 三栏中文预览 + AI 幻灯片</td>
+<td><a href="./wechat-article-md-local/"><img src="./assets/readme/cards/wechat-article-md-local.png" alt="wechat-article-md-local 展示卡"></a><br><b>wechat-article-md-local</b> · 公众号文章 → 本地 Markdown</td>
 </tr>
 <tr>
-<td><a href="./xiaohongshu-downloader/"><img src="./assets/readme/cards/xiaohongshu-downloader.png" alt="xiaohongshu-downloader 输出结构"></a><br><b>xiaohongshu-downloader</b> · 小红书视频 → 口播逐字稿</td>
-<td><a href="./x-article-download/"><img src="./assets/readme/cards/x-article-download.png" alt="x-article-download 输出结构"></a><br><b>x-article-download</b> · 推文 / X 长文 / 整账号 → Markdown</td>
+<td><a href="./xiaohongshu-downloader/"><img src="./assets/readme/cards/xiaohongshu-downloader.png" alt="xiaohongshu-downloader 展示卡"></a><br><b>xiaohongshu-downloader</b> · 小红书视频 → 口播逐字稿</td>
+<td><a href="./x-article-download/"><img src="./assets/readme/cards/x-article-download.png" alt="x-article-download 展示卡"></a><br><b>x-article-download</b> · 推文 / X 长文 / 整账号 → Markdown</td>
 </tr>
 <tr>
-<td><a href="./hkr-render/"><img src="./hkr-render/docs/gallery-preview.png" alt="hkr-render 7 个主题画廊"></a><br><b>hkr-render</b> · Markdown → 公众号排版（7 主题）→ 草稿箱</td>
-<td><a href="./md2view/"><img src="./md2view/assets/demo-split.png" alt="md2view 双栏溯源阅读视图"></a><br><b>md2view</b> · Markdown → 可溯源的双栏阅读视图</td>
+<td><a href="./hkr-render/"><img src="./assets/readme/cards/hkr-render.png" alt="hkr-render 展示卡"></a><br><b>hkr-render</b> · Markdown → 公众号排版（7 主题）→ 草稿箱</td>
+<td><a href="./md2view/"><img src="./assets/readme/cards/md2view.png" alt="md2view 展示卡"></a><br><b>md2view</b> · Markdown → 可溯源的双栏阅读视图</td>
 </tr>
 <tr>
-<td><a href="./gpt-image2-prompt-director/"><img src="./assets/readme/gpt-output-xhs-card.png" alt="gpt-image2-prompt-director 真实出图"></a><br><b>gpt-image2-prompt-director</b> · 一句话点子 → 可出图的完整 brief（真实出图）</td>
-<td><a href="./repo-tidy/"><img src="./assets/readme/cards/repo-tidy.png" alt="repo-tidy 真实输出"></a><br><b>repo-tidy</b> · 归位 + 一条命令开任务分支</td>
+<td><a href="./gpt-image2-prompt-director/"><img src="./assets/readme/cards/gpt-image2-prompt-director.png" alt="gpt-image2-prompt-director 展示卡"></a><br><b>gpt-image2-prompt-director</b> · 一句话点子 → 可出图的完整 brief（真实出图）</td>
+<td><a href="./repo-tidy/"><img src="./assets/readme/cards/repo-tidy.png" alt="repo-tidy 展示卡"></a><br><b>repo-tidy</b> · 归位 + 一条命令开任务分支</td>
 </tr>
 <tr>
-<td><a href="./repo-map/"><img src="./assets/readme/cards/repo-map.png" alt="repo-map 真实注入文本"></a><br><b>repo-map</b> · 提到仓库名，自动注入路径与角色</td>
-<td><a href="./git-push-guard/"><img src="./assets/readme/cards/git-push-guard.png" alt="git-push-guard hook 文案"></a><br><b>git-push-guard</b> · 直推 master/main 时拦下来问一句</td>
+<td><a href="./repo-map/"><img src="./assets/readme/cards/repo-map.png" alt="repo-map 展示卡"></a><br><b>repo-map</b> · 提到仓库名，自动注入路径与角色</td>
+<td><a href="./git-push-guard/"><img src="./assets/readme/cards/git-push-guard.png" alt="git-push-guard 展示卡"></a><br><b>git-push-guard</b> · 直推 master/main 时拦下来问一句</td>
 </tr>
 <tr>
-<td><a href="./harness/"><img src="./assets/readme/cards/harness.png" alt="harness TODO.md 看板"></a><br><b>harness</b> · Inspector → Worker → Reviewer 看板循环</td>
-<td><a href="./do-something/"><img src="./assets/readme/cards/do-something.png" alt="do-something DO.md"></a><br><b>do-something</b> · 无人值守自主推进，合并即收割</td>
+<td><a href="./harness/"><img src="./assets/readme/cards/harness.png" alt="harness 展示卡"></a><br><b>harness</b> · Inspector → Worker → Reviewer 看板循环</td>
+<td><a href="./do-something/"><img src="./assets/readme/cards/do-something.png" alt="do-something 展示卡"></a><br><b>do-something</b> · 无人值守自主推进，合并即收割</td>
 </tr>
 <tr>
-<td><a href="./ci-review/"><img src="./assets/readme/cards/ci-review.png" alt="ci-review 在 PR #8 上的真实评论"></a><br><b>ci-review</b> · CI 里的验证型 CR，只验执行不评方向</td>
+<td><a href="./ci-review/"><img src="./assets/readme/cards/ci-review.png" alt="ci-review 展示卡"></a><br><b>ci-review</b> · CI 里的验证型 CR，只验执行不评方向</td>
+<td><a href="./hook-test-kit/"><img src="./assets/readme/cards/hook-test-kit.png" alt="hook-test-kit 展示卡"></a><br><b>hook-test-kit</b> · 给 hook 脚本生成行为矩阵测试，变异实验收尾</td>
+</tr>
+<tr>
+<td><a href="./scanned-book-ocr/"><img src="./assets/readme/cards/scanned-book-ocr.png" alt="scanned-book-ocr 展示卡"></a><br><b>scanned-book-ocr</b> · 扫描 PDF → 页码可追溯的本地文本</td>
+<td><a href="./pdf-triptych/"><img src="./assets/readme/cards/pdf-triptych.png" alt="pdf-triptych 展示卡"></a><br><b>pdf-triptych</b> · 长标准 PDF → 可追溯的一页结构图</td>
+</tr>
+<tr>
 <td>飞轮实景：do-something 提出方向并实践 → ci-review 验证质量 → 下一轮先回应评论 → 人类只在想收割时出现。<br><br>本仓 PR #8 实录：机器人在审查规范的安装副本里发现一处逻辑矛盾（带失败场景与复现命令），开发者修复 push 后，增量审查确认"矛盾已由此 commit 消除"，零重复评论。</td>
+<td></td>
 </tr>
 </table>
+<!-- cards-gallery-end -->
 
 <a id="install"></a>
 ## Install · 安装

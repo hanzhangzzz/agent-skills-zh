@@ -1,4 +1,4 @@
-# ci-review：每次 push 到 PR 时做一次验证型代码审查，只验证"做对了没、做成了没"。
+# ci-review：每次 push 到 PR 时审执行；do/* 机器人分支额外审价值，双通过才可自动合入。
 # 安装：/ci-review（或 scripts/install.sh）。审查规范在 .github/ci-review.md，按仓库口味改它。
 # 模型接入（不占 Claude 订阅额度）：
 #   Secret   CI_REVIEW_API_KEY   网关或 Anthropic 的 API key（必填）
@@ -46,13 +46,29 @@ jobs:
             REPO: ${{ github.repository }}
             PR: ${{ github.event.pull_request.number }}
             HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            HEAD_REF: ${{ github.event.pull_request.head.ref }}
             BASE_REF: ${{ github.event.pull_request.base.ref }}
+            VALUE_REVIEW_BRANCHES: ${{ env.CI_REVIEW_MERGE_BRANCHES }}
             读取仓库里的 .github/ci-review.md，严格按它执行。
           claude_args: |
             --allowedTools "Bash,Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment"
             ${{ vars.CI_REVIEW_MODEL != '' && format('--model {0}', vars.CI_REVIEW_MODEL) || '' }}
-      # 合并由这一步的脚本决定，不经模型：模型只在 sticky 里写 verdict，脚本核对四个条件后才合并。
-      - name: merge when verdict=pass
+      # 模型只写 verdict；脚本先把失败变成红 check，再单独判断是否满足自动合入条件。
+      - name: validate review verdict
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- ci-review last="))] | last | .body // ""' \
+            > /tmp/ci-review-sticky.md
+          bash .github/scripts/ci-review-verdict.sh check "$HEAD_REF" "$HEAD_SHA" \
+            /tmp/ci-review-sticky.md "$CI_REVIEW_MERGE_BRANCHES"
+      - name: merge when both verdicts pass
         if: env.CI_REVIEW_MERGE == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,16 +78,17 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          hit=0; for g in $CI_REVIEW_MERGE_BRANCHES; do case "$HEAD_REF" in $g) hit=1;; esac; done
-          [ "$hit" = 1 ] || { echo "跳过：$HEAD_REF 不在自动合并范围（${CI_REVIEW_MERGE_BRANCHES}）"; exit 0; }
-          sticky="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq '[.[] | select(.body | startswith("<!-- ci-review last="))] | last | .body // ""')"
-          grep -q "<!-- ci-review last=$HEAD_SHA verdict=pass -->" <<<"$sticky" \
-            || { echo "跳过：sticky 不是本 sha 的 verdict=pass"; exit 0; }
           unresolved="$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{isResolved}}}}}' \
             -f o="${REPO%/*}" -f r="${REPO#*/}" -F n="$PR" \
             --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)] | length')"
-          [ "$unresolved" = 0 ] || { echo "跳过：$unresolved 条未解决线程，留人裁决"; exit 0; }
+          if output="$(bash .github/scripts/ci-review-verdict.sh merge "$HEAD_REF" "$HEAD_SHA" \
+              /tmp/ci-review-sticky.md "$CI_REVIEW_MERGE_BRANCHES" "$unresolved")"; then
+            echo "$output"
+          else
+            rc=$?; echo "$output"
+            [ "$rc" = 3 ] && exit 0
+            exit "$rc"
+          fi
           # GITHUB_TOKEN 触发的 ready_for_review 不会再起一次 workflow；换成 PAT 就会，这一关防第二次运行重复合并
           [ "$(gh pr view "$PR" --json state --jq .state)" = OPEN ] || { echo "跳过：PR 已不是 OPEN"; exit 0; }
           gh pr ready "$PR" 2>/dev/null || true

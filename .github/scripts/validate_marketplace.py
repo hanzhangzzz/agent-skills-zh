@@ -13,8 +13,8 @@ description 非字符串如实上报）。依赖：python3 -m pip install pyyaml
 - SKILL.md 内无硬编码安装路径（~/.claude/skills/、/Users/、/home/；README 是给人看的文档，不检查）
 - SKILL.md 里反引号引用的 scripts/、references/ 路径真实存在
 - scripts/ 下的 .sh/.py 有可执行位
-- 索引一致：含 SKILL.md 的目录必须同时出现在 README 表格、MARKETPLACE.md、marketplace.json；
-  反向（索引里有、目录没有）只允许 hook-only entry（无 skills 字段）
+- 索引一致：README/README.en/MARKETPLACE/画廊的 skill 集合与 marketplace.json 完全一致，
+  README badge 数量等于 plugin entry 数；hook-only entry 也不能从索引消失
 """
 
 import json
@@ -142,6 +142,8 @@ for name in sorted(os.listdir(root)):
 # ── 索引一致性 ────────────────────────────────────────────────────
 readme = open(os.path.join(root, "README.md")).read()
 readme_names = set(re.findall(r"^\| \[([\w-]+)\]\(\./", readme, re.M))
+readme_en = open(os.path.join(root, "README.en.md")).read()
+readme_en_names = set(re.findall(r"^\| \[([\w-]+)\]\(\./", readme_en, re.M))
 mkt = open(os.path.join(root, "MARKETPLACE.md")).read()
 mkt_names = set(re.findall(r"^### ([\w-]+)\s*$", mkt, re.M))
 
@@ -156,6 +158,59 @@ for d in sorted(skill_dirs):
 for name in sorted(readme_names | mkt_names):
     if name not in skill_dirs and name not in hook_only:
         fail(f"索引里的 {name} 没有对应目录（且非 hook-only entry）")
+
+
+def check_exact_index(label, actual):
+    missing = entry_names - actual
+    extra = actual - entry_names
+    if missing:
+        fail(f"{label} 缺 entry：{', '.join(sorted(missing))}")
+    if extra:
+        fail(f"{label} 多出未知 entry：{', '.join(sorted(extra))}")
+
+
+check_exact_index("README.md Skills 表格", readme_names)
+check_exact_index("README.en.md Skills 表格", readme_en_names)
+check_exact_index("MARKETPLACE.md", mkt_names)
+
+def check_badge(label, text):
+    badges = re.findall(r"skills-(\d+)-blue", text)
+    if len(badges) != 1:
+        fail(f"{label} skill badge 数量应为 1，实际 {len(badges)}")
+    elif int(badges[0]) != len(entry_names):
+        fail(f"{label} skill badge={badges[0]}，实际 plugin entry={len(entry_names)}")
+
+
+check_badge("README.md", readme)
+check_badge("README.en.md", readme_en)
+
+cards_path = os.path.join(root, "assets/readme/cards-src/cards.json")
+try:
+    cards = json.load(open(cards_path))
+    card_names_list = [c.get("name") for c in cards]
+    invalid_names = [name for name in card_names_list if not isinstance(name, str) or not name]
+    if invalid_names:
+        fail("cards.json 存在缺失或非字符串 name")
+    valid_names = [name for name in card_names_list if isinstance(name, str) and name]
+    card_names = set(valid_names)
+    if len(valid_names) != len(card_names):
+        fail("cards.json 存在重复 name")
+    check_exact_index("cards.json", card_names)
+except Exception as e:
+    fail(f"cards.json 无法解析：{e}")
+
+# ── 画廊单一事实源 ────────────────────────────────────────────────
+gallery_gen = os.path.join(root, "assets/readme/cards-src/build_gallery.py")
+if os.path.exists(gallery_gen):
+    import subprocess
+    r = subprocess.run([sys.executable, gallery_gen, "--check"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        detail = (r.stdout + r.stderr).strip()
+        # traceback 的根因（异常类型+消息）在最后一个非空行
+        last = [l for l in detail.splitlines() if l.strip()]
+        reason = last[-1][:200] if last else "运行 assets/readme/cards-src/build_gallery.py 重新生成"
+        fail("画廊校验未通过——" + reason)
 
 if failures:
     print(f"\n共 {failures} 处违规")

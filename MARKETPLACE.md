@@ -1,7 +1,7 @@
 ---
 name: agent-skills-zh
 description: Agent Skills for Claude Code & Codex, Chinese-first — 面向中文开发者的 Agent Skills 注册表
-version: 1.1.0
+version: 1.2.0
 registry: https://github.com/hanzhangzzz/agent-skills-zh
 install: npx skills add hanzhangzzz/agent-skills-zh
 ---
@@ -195,8 +195,8 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 ```json
 {
   "name": "do-something",
-  "version": "1.3.0",
-  "description": "Autonomously pick and finish the highest-leverage task in the current project: backlog first, then purpose-driven reasoning, then choose a purpose; all runs continue on one do/main branch with DO.md as memory, humans merge to harvest or delete to veto. Optional MR mode (DO.md `MR: on`) keeps a living draft MR and answers CI failures and review threads first — pairs with ci-review. 自主推进项目，适合 cron/loop 无人值守；MR 模式与 ci-review 组成飞轮",
+  "version": "1.4.0",
+  "description": "Autonomously answer feedback first, select the highest-value task supported by real evidence, finish and verify a durable outcome, or return NO-OP when nothing qualifies. MR mode pairs with ci-review and requires separate value and execution verdicts before auto-merge. 自主推进项目，以真实价值和完成度为门，不为保持循环制造提交",
   "trigger": "/do-something",
   "keywords": ["autonomous", "agent", "cron", "loop", "unattended", "project improvement", "backlog", "merge request", "flywheel", "做点什么", "自己看着办", "推进一下"],
   "compatibility": "Claude Code, Codex",
@@ -211,8 +211,8 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 ```json
 {
   "name": "ci-review",
-  "version": "1.1.0",
-  "description": "Install a CI-triggered LLM code reviewer into a repo: on every PR/MR push, Claude Code runs headless, reproduces every claim the change makes, hunts correctness bugs with concrete failure scenarios, and posts inline comments plus one sticky summary with a machine-readable verdict. Two tiers remembered in the repo: review-only, or auto-merge do/* branches when the verdict passes and no thread is open. Detects GitHub/GitLab, asks only for what is missing, sets CI variables itself. Judges execution, not direction — the other half of the do-something flywheel. CI 里的验证型代码审查机器人，可选审查通过自动合并",
+  "version": "1.2.0",
+  "description": "Install a CI-triggered LLM code reviewer into a repo: every PR/MR gets a reproducible execution verdict; configured bot branches such as do/* also need a separate value verdict proving evidence, purpose alignment, durable output, and completion before deterministic auto-merge. Markdown behavior files are reviewed as code, and failed verdicts become red checks. CI 里的验证型代码审查机器人，机器人分支价值与执行双门禁",
   "trigger": "/ci-review",
   "keywords": ["code review", "ci", "github actions", "gitlab ci", "claude-code-action", "pull request", "merge request", "auto merge", "flywheel", "代码审查", "自动 review", "自动合并"],
   "compatibility": "Claude Code",
@@ -263,4 +263,56 @@ Natural-language request an agent understands · 自然语言安装请求：
 
 ```text
 Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-zh
+```
+
+### scanned-book-ocr
+
+```json
+{
+  "name": "scanned-book-ocr",
+  "version": "1.0.0",
+  "description": "扫描书 PDF 本地批量 OCR，输出页码可追溯的文本，含并发一致性基准、完整性校验和视觉抽检；支持 Apple Silicon macOS。",
+  "trigger": "$scanned-book-ocr",
+  "keywords": [
+    "ocr",
+    "scanned pdf",
+    "book",
+    "text",
+    "扫描书",
+    "图片 PDF",
+    "文字提取"
+  ],
+  "compatibility": "Claude Code, Codex; Apple Silicon macOS, Python 3.12+, pdftoppm",
+  "install_path": "scanned-book-ocr/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
+### pdf-triptych
+
+```json
+{
+  "name": "pdf-triptych",
+  "version": "1.0.0",
+  "description": "把一份标准/规范/白皮书 PDF 拆成一页三联图 HTML：骨架、细节、例子三张图共用同一根横轴和同一套颜色。先派 subagent 通读全文挖出结构，再把结构翻译成视觉通道，最后才写代码；自带渲染检查（自动测高、运行时错误、溢出重叠字号、列归属声明）。",
+  "trigger": "/pdf-triptych",
+  "keywords": [
+    "pdf",
+    "standard",
+    "specification",
+    "infographic",
+    "visualization",
+    "iso",
+    "whitepaper",
+    "标准拆解",
+    "三联图",
+    "文档骨架图",
+    "PDF 可视化"
+  ],
+  "compatibility": "Claude Code, Codex; needs pdftotext, Chrome/Chromium, node, Python 3",
+  "install_path": "pdf-triptych/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
 ```

@@ -98,6 +98,12 @@ def first_heading(markdown: str) -> str:
 def build_html():
     """构建 preview.html"""
 
+    # 内嵌 marked 库（离线可用，不依赖 CDN——jsdelivr 在大陆间歇性不可达）
+    marked_lib = escape_script_content(read_file('marked.min.js'))
+    if not marked_lib.strip():
+        print("❌ marked.min.js 为空或仅含空白，无法构建自包含预览", file=sys.stderr)
+        sys.exit(1)
+
     # 读取源文件
     original_md = read_file('original.md', '# 原文加载失败')
     translated_md = read_file('translated.md', '# 翻译加载失败')
@@ -137,7 +143,9 @@ def build_html():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title_html} - Doc Reader</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+{marked_lib}
+    </script>
     <style>
         :root {{
             --bg-primary: #0a0a0a;
@@ -603,5 +611,12 @@ if __name__ == '__main__':
     # 切换到脚本所在目录（支持从任意位置运行）
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
+
+    # fail-fast：原文/译文缺失时预览无意义，拒绝产出废品（slides 元数据可选，--no-ppt 模式合法缺失）
+    missing = [f for f in ('original.md', 'translated.md', 'marked.min.js') if not os.path.exists(f)]
+    if missing:
+        print(f"❌ 缺少必需文件: {', '.join(missing)}（当前目录: {os.getcwd()}）", file=sys.stderr)
+        print("   请将 original.md、translated.md 与 scripts/ 下的 marked.min.js 放到脚本同目录后再运行", file=sys.stderr)
+        sys.exit(1)
 
     build_html()

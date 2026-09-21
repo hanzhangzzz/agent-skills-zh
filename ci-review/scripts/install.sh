@@ -33,8 +33,8 @@ if [ -z "$PLATFORM" ]; then
   esac
 fi
 case "$PLATFORM" in
-  github) CI_FILE=".github/workflows/ci-review.yml"; RULES=".github/ci-review.md"; TPL="github-ci-review.yml";;
-  gitlab) CI_FILE=".gitlab/ci-review.yml";          RULES=".gitlab/ci-review.md"; TPL="gitlab-ci-review.yml";;
+  github) CI_FILE=".github/workflows/ci-review.yml"; RULES=".github/ci-review.md"; GATE=".github/scripts/ci-review-verdict.sh"; TPL="github-ci-review.yml";;
+  gitlab) CI_FILE=".gitlab/ci-review.yml";          RULES=".gitlab/ci-review.md"; GATE=".gitlab/ci-review-verdict.sh"; TPL="gitlab-ci-review.yml";;
   *) echo "✗ 平台只能是 github|gitlab"; exit 1;;
 esac
 
@@ -56,7 +56,7 @@ copy() { # src dst
 
 status() {
   echo "平台：${PLATFORM}（${REMOTE}）"
-  for f in "$CI_FILE" "$RULES"; do [ -e "$f" ] && echo "✓ $f" || echo "✗ 缺 $f"; done
+  for f in "$CI_FILE" "$RULES" "$GATE"; do [ -e "$f" ] && echo "✓ $f" || echo "✗ 缺 $f"; done
   [ -e "$CI_FILE" ] && echo "合并档位：$(merge_mode)（范围 $(grep -E '^[[:space:]]*CI_REVIEW_MERGE_BRANCHES:' "$CI_FILE" | sed -E 's/.*"([^"]*)".*/\1/')）"
   if [ "$PLATFORM" = github ]; then
     command -v gh >/dev/null || { echo "· gh 未安装，跳过 secrets 检查"; return; }
@@ -80,6 +80,7 @@ case "$CMD" in
   install)
     copy "$SKILL_DIR/templates/$TPL" "$CI_FILE"
     copy "$SKILL_DIR/prompts/review.md" "$RULES"
+    copy "$SKILL_DIR/scripts/verdict_gate.sh" "$GATE"
     [ -n "$MERGE" ] && set_merge "$MERGE"
     echo; status;;
 esac

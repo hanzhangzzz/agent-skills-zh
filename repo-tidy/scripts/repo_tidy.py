@@ -68,7 +68,13 @@ def find_repos(root: Path, max_depth=3):
 
 
 def master_ref(repo):
-    """返回 (远端master分支名, 是否有远端)。"""
+    """优先采用 origin/HEAD；旧仓库缺少该引用时兼容 master/main。"""
+    rc, remote_head, _ = git(repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    if rc == 0 and remote_head.startswith("origin/"):
+        name = remote_head.removeprefix("origin/")
+        rc, _, _ = git(repo, "show-ref", "-q", f"refs/remotes/origin/{name}")
+        if rc == 0:
+            return name, True
     for name in ("master", "main"):
         rc, _, _ = git(repo, "show-ref", "-q", f"refs/remotes/origin/{name}")
         if rc == 0:
@@ -268,6 +274,32 @@ def start_task(repo: Path, task: str):
     rc_st, out_st, _ = git(repo, "status", "--porcelain", "--untracked-files=no", timeout=60)
     busy = head != master or rc_st != 0 or bool(out_st)
 
+    # 占着主检出的分支到底还活着吗？只看「脏不脏」会把做完没收拾的僵尸任务
+    # 当成「有人在用」，于是新任务绕去 worktree，而主检出从此没人还回来。
+    # 这种情况必须说出来，不能默默绕开。
+    if busy and head != master and has_remote:
+        merged = git(repo, "merge-base", "--is-ancestor", head, f"origin/{master}")[0] == 0
+        if merged:
+            dirty = [l for l in out_st.splitlines() if l.strip()]
+            stale = []
+            for line in dirty:
+                f = line[3:].strip().strip('"')
+                # 与 origin/master 逐字相同的改动 = 已合并任务留下的副本，丢了不可惜
+                if git(repo, "diff", "--quiet", f"origin/{master}", "--", f)[0] == 0:
+                    stale.append(f)
+            print(f"⚠️  主检出停在 {head}，该分支已合并进 origin/{master}——任务做完了没归位。")
+            if dirty:
+                print(f"    工作区还有 {len(dirty)} 处未提交改动"
+                      + (f"，其中 {len(stale)} 处与 origin/{master} 逐字相同（是残留副本）" if stale else "")
+                      + "。")
+                print(f"    先确认这些改动是否还需要：cd {repo} && git status")
+                print(f"    确认可弃后归位：git stash push -u -m park-{head} && "
+                      f"git switch {master} && git merge --ff-only origin/{master}")
+            else:
+                print(f"    工作区干净，直接归位：cd {repo} && git switch {master} && "
+                      f"git merge --ff-only origin/{master}")
+            print(f"    归位后重跑本命令，新任务就能用上主检出；现在先建并行 worktree。")
+
     if not busy:
         rc, _, err = git(repo, "switch", "--no-track", "-c", branch, base, timeout=TREE_TIMEOUT)
         if rc != 0:
@@ -284,7 +316,8 @@ def start_task(repo: Path, task: str):
         if rc != 0:
             print(f"❌ 建 worktree 失败: {fatal_line(err, err)}", file=sys.stderr)
             sys.exit(1)
-        print(f"✅ 主检出被占用（{head}），已建并行 worktree（分支 {branch}，基于 {base}）\ncd {wt}")
+        why = "工作区有未提交改动" if head == master else f"停在 {head}"
+        print(f"✅ 主检出被占用（{why}），已建并行 worktree（分支 {branch}，基于 {base}）\ncd {wt}")
 
 
 def render(plan: RepoPlan, applied: bool):

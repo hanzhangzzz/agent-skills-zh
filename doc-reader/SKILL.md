@@ -40,9 +40,11 @@ description: |
 | `generate_slides.py` | 并发调用 Codex CLI（默认 4 路），由内置 `$imagegen` 生成整组幻灯片 |
 | `build.py` | 构建三栏预览 HTML |
 
+> **Python 依赖**：`pip install html-to-markdown`（`web_fetcher.py` 需要；已适配 3.x 的 ConversionResult API）。首次运行缺库时脚本会 fail-fast 并提示本命令。
+
 **🚨 关键执行规则:**
 
-每次执行 `generate_slides.py` 和 `build.py` 前，**必须**将脚本从本 skill 的 `scripts/` 目录复制到当前工作目录 `output/{slug}/`。
+每次执行 `generate_slides.py` 和 `build.py` 前，**必须**将脚本从本 skill 的 `scripts/` 目录复制到当前工作目录 `output/{slug}/`。`build.py` 还需同目录放置 `marked.min.js`（预览的内嵌渲染库，随 scripts/ 一起复制）。
 
 图片生成要求 `codex` 位于 `PATH`、Codex CLI 已登录，并且当前版本和账号可使用内置 imagegen。安装 CLI 本身不等于已经具备图片生成权限。
 

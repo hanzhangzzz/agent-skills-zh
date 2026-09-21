@@ -1,7 +1,7 @@
 ---
 name: ci-review
 description: |
-  Install a CI-triggered LLM code reviewer into the current repo: on every push to a PR/MR, Claude Code runs headless, reproduces every claim the change makes ("tests pass", "verified", "supports X"), hunts correctness bugs with concrete failure scenarios, and posts inline comments plus one sticky summary with a machine-readable verdict. Two tiers chosen at install and remembered in the repo: review-only, or auto-merge bot branches (do/* by default) when the verdict passes and no thread is open. Detects GitHub vs GitLab from origin, asks only for what is missing, sets the CI variables itself. Judges execution, not direction — the other half of the do-something flywheel. Use when the user says /ci-review, 装一个 CI 代码审查, CI 里自动 code review, 给 PR/MR 加 AI review, 让机器人验证 PR, 审查通过自动合并.
+  Install a CI-triggered LLM code reviewer into the current repo: on every push to a PR/MR, Claude Code runs headless, reproduces every claim the change makes, hunts correctness bugs with concrete failure scenarios, and posts a machine-readable execution verdict. For configured bot branches (do/* by default), it also requires a separate value verdict before auto-merge, rejecting bookkeeping-only work and incomplete outcomes. Detects GitHub vs GitLab, installs a deterministic verdict gate, and supports review-only or auto-merge tiers. Use when the user says /ci-review, 装一个 CI 代码审查, CI 里自动 code review, 给 PR/MR 加 AI review, 让机器人验证 PR, 审查通过自动合并.
 trigger: /ci-review
 compatibility: Claude Code
 license: MIT
@@ -9,10 +9,11 @@ license: MIT
 
 # ci-review
 
-给仓库装一个只回答一个问题的审查机器人：**这次改动宣称做到的事，真的做到了吗？**
+给仓库装一个审查机器人：所有 PR 都回答**这次改动宣称做到的事，真的做到了吗？**；
+对配置的机器人分支再回答**这件事值得自动进入默认分支吗？**
 
-它和人类 reviewer 分工：方向、取舍、值不值得做，是人的事；
-声明能不能复现、diff 里有没有能写出失败场景的缺陷，是它的事。
+它不替人类评价普通 PR 的方向；但 `do/*` 没有人实时把关，必须额外通过价值门，
+避免验证账本、重复 sweep 和未完成产物仅因"技术上没错"就自动合入。
 配合 do-something 的 MR 模式即成飞轮：do-something 提出方向并实践，ci-review 验证实践质量，
 do-something 下一轮先回应它的评论。开"通过即合并"档后，机器人分支的收割也由机器完成，人类只在想否决时出现。
 
@@ -42,8 +43,8 @@ bash <本 SKILL.md 所在目录>/scripts/install.sh [仓库路径] [--force] [--
 
 | 平台 | CI 配置 | 审查规范 |
 |---|---|---|
-| GitHub | `.github/workflows/ci-review.yml`（官方 `anthropics/claude-code-action@v1`） | `.github/ci-review.md` |
-| GitLab | `.gitlab/ci-review.yml`（`claude -p` 头less，需 `include:`） | `.gitlab/ci-review.md` |
+| GitHub | `.github/workflows/ci-review.yml`（官方 `anthropics/claude-code-action@v1`） | `.github/ci-review.md` + `.github/scripts/ci-review-verdict.sh` |
+| GitLab | `.gitlab/ci-review.yml`（`claude -p` 头less，需 `include:`） | `.gitlab/ci-review.md` + `.gitlab/ci-review-verdict.sh` |
 
 审查规范是 `prompts/review.md` 的副本，落在仓库里供按口味修改；CI 里的 Claude 读它执行。
 
@@ -97,21 +98,24 @@ glab variable set GITLAB_TOKEN --masked                  # GitLab 还要项目�
 
 ### 5. 提交并告知
 
-只提交这两个文件（CI 配置 + 审查规范），GitLab 还要在 `.gitlab-ci.yml` 里加 `include: - local: .gitlab/ci-review.yml` 并确认 stages 有 `test`。
+只提交生成的三个文件（CI 配置 + 审查规范 + verdict gate），GitLab 还要在 `.gitlab-ci.yml` 里加 `include: - local: .gitlab/ci-review.yml` 并确认 stages 有 `test`。
 最后跑 `install.sh status`，把仍缺的项原样告诉用户，并说明：push 后开一个 PR/MR 才能看到第一次运行。
 
 ## 合并档位怎么工作
 
-合并**不经模型**。模型只在 sticky 第一行写 `<!-- ci-review last=<sha> verdict=pass|fail -->`，
-CI 里一段普通 shell 核对四个条件，全满足才合并：
+合并**不经模型**。模型只在 sticky 第一行写
+`<!-- ci-review last=<sha> execution=pass|fail value=pass|fail|na -->`，
+确定性 gate 把失败 verdict 变成红 check，并核对以下条件：
 
 1. 来源分支匹配 `CI_REVIEW_MERGE_BRANCHES`（默认 `do/*`，空格分隔的 glob；想覆盖所有 PR 改成 `*`）。
-2. sticky 的 sha 等于本次 HEAD，且 `verdict=pass`。
-3. 无未解决的评审线程（人和机器人的都算）。do-something 与机器人来回 5 轮后会回"留人裁决"停手，那条线程留着就挡住合并。
-4. 合并方式 `CI_REVIEW_MERGE_METHOD`（默认 squash）是仓库允许的。
+2. sticky 的 sha 等于本次 HEAD，且 `execution=pass`。
+3. 匹配机器人分支时 `value=pass`；普通分支必须是 `value=na`。
+4. 无未解决的评审线程（人和机器人的都算）。do-something 与机器人来回 5 轮后会回"留人裁决"停手，那条线程留着就挡住合并。
+5. 合并方式 `CI_REVIEW_MERGE_METHOD`（默认 squash）是仓库允许的。
 
-`pass` 的定义写死在审查规范里：结论"做成了"、本轮 inline 为 0、且至少验证过一条声明；纯文档改动直接 pass；
-**没有可验证声明就是 fail**，没声明就没验证，不能凭信任合并。
+`execution=pass` 的定义写死在审查规范里：结论"做成了"、本轮 inline 为 0、且至少验证过一条声明；
+**没有可验证声明就是 fail**。不按扩展名免审：`SKILL.md` 和 references 会改变 Agent 行为，本来就是产品代码。
+机器人分支的 `value=pass` 还要求有具体证据、直接推进项目目的、留下持久成果并真正闭环；只改 DO.md、重复 sweep 或关键路径未验证均 fail。
 
 模型的 allowedTools 里没有合并权限，PR 正文里的注入最多骗它写个 `pass`，还得过分支和线程两关。
 所有档位设置都在 CI 文件顶部，改档位 = 一次 commit，历史可查。
@@ -127,9 +131,11 @@ bash <本 SKILL.md 所在目录>/scripts/install.sh status
 ## 审查行为（写在 prompts/review.md，此处只列不变量）
 
 - 范围增量：sticky 里记 `last=<sha>`，下次只审这个 sha 之后的 diff，不重复评论。
-- 先验证声明再找缺陷：正文、commit message、DO.md 日志里的"验证过了"逐条亲自复现。
+- 先验证声明再找缺陷：正文、commit message、DO.md 里的"验证过了"逐条亲自复现。
+- 匹配 `CI_REVIEW_MERGE_BRANCHES` 的机器人分支额外审价值；普通分支固定 `value=na`。
+- Markdown 不豁免；按文件是否改变行为判断审查深度。
 - 每条发现必须有失败场景，否则不发；风格、命名、"可以考虑"一律不报。
-- 只发评论和 verdict，不改代码、不 approve、不 request changes、不合并。
+- 只发评论和双 verdict，不改代码、不 approve、不 request changes、不合并。
 - 评论正文以 `<!-- ci-review -->` 开头，do-something 据此识别机器人线程并对回合数设上限。
 
 ## 调口味

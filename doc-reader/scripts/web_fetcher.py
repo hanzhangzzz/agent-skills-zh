@@ -125,13 +125,15 @@ def html_to_md(html: str) -> str:
         Markdown 内容
     """
     opts = ConversionOptions(
-        preserve_tags={'br'},      # 保留 br 标签
+        preserve_tags=['br'],      # 保留 br 标签（html-to-markdown 3.x 要求 Sequence，set 会 TypeError）
         heading_style='atx',       # 使用 # 风格标题
         code_block_style='backticks',  # 使用 ``` 代码块
         autolinks=True,            # 自动识别链接
     )
 
-    return html_to_markdown.convert(html, options=opts)
+    result = html_to_markdown.convert(html, options=opts)
+    # html-to-markdown 3.x 返回 ConversionResult，markdown 正文在 .content
+    return result.content if hasattr(result, "content") else str(result)
 
 
 def extract_title(html: str) -> str:

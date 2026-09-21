@@ -17,6 +17,18 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 .src{font-size:13px;color:#9A8B7E;margin-top:auto;padding-top:8px}
  body{width:1200px}</style>
 <div class="card">
+  <div class="top"><span class="name">doc-reader</span><span class="tag">英文文档 → 中文精译</span></div>
+  <div class="one">章节级精准翻译英文技术文档/PDF，图片 100% 保留，本地三栏预览（原文·译文·AI 幻灯）</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>https://blog.example.com/post
+（或本地 PDF）</pre></div>
+    <div class="pane"><h4>真实产出</h4><pre>translation.md   逐节对照
+├── images/   <span class="ok">图片 100% 保留</span>
+└── preview.html  原文·译文·AI 幻灯 三栏</pre><div class="src">doc-reader</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
   <div class="top"><span class="name">wechat-article-md-local</span><span class="tag">公众号 → Markdown</span></div>
   <div class="one">收到 mp.weixin.qq.com 链接自动触发：整篇文章、元信息、图片全部落到本地</div>
   <div class="grid">
@@ -38,6 +50,28 @@ source_url: &quot;https://mp.weixin.qq.com/s/M-K8…&quot;
 ---
 你好，我是《Redis 高手心法》畅销书作者码哥，可以叫我靓仔。
 我用了三个月的 Claude Code，有一个时期非常难受…</pre><div class="src">真实运行 · 2026-09-01 · 公开文章</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">xiaohongshu-downloader</span><span class="tag">小红书视频 → 逐字稿</span></div>
+  <div class="one">收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>https://xhslink.com/…
+https://www.xiaohongshu.com/explore/…
+
+（收到小红书链接即自动触发，
+ 也可说：小红书视频转文字）</pre></div>
+    <div class="pane"><h4>输出结构</h4><pre>&lt;OUTPUT_DIR&gt;/小红书-Obsidian加CloudCode打造个人生活操作系统/
+├── transcript.md          口播逐字稿（Markdown）
+├── videos/
+│   └── video.mp4
+└── transcripts/
+    ├── audio.srt          带时间轴
+    ├── audio.txt
+    └── audio-zh.md        英文视频附中文翻译
+
+中文口播直接保存；英文口播翻译后保存</pre><div class="src">输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）</div></div>
   </div>
   <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
 </div>
@@ -65,24 +99,44 @@ source_url: &quot;https://mp.weixin.qq.com/s/M-K8…&quot;
   <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
 </div>
 <div class="card">
-  <div class="top"><span class="name">xiaohongshu-downloader</span><span class="tag">小红书视频 → 逐字稿</span></div>
-  <div class="one">收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中</div>
+  <div class="top"><span class="name">hkr-render</span><span class="tag">Markdown → 公众号排版</span></div>
+  <div class="one">一键排成微信合规的内联样式 HTML：7 主题、外链自动转脚注、多图文直推草稿箱</div>
   <div class="grid">
-    <div class="pane in"><h4>输入 · 触发</h4><pre>https://xhslink.com/…
-https://www.xiaohongshu.com/explore/…
+    <div class="pane in"><h4>输入 · 触发</h4><pre>一篇 md
 
-（收到小红书链接即自动触发，
- 也可说：小红书视频转文字）</pre></div>
-    <div class="pane"><h4>输出结构</h4><pre>&lt;OUTPUT_DIR&gt;/小红书-Obsidian加CloudCode打造个人生活操作系统/
-├── transcript.md          口播逐字稿（Markdown）
-├── videos/
-│   └── video.mp4
-└── transcripts/
-    ├── audio.srt          带时间轴
-    ├── audio.txt
-    └── audio-zh.md        英文视频附中文翻译
+（&quot;公众号排版，用含彰主题&quot;）</pre></div>
+    <div class="pane"><h4>真实产出</h4><pre>preview.html
+├── 内联样式，无外链样式表（微信合规）
+├── 7 主题: 含彰/墨韵/赤陶/杂志…
+└── 外链自动转脚注 · <span class="ok">多图文直推草稿箱</span></pre><div class="src">7 主题 × 样例全过</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">md2view</span><span class="tag">Markdown → 可读视图</span></div>
+  <div class="one">把又长又臭的 md 重编码成左原文·右重组·滚动同步的双栏视图，每个字都能一键回到原文出处</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>一篇复盘/报告/规格/长 README
 
-中文口播直接保存；英文口播翻译后保存</pre><div class="src">输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）</div></div>
+（&quot;把这篇变成能读的视图&quot;）</pre></div>
+    <div class="pane"><h4>真实产出</h4><pre>reader.html  <span class="ok">53KB 自包含</span>
+├── 左栏: 原文（分块锚点）
+├── 右栏: 信息重组（表格/矩阵/标注条）
+└── <span class="ok">机器验证</span> 溯源不过不产出 · 防垫字检查</pre><div class="src">单测 27/27 · 真实管线冒烟通过</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">gpt-image2-prompt-director</span><span class="tag">弱想法 → 生图 brief</span></div>
+  <div class="one">把模糊想法变成高质量 gpt-image-2 生成提示词：头像/表情包/信息图/海报/产品图，附专家提示词集基准评测</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>&quot;我想要一个赛博朋克风头像&quot;
+
+（或: 修一下这个 prompt）</pre></div>
+    <div class="pane"><h4>真实产出</h4><pre>prompt-brief.md
+├── 视觉框架 + 工件规格
+├── 平台参数（尺寸/风格约束）
+└── <span class="ok">专家提示词集基准评测</span></pre><div class="src">gpt-image2-prompt-director</div></div>
   </div>
   <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
 </div>
@@ -221,6 +275,61 @@ gh variable set CI_REVIEW_MODEL --body glm-5.3</pre></div>
 <span class="ok">无代码改动 —— 范围只含两个 *.md，按捷径分支只更新 sticky</span>
 <span class="ok">&quot;修正逻辑矛盾&quot;成立 —— 本条 sticky 正是新捷径分支的首次真实触发</span>
 发现 0 条重复评论；改规范 = 改 .github/ci-review.md，下次 push 生效</pre><div class="src">评论原文来自 agent-skills-zh PR #8，模型经智谱 Anthropic 兼容网关</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">hook-test-kit</span><span class="tag">hook → 行为测试</span></div>
+  <div class="one">给 Claude Code hook 脚本生成行为矩阵测试骨架——scratch 隔离、EMPTY/!否定协议、变异实验收尾</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>&quot;给 repo-tidy 的 hook 补测试&quot;</pre></div>
+    <div class="pane"><h4>真实产出</h4><pre>test_git-repo-status.sh
+├── run/assert 协议（bash 坑位预修）
+├── 11 场景: trunk/无远端/空仓库/detached…
+└── <span class="ok">变异实验</span> 改坏必红、恢复复绿</pre><div class="src">狗粮全链路验证</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">scanned-book-ocr</span><span class="tag">扫描 PDF → 文字</span></div>
+  <div class="one">本地批量 OCR，保留页码；并发输出一致性检查 + 完整性校验 + 视觉抽检</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>一本纯图片 PDF
+
+“把扫描书转成 AI 可读的文字”
+
+Apple Silicon macOS
+Python 3.12+ / pdftoppm</pre></div>
+    <div class="pane"><h4>输出结构</h4><pre>book.txt    整本原文 + 页码标记
+pages/      每页独立文本
+manifest.json    来源与逐页哈希
+quality-report.json    校验与抽检
+
+=== PDF_PAGE 0001 ===
+&lt;该页 OCR 原文&gt;
+
+校验通过后可复制为 book.md</pre><div class="src">结构来自 scanned-book-ocr/SKILL.md；不包含用户书籍内容</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">pdf-triptych</span><span class="tag">长 PDF → 结构图</span></div>
+  <div class="one">骨架、细节、例子共用横轴与颜色，让长标准可以讲清和评审</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>一份标准 / 规范 / 白皮书 PDF
+
+/pdf-triptych &lt;PDF&gt;
+
+“把这份 PDF 画成可评审的一页图”</pre></div>
+    <div class="pane"><h4>流程与输出约定</h4><pre>全文结构探针 → 视觉骨架
+
+骨架：结构怎样逐层展开
+细节：概念之间的准确关系
+例子：具体场景对应哪一列
+
+同一横轴 · 同一颜色系统 · 条款可追溯
+
+渲染检查 → 逐块视觉复核 → 一页 HTML</pre><div class="src">流程来自 pdf-triptych/SKILL.md；不包含用户 PDF 内容</div></div>
   </div>
   <div class="foot">agent-skills-zh · npx skills add hanzhangzzz/agent-skills-zh</div>
 </div>

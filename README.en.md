@@ -7,7 +7,7 @@ Translate English docs into Chinese, archive WeChat / Xiaohongshu / X content as
 
 [![GitHub stars](https://img.shields.io/github/stars/hanzhangzzz/agent-skills-zh?style=flat&logo=github)](https://github.com/hanzhangzzz/agent-skills-zh/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-[![Skills](https://img.shields.io/badge/skills-11-blue)](#skills)
+[![Skills](https://img.shields.io/badge/skills-16-blue)](#skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-8A2BE2)](#install)
 [![Codex](https://img.shields.io/badge/Codex-compatible-black)](#install)
 [![skills.sh](https://img.shields.io/badge/skills.sh-hanzhangzzz%2Fagent--skills--zh-orange)](https://skills.sh/hanzhangzzz/agent-skills-zh)
@@ -30,6 +30,7 @@ Then just talk to your agent. Every skill lists its trigger phrases (English and
 | Skill | What it does | Use when | Trigger |
 | --- | --- | --- | --- |
 | [doc-reader](./doc-reader/) | Translate an English article or PDF into Chinese section by section with consistent terminology, keep 100% of images, build a 3-column preview (original · translation · AI slides) | Reading long English blogs, papers and docs and wanting a faithful side-by-side Chinese version | `/doc-reader <URL or PDF>` |
+| [scanned-book-ocr](./scanned-book-ocr/) | Local scanned PDF OCR → page-traceable text with deterministic concurrency checks and visual QA. 扫描书转文字，保留页码并校验质量 | Image-only books for AI reading; Apple Silicon macOS, Python 3.12+ | `$scanned-book-ocr` · `扫描 PDF 转文字` |
 | [wechat-article-md-local](./wechat-article-md-local/) | Save a WeChat Official Account article as local Markdown with images downloaded | You receive an `mp.weixin.qq.com` link and want to archive, quote or analyze it | auto on `mp.weixin.qq.com` links |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/) | Download a Xiaohongshu (RedNote) video and transcribe the voice-over with Whisper into Markdown | You receive a Xiaohongshu video link and need the spoken content as text | auto on `xiaohongshu.com` / `xhslink.com` links |
 | [x-article-download](./x-article-download/) | Download a tweet, a long-form X article or an entire account to Markdown | You receive an `x.com` link and want to archive or analyze it | auto on `x.com` links |
@@ -39,9 +40,11 @@ Then just talk to your agent. Every skill lists its trigger phrases (English and
 | [repo-tidy](./repo-tidy/) | Git tidy-up + parallel-task base: back to latest master, prune merged branches/worktrees, `--new` opens a task branch (parallel worktree when busy); SessionStart hook injects repo status | Multi-repo, multi-task agent work where task branches pile up | `tidy repo` · `归位` · `开新任务` |
 | [repo-map](./repo-map/) | Local repository map: self-healing index of all local git repos; a hook injects path + read/write role whenever a repo name is mentioned | Cross-repo references where the AI keeps asking for paths | `repo-map` · `仓库地图` |
 | [harness](./harness/) | Minimal Harness Engineering: Inspector → Worker → Reviewer loop driven by a shared `TODO.md` | You want an agent to continuously inspect, fix and review a repo, on demand or on a schedule | `/harness` |
-| [do-something](./do-something/) | Autonomously pick and finish the highest-leverage task in the project; all runs continue on one `do/main` branch, humans merge to harvest. MR mode keeps a living draft MR and answers CI/review feedback first | Spare tokens and an idle project — let the agent work while you sleep (cron/loop) | `/do-something` |
-| [ci-review](./ci-review/) | Install a CI-triggered LLM reviewer: on every PR/MR push Claude reproduces the change's claims, hunts correctness bugs with failure scenarios, posts inline comments + one sticky summary with a verdict. Optional tier: auto-merge `do/*` branches when the verdict passes. Judges execution, not direction | You want every PR/MR machine-verified before a human looks, or you run do-something in MR mode and want the flywheel to harvest itself | `/ci-review` |
+| [do-something](./do-something/) | Answer feedback, choose work backed by real value evidence, finish and verify a durable outcome, or return NO-OP. `do/*` auto-merge requires separate value and execution verdicts | An idle project where the agent may work unattended without manufacturing tasks to keep the loop busy | `/do-something` |
+| [ci-review](./ci-review/) | Every PR/MR gets an execution verdict; configured bot branches also need a separate value verdict before deterministic auto-merge. Skill Markdown is reviewed as behavior code and failed verdicts are red checks | You want machine-verified execution, plus a value gate before unattended bot branches enter main | `/ci-review` |
 | [git-push-guard](./git-push-guard/) | Hook-only plugin: intercepts direct pushes to `master`/`main`, asks for confirmation, per-repo allowlist | You let an agent commit and want shared-branch discipline enforced | auto on `git push` (plugin install only) |
+| [hook-test-kit](./hook-test-kit/) | Behavior-matrix test scaffolding for Claude Code hooks — scratch fixtures, EMPTY/!-negation assertions, mutation-experiment finish. 给 hook 脚本补行为测试 | `/hook-test-kit` · 写了/改了 hook 要测试 |
+| [pdf-triptych](./pdf-triptych/) | Break a standard / spec / whitepaper PDF into a one-page triptych — skeleton, detail, worked example — three figures sharing one horizontal axis and one color system, with a subagent reading the full text first | A long standard nobody finishes reading, that you still have to present or review | `/pdf-triptych <PDF>` |
 
 ## Gallery
 
@@ -151,6 +154,10 @@ node scripts/eval_prompt_director.mjs --case-id 40 --prompt-file examples/readme
 ### harness
 
 A lightweight autonomous loop: the Inspector reads the project and writes actionable tasks to `TODO.md`, the Worker claims and implements them with verification, the Reviewer checks diffs and results before anything is recorded. Run once, loop until nothing safe is left, or schedule it inside a Claude Code session.
+
+### hook-test-kit
+
+Behavior-matrix test scaffolding for Claude Code hooks (PreToolUse / SessionStart / UserPromptSubmit): scratch fixtures, JSON-over-stdin, an EMPTY/!-negation assertion protocol, and known bash pitfalls pre-fixed. Every suite finishes with a mutation experiment — break each interception rule, the suite must go red.
 
 ## Contributing
 

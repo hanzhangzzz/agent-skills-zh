@@ -94,6 +94,8 @@ Worker 重新领取 [被拒绝]...
 将额外上下文保存到临时文件：
 ```bash
 echo "用户额外指令: <用户输入的自然语言>" > /tmp/harness-context.txt
+#   生命周期：full 模式下一轮 = inspector + worker-reviewer 都会读到；
+#   worker-reviewer 在本轮实际投递给 claude 后的收尾才删除（无可做任务早退时保留）
 ```
 
 如果没有额外上下文，创建空文件（子进程检测到空文件就不注入）。

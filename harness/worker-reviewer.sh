@@ -28,6 +28,9 @@ USER_CONTEXT=""
 if [ -f /tmp/harness-context.txt ]; then
   USER_CONTEXT="$(cat /tmp/harness-context.txt)"
 fi
+DELIVERED=0   # 是否真的把上下文投递给了 claude（决定收尾是否消费）
+# trap EXIT：无论 set -e 中断、正常退出还是 --loop break，投递过的上下文都收尾消费
+trap '[ "$DELIVERED" = 1 ] && rm -f /tmp/harness-context.txt' EXIT
 
 cd "$PROJECT_DIR"
 
@@ -50,7 +53,7 @@ fi
 
 # 检查 TODO.md 中是否有可做的任务（[待领取] 或 [被拒绝]）
 has_work() {
-  grep -qE '^\s*-\s*\[[ x]\]\s*\[(待领取|被拒绝)\]' TODO.md 2>/dev/null
+  grep -qE '^[[:space:]]*-[[:space:]]*\[[ x]\][[:space:]]*\[(待领取|被拒绝)\]' TODO.md 2>/dev/null
 }
 
 run_worker() {
@@ -68,6 +71,8 @@ $(cat "$doc")
 "
     fi
   done
+
+  DELIVERED=1   # 调用即投递：prompt 已作为参数递出，CLI 随后异常不影响投递事实
 
   claude -p "$(cat "$WORKER_PROMPT")
 
@@ -90,7 +95,6 @@ ${EXTRA_PROMPT}
     --permission-mode bypassPermissions \
     --verbose \
     --output-format stream-json 2>&1 | tail -3
-
   echo "=== Worker finished at $(date) ==="
 }
 
@@ -109,6 +113,8 @@ $(cat "$doc")
 "
     fi
   done
+
+  DELIVERED=1
 
   claude -p "$(cat "$REVIEWER_PROMPT")
 
@@ -130,7 +136,6 @@ Worker 刚完成了任务。请审查 Worker 的改动，更新 TODO.md。
     --permission-mode bypassPermissions \
     --verbose \
     --output-format stream-json 2>&1 | tail -3
-
   echo "=== Reviewer finished at $(date) ==="
 }
 
