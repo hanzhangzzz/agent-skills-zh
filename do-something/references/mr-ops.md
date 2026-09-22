@@ -40,14 +40,58 @@ GitLab：
 # 未解决的 discussion
 glab api "projects/:id/merge_requests/<iid>/discussions?per_page=100" \
   | jq '.[] | select(.notes[0].resolvable==true and .notes[0].resolved==false)'
-# 回复
-glab api -X POST "projects/:id/merge_requests/<iid>/discussions/<discussion-id>/notes" -f body='已修：<sha>'
-# resolve
-glab api -X PUT "projects/:id/merge_requests/<iid>/discussions/<discussion-id>" -f resolved=true
+# 回复——正文含反引号/代码块时必须走临时文件＋命令替换（直接 -f 'body=...' 会被
+# shell 展开污染；-F "body=<path" 会把路径当正文；--input 裸 JSON 报 415）
+F=$(mktemp).md && cat > "$F" <<'EOF'
+已修：<sha>
+（正文……）
+EOF
+glab api -X POST "projects/:id/merge_requests/<iid>/discussions/<discussion-id>/notes" \
+  -F "body=$(cat "$F")"
+# resolve——discussion id 必须用 API 返回的完整 40 位十六进制串（截短前缀会 500；
+# note 级 PUT /notes/<id> -F resolved=true 不生效，必须 discussion 级端点）
+glab api -X PUT "projects/:id/merge_requests/<iid>/discussions/<完整discussion-id>" -F resolved=true
 ```
 
 机器人线程的识别：ci-review 发的评论正文以 `<!-- ci-review -->` 开头；作者是人就不设回合上限。
 "同一线程来回 5 轮"按你自己在该线程里的回复条数计。
+
+## 普通评论（两个平台都必须查）
+
+可解决线程只是反馈的一部分。下面这些评论**不会**出现在上面的线程查询里，必须按 DO.md 的 `feedback_seen` 水位单独拉：
+
+| 平台 | 线程查询漏掉的 |
+|---|---|
+| GitHub | PR 对话区评论（issue comments）、review 总评（review body） |
+| GitLab | 直接发的 MR 评论（`glab mr note`、页面"评论"），`resolvable=false` |
+
+水位 `W` 取自同一平台 API 返回的 `created_at` / `submitted_at` 原值（不手写、不换时区）；两边都是 ISO-8601 UTC，
+字符串比较即时间比较。DO.md 里没有水位时 `W='1970-01-01T00:00:00Z'`，读全部。
+
+```bash
+W='<DO.md 里的 feedback_seen>'
+
+# GitHub：对话区评论 + review 总评（{owner}/{repo} 由 gh 按当前仓库自动填充）
+gh api --paginate "repos/{owner}/{repo}/issues/<n>/comments" \
+  --jq ".[] | select(.created_at > \"$W\" and (.body | startswith(\"<!-- do-something -->\") | not)) | {id, created_at, user: .user.login, body}"
+gh api --paginate "repos/{owner}/{repo}/pulls/<n>/reviews" \
+  --jq ".[] | select(.submitted_at > \"$W\" and .body != \"\" and (.body | startswith(\"<!-- do-something -->\") | not)) | {id, submitted_at, user: .user.login, state, body}"
+
+# GitLab：全部非系统评论（--paginate 可能输出多段数组，jq -s add 统一拼接）
+glab api --paginate "projects/:id/merge_requests/<iid>/notes?sort=asc&per_page=100" \
+  | jq -s --arg w "$W" 'add | .[] | select(.system == false and .created_at > $w and (.body | startswith("<!-- do-something -->") | not)) | {id, created_at, author: .author.username, body}'
+```
+
+回复普通评论：正文第一行固定写 `<!-- do-something -->`，下一轮据此排除自己的回复——
+人类和 do-something 可能共用同一个账号，不能按作者过滤。逐条点名被处理的评论 id 和结果：
+
+```bash
+F=$(mktemp).md && printf '%s\n' '<!-- do-something -->' '- 回应 <评论 id>：已修 <sha>（或：不认可，理由……，留人裁决）' > "$F"
+gh pr comment <n> --body-file "$F"                                                 # GitHub
+glab api -X POST "projects/:id/merge_requests/<iid>/notes" -F "body=$(cat "$F")"   # GitLab
+```
+
+处理完把 `feedback_seen` 更新为**本轮开始时**查到的最新评论时间（不是回复之后的时间），处理期间新到的评论留给下一轮。
 
 ## 结束：push、MR 标题与正文
 

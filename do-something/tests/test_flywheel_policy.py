@@ -33,6 +33,15 @@ class FlywheelPolicyTest(unittest.TestCase):
             self.assertIn(heading, self.mr_ops)
         self.assertIn("git hash-object", self.mr_ops)
 
+    def test_feedback_includes_plain_comments_on_both_platforms(self) -> None:
+        # 只查可解决线程会漏掉 GitLab resolvable=false 的普通评论和 GitHub 对话区评论（quality-os !58 空转 28 轮）
+        self.assertIn("新普通评论", self.skill)
+        self.assertIn("feedback_seen", self.skill)
+        for endpoint in ("issues/<n>/comments", "pulls/<n>/reviews", "merge_requests/<iid>/notes"):
+            self.assertIn(endpoint, self.mr_ops)
+        self.assertIn(".system == false", self.mr_ops)
+        self.assertIn("<!-- do-something -->", self.mr_ops)
+
     def test_do_md_is_bounded_state_not_append_only_history(self) -> None:
         headings = [line for line in self.state.splitlines() if line.startswith("# ")]
         self.assertEqual(
