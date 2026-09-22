@@ -1,0 +1,95 @@
+<header class="mv-page-head">
+  <div class="mv-kicker" data-sources="b001">coding-usage-bar 0.5.1 · 发布复盘</div>
+  <h1 data-sources="b000">发布成功，为什么用户还装不上？</h1>
+  <p class="mv-lead" data-sources="b001">把“命令执行完了”推进到“陌生用户获得可工作的结果”。点击右侧内容，回到左侧原文核证。</p>
+</header>
+<style>
+#v-evidence .evidence-lanes{display:grid;gap:12px}
+#v-evidence .evidence-lane{display:grid;grid-template-columns:120px 1fr;gap:16px;padding:22px 18px;border-left:4px solid var(--accent);background:var(--surface)}
+#v-evidence .evidence-lane strong{font-size:18px}
+#v-evidence .evidence-lane p{margin:0;font-size:14px}
+#v-state .state-flow{display:grid;gap:10px}
+#v-state .state-step{position:relative;display:grid;grid-template-columns:32px 1fr;align-items:center;gap:14px;padding:16px;background:var(--surface);border:1px solid var(--line)}
+#v-state .state-step strong{font-size:18px;display:block}
+#v-state .state-step p{margin:4px 0 0;font-size:14px}
+#v-state .state-step .dot{width:18px;height:18px;border:3px solid var(--accent);border-radius:50%}
+#v-state .state-step:not(:last-child)::after{content:"";position:absolute;left:24px;top:calc(50% + 12px);height:calc(50% + 10px);width:2px;background:var(--accent);opacity:.35}
+#v-state .state-step:last-child{border-color:var(--accent)}
+#v-state .state-step:last-child .dot{background:var(--accent)}
+@media(max-width:800px){#v-evidence .evidence-lane{grid-template-columns:90px 1fr;gap:12px;padding:18px 14px}}
+#v-package .package-root{padding:28px;text-align:center;border:2px solid var(--accent);font-size:24px;font-weight:700}
+#v-package .package-branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:20px 0}
+#v-package .destination{padding:24px 14px;border:1px solid var(--line);text-align:center}
+#v-package .destination strong{display:block;font-size:20px;margin-bottom:8px}
+#v-install .observations{display:grid;gap:12px}
+#v-install .observation{padding:23px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:18px;align-items:center}
+#v-install .observation strong{font-size:20px}
+#v-install .observation span{max-width:55%;font-size:14px}
+#v-triage td{font-size:14px;padding:18px 12px}
+#v-feedback .repeat{font-family:var(--serif);font-size:clamp(28px,4vw,48px);line-height:1.25;color:var(--accent-strong);padding:30px 0;border-top:2px solid var(--accent);border-bottom:1px solid var(--line);margin:20px 0}
+</style>
+<section class="mv-view" id="v-evidence">
+  <div class="mv-view-head"><div class="mv-kicker"><span class="vn"></span> EVIDENCE</div><h2 data-sources="b002">三种证据，回答三个问题</h2></div>
+  <figure class="mv-diagram flat">
+    <div class="evidence-lanes">
+      <div class="evidence-lane" data-sources="b003"><strong>本地验证</strong><p>当前环境的代码正常吗？<br>139 项测试、构建与打包结果。</p></div>
+      <div class="evidence-lane" data-sources="b004"><strong>分发验证</strong><p>别人能拿到正确的包吗？<br>公开 registry 可读，取回文件与候选包一致。</p></div>
+      <div class="evidence-lane" data-sources="b005"><strong>使用验证</strong><p>拿到包后能完成任务吗？<br>命令、菜单栏与必要文件都实际工作。</p></div>
+    </div>
+  </figure>
+  <p class="mv-claim" data-sources="b003">本地测试通过，不能证明公开安装已经可用。</p>
+</section>
+<section class="mv-view" id="v-state">
+  <div class="mv-view-head"><div class="mv-kicker"><span class="vn"></span> DELIVERY STATE</div><h2 data-sources="b006">命令成功与交付完成之间</h2></div>
+  <figure class="mv-diagram flat"><div class="state-flow">
+    <div class="state-step" data-sources="b007"><i class="dot"></i><div><strong>候选包</strong><p>本地验证通过后生成。</p></div></div>
+    <div class="state-step" data-sources="b007"><i class="dot"></i><div><strong>registry 已接收</strong><p>发布命令成功，公开安装未必立即可用。</p></div></div>
+    <div class="state-step" data-sources="b008"><i class="dot"></i><div><strong>等待可用</strong><p>扫描等待期间，不重复宣称完成。</p></div></div>
+    <div class="state-step" data-sources="b009"><i class="dot"></i><div><strong>用户可安装</strong><p>全新缓存、隔离目录取回包，再运行核心命令。</p></div></div>
+  </div></figure>
+</section>
+<section class="mv-view" id="v-package">
+  <div class="mv-view-head"><div class="mv-kicker"><span class="vn"></span> ARTIFACT</div><h2 data-sources="b010">同一个包走到底</h2></div>
+  <figure class="mv-diagram flat">
+    <div class="package-root" data-sources="b011">测试通过的候选包</div>
+    <div class="package-branches">
+      <div class="destination" data-sources="b011"><strong>registry</strong>发布同一份字节</div>
+      <div class="destination" data-sources="b011"><strong>GitHub Release</strong>发布同一份字节</div>
+    </div>
+    <div class="mv-callout tone-evidence" data-sources="b012">只打包一次 → 保留 SHA-256 → 从公开入口取回 → 对照哈希</div>
+  </figure>
+  <p class="mv-claim" data-sources="b012">哈希证明文件一致，不证明功能正确。</p>
+  <details class="mv-drawer"><summary>为什么不能重新打包？</summary><p data-sources="b011">验证后重新打一个包，会让原先的验证证据失去对应对象。</p></details>
+</section>
+<section class="mv-view" id="v-install">
+  <div class="mv-view-head"><div class="mv-kicker"><span class="vn"></span> REAL USE</div><h2 data-sources="b013">安装行为也是产品的一部分</h2></div>
+  <figure class="mv-diagram flat"><div class="observations">
+    <div class="observation" data-sources="b014"><strong>CLI</strong><span>运行命令，看到实际结果。</span></div>
+    <div class="observation" data-sources="b014"><strong>菜单栏</strong><span>查看界面和宿主插件是否工作。</span></div>
+    <div class="observation" data-sources="b014"><strong>运行时文件</strong><span>确认必要文件与后台任务。</span></div>
+  </div></figure>
+  <div class="mv-callout tone-warn" data-sources="b015">已有用户的配置需要保留。新 provider 能只读查询就先只读查询，不改写其他 provider 的状态或现有安装。</div>
+</section>
+<section class="mv-view" id="v-triage">
+  <div class="mv-view-head"><div class="mv-kicker"><span class="vn"></span> NEXT ACTION</div><h2 data-sources="b016">失败在哪一段，就回到哪一段</h2></div>
+  <div class="mv-tablewrap"><table class="mv-table">
+    <thead><tr><th data-sources="b017">测试或命令失败</th><th data-sources="b017">回到实现或检查路径</th></tr></thead>
+    <tbody>
+      <tr data-sources="b017"><td>本地测试失败</td><td>回到实现</td></tr>
+      <tr data-sources="b017"><td>指定版本不可读</td><td>检查分发状态</td></tr>
+      <tr data-sources="b017"><td>包可下载，命令失败</td><td>检查安装环境</td></tr>
+      <tr data-sources="b017" class="is-hl"><td>命令成功，没有需要的结果</td><td>检查实际使用路径</td></tr>
+    </tbody>
+  </table></div>
+  <div class="mv-callout tone-risk" data-sources="b018">未知不是零。一次成功不等于所有环境都支持；订阅账号、系统版本和使用场景缺证据时，要明确列出。</div>
+</section>
+<section class="mv-view" id="v-feedback">
+  <div class="mv-view-head"><div class="mv-kicker"><span class="vn"></span> USER VALUE</div><h2 data-sources="b019">发布之后还要知道什么</h2></div>
+  <div class="repeat" data-sources="b021">独立用户完成同一个任务，<br>是否愿意第二次使用？</div>
+  <p class="mv-note" data-sources="b021">这比维护者再做一张演示图，更能帮助判断下一步投入。</p>
+  <div class="mv-facts">
+    <div class="mv-fact" data-sources="b020"><div class="mv-fact-l">发布记录</div><div class="mv-fact-v">版本 · 公开入口 · 验证过的核心路径 · 剩余限制</div></div>
+    <div class="mv-fact" data-sources="b020"><div class="mv-fact-l">用户反馈</div><div class="mv-fact-v">实际任务 · 失败步骤 · 预期结果 · 实际结果</div></div>
+    <div class="mv-fact" data-sources="b020"><div class="mv-fact-l">分享之前</div><div class="mv-fact-v">移除凭据和私人内容</div></div>
+  </div>
+</section>
