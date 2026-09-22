@@ -8,6 +8,32 @@
 
 ---
 
+## 先试一个完整案例
+
+**发布成功，为什么用户还装不上？** 把一篇开源工具发布复盘，重组为证据对照、交付状态、同包核验、实际使用、失败排查和用户反馈六个视图。它展示的是阅读与溯源能力，不是自动发布工具。
+
+![真实浏览器中的发布复盘案例：左侧原文，右侧证据对照](examples/release-evidence/preview.png)
+
+[原始 Markdown](examples/release-evidence/input.md) · [完整提示词](examples/release-evidence/prompt.txt) · [下载离线阅读器](https://raw.githubusercontent.com/hanzhangzzz/agent-skills-zh/main/md2view/examples/release-evidence/reader.html)
+
+将阅读器保存为 `reader.html` 后用浏览器打开。点击右侧“用户可安装”会定位对应原文；点击左侧段落会定位右侧视图。顶部可切换原文、双栏和信息重组模式。HTML 无需服务器或账号；GitHub 文件预览不会执行交互。
+
+只安装这一项技能：
+
+```bash
+npx skills add hanzhangzzz/agent-skills-zh --skill md2view
+```
+
+把案例原文和完整提示词交给已安装技能的 Agent，可重新生成自己的版本；模型的布局和措辞可能不同。若要复现仓库中这份成品，在仓库根目录运行：
+
+```bash
+python3 md2view/scripts/parse_blocks.py md2view/examples/release-evidence/input.md /tmp/md2view-case-blocks.json
+python3 md2view/scripts/verify_anchors.py /tmp/md2view-case-blocks.json md2view/examples/release-evidence/right-pane.html
+python3 md2view/scripts/build_reader.py /tmp/md2view-case-blocks.json md2view/examples/release-evidence/right-pane.html /tmp/md2view-case-reader.html --title '发布成功，为什么用户还装不上？'
+```
+
+此路径使用已公开的右栏设计，确定性地重建成品，不调用模型。该样例覆盖 22 个原文块、39 个溯源元素；已在 1440 和 768 像素视口检查布局，实际点验双向定位、抽屉展开和阅读模式。锚点检查通过不能替代语义复核。
+
 ## 为什么需要它
 
 AI 生成的文档越来越多,也越来越又长又臭。而人在任务之间高速切换,注意力是最稀缺的资源——一份超过一屏的文档,很难一点点把细节抠准。
