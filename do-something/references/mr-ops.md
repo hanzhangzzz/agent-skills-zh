@@ -73,13 +73,13 @@ W='<DO.md 里的 feedback_seen>'
 
 # GitHub：对话区评论 + review 总评（{owner}/{repo} 由 gh 按当前仓库自动填充）
 gh api --paginate "repos/{owner}/{repo}/issues/<n>/comments" \
-  --jq ".[] | select(.created_at > \"$W\" and (.body | startswith(\"<!-- do-something -->\") | not)) | {id, created_at, user: .user.login, body}"
+  --jq ".[] | select(.created_at > \"$W\" and ((.body // \"\") | startswith(\"<!-- do-something -->\") | not)) | {id, created_at, user: .user.login, body}"
 gh api --paginate "repos/{owner}/{repo}/pulls/<n>/reviews" \
-  --jq ".[] | select(.submitted_at > \"$W\" and .body != \"\" and (.body | startswith(\"<!-- do-something -->\") | not)) | {id, submitted_at, user: .user.login, state, body}"
+  --jq ".[] | select(.submitted_at > \"$W\" and (.body // \"\") != \"\" and ((.body // \"\") | startswith(\"<!-- do-something -->\") | not)) | {id, submitted_at, user: .user.login, state, body}"
 
 # GitLab：全部非系统评论（--paginate 可能输出多段数组，jq -s add 统一拼接）
 glab api --paginate "projects/:id/merge_requests/<iid>/notes?sort=asc&per_page=100" \
-  | jq -s --arg w "$W" 'add | .[] | select(.system == false and .created_at > $w and (.body | startswith("<!-- do-something -->") | not)) | {id, created_at, author: .author.username, body}'
+  | jq -s --arg w "$W" 'add | .[] | select(.system == false and .created_at > $w and ((.body // "") | startswith("<!-- do-something -->") | not)) | {id, created_at, author: .author.username, body}'
 ```
 
 回复普通评论：正文第一行固定写 `<!-- do-something -->`，下一轮据此排除自己的回复——
