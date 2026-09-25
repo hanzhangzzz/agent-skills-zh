@@ -316,3 +316,19 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
   "license": "MIT"
 }
 ```
+
+### readme-craft
+
+```json
+{
+  "name": "readme-craft",
+  "version": "1.0.0",
+  "description": "为开源项目写或审查渐进式 README：首屏说清价值，快速走通真实首次使用，再解释原理与边界。",
+  "trigger": "/readme-craft",
+  "keywords": ["readme", "open source", "documentation", "quickstart", "开源", "项目首页", "渐进式披露"],
+  "compatibility": "Claude Code, Codex",
+  "install_path": "readme-craft/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```

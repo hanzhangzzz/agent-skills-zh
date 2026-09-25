@@ -206,6 +206,16 @@
       "skills": [
         "./pdf-triptych"
       ]
+    },
+    {
+      "name": "readme-craft",
+      "source": "./",
+      "strict": false,
+      "description": "Write or review an evidence-based open-source README: clear value, verified quickstart, understandable mechanism, and progressive detail. 开源项目 README 写作与审查",
+      "version": "1.0.0",
+      "skills": [
+        "./readme-craft"
+      ]
     }
   ]
 }

@@ -6,7 +6,7 @@
 
 面向中文开发者，按需安装。这里有翻译、OCR、内容存档、文档可视化和仓库维护工具；每项的运行环境不同，先选你要完成的任务。
 
-[![Skills](https://img.shields.io/badge/skills-15-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-16-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -19,7 +19,7 @@
 | --- | --- |
 | 读懂英文文章、扫描书或长标准 | [文章翻译](./doc-reader/SKILL.md) · [扫描书 OCR](./scanned-book-ocr/SKILL.md) · [标准结构图](./pdf-triptych/SKILL.md) |
 | 把文章、视频内容留到本地 | [公众号](./wechat-article-md-local/SKILL.md) · [小红书视频](./xiaohongshu-downloader/SKILL.md) · [X 内容](./x-article-download/SKILL.md) |
-| 把已有内容变成可阅读、可发布的结果 | [双栏阅读视图](./md2view/SKILL.md) · [公众号排版](./hkr-render/SKILL.md) · [生图提示词](./gpt-image2-prompt-director/SKILL.md) |
+| 把已有内容变成可阅读、可发布的结果 | [开源 README 写作](./readme-craft/SKILL.md) · [双栏阅读视图](./md2view/SKILL.md) · [公众号排版](./hkr-render/SKILL.md) · [生图提示词](./gpt-image2-prompt-director/SKILL.md) |
 | 管好 Agent 的代码工作 | [分支与工作树](./repo-tidy/SKILL.md) · [跨仓库定位](./repo-map/SKILL.md) · [自主推进](./do-something/SKILL.md) · [CI 审查](./ci-review/SKILL.md) |
 
 不知道先试哪个？下面的提示词示例只需要你已有的 Agent，不需要图片生成权限或平台账号。
@@ -143,6 +143,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [scanned-book-ocr](./scanned-book-ocr/SKILL.md) | 扫描 PDF → 带页码的文本与校验记录 | Apple Silicon macOS、Python 3.12+、pdftoppm、OCR 模型；结果需抽检 |
 | [pdf-triptych](./pdf-triptych/SKILL.md) | 标准/规范 PDF → 骨架、细节、例子三联图 | 可读取的 PDF、全文理解与浏览器渲染检查；不是普通 OCR |
 | [md2view](./md2view/SKILL.md) | Markdown → 原文与重组视图的双栏 HTML | Python 3、模型与浏览器检查；来源锚点便于复核，不保证语义无遗漏 |
+| [readme-craft](./readme-craft/SKILL.md) | 开源项目证据 → 渐进式 README | 项目源码与可运行示例；3 秒/30 秒/1 分钟是信息设计目标，非实测承诺 |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | 单篇公众号文章 → 本地 Markdown 与图片 | Node.js、Python 依赖、Chrome；脚本可安装本地 npm 依赖，受文章可访问性限制 |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/SKILL.md) | 小红书视频 → 视频文件与口播稿 | yt-dlp、ffmpeg、Whisper；受链接访问与平台限制，转录需复核 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |
