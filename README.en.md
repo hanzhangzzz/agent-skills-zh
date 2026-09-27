@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-16-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-17-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -19,7 +19,8 @@ Install only what you need. Each skill has its own runtime requirements; choose 
 | --- | --- |
 | Read English articles, scanned books, or long standards | [Translate an article](./doc-reader/SKILL.md) · [OCR a book](./scanned-book-ocr/SKILL.md) · [Map a standard](./pdf-triptych/SKILL.md) |
 | Keep online content locally | [WeChat](./wechat-article-md-local/SKILL.md) · [Xiaohongshu video](./xiaohongshu-downloader/SKILL.md) · [X content](./x-article-download/SKILL.md) |
-| Turn content into something readable or publishable | [Open-source README writing](./readme-craft/SKILL.md) · [Split reading view](./md2view/SKILL.md) · [WeChat layout](./hkr-render/SKILL.md) · [Image prompt](./gpt-image2-prompt-director/SKILL.md) |
+| Get an open-source project seen and tried | [Open-source README writing](./readme-craft/SKILL.md) · [Launch video](./launch-video/SKILL.md) |
+| Turn content into something readable or publishable | [Split reading view](./md2view/SKILL.md) · [WeChat layout](./hkr-render/SKILL.md) · [Image prompt](./gpt-image2-prompt-director/SKILL.md) |
 | Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [CI review](./ci-review/SKILL.md) |
 
 Not sure where to start? The text-only example below uses your existing agent without image-generation access or a platform account.
@@ -145,6 +146,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [pdf-triptych](./pdf-triptych/SKILL.md) | Standard/spec PDF → skeleton, detail, example triptych | Readable PDF, full-text reasoning, browser rendering checks; not general OCR |
 | [md2view](./md2view/SKILL.md) | Markdown → source and reorganized view in one HTML | Python 3, a model, and browser checks; anchors aid verification, not proof of semantic completeness |
 | [readme-craft](./readme-craft/SKILL.md) | Project evidence → progressively disclosed open-source README | Project source and runnable example; 3s/30s/1m are information-design goals, not measured promises |
+| [launch-video](./launch-video/SKILL.md) | Project evidence → 30-second launch video (MP4) | Node.js, Playwright/Chromium, ffmpeg, Python 3; visuals come from real material, music and SFX are synthesized by script; no invented numbers when evidence is missing |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | One WeChat article → local Markdown and images | Node.js, Python dependencies, Chrome; wrapper can install local npm dependencies; article must be accessible |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/SKILL.md) | Xiaohongshu video → video and transcript | yt-dlp, ffmpeg, Whisper; platform/access limits apply; review transcription |
 | [x-article-download](./x-article-download/SKILL.md) | Tweets/articles/account content → local Markdown | Browser; batch path needs xreach, video needs yt-dlp/Whisper; some content requires login |

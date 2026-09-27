@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROJECT — launch video</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<!--
+  launch-video template · 1920×1080.
+  Replace every UPPERCASE placeholder and every .ph block with real, verified material.
+  Engine contract used by scripts/render.mjs: __duration, __seek(t), __ready, __recording.
+  Rules that keep frames correct:
+    - render(t) must be pure: derive every style from t, never from the previous frame.
+    - Toggle scenes with display (engine does it). Never set a child's visibility to 'visible':
+      it overrides a hidden parent and leaks elements into other scenes.
+-->
+<style>
+  :root{
+    --paper:#F2EFE7; --ink:#15171A; --ink-2:#5B5E63; --line:#CFCABD;
+    --dark:#0F1211; --dark-2:#181C1A; --dark-line:#2A302D; --fog:#9AA39E; --on-dark:#EDEFEA;
+    --accent:#2E7A50; --accent-dark:#62C68E;           /* ONE accent: take it from the product */
+    --serif:'Instrument Serif', Georgia, serif;
+    --sans:'Inter Tight', -apple-system, 'PingFang SC', sans-serif;
+    --mono:'JetBrains Mono', Menlo, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  #stage{position:absolute;width:1920px;height:1080px;background:var(--paper);overflow:hidden;transform-origin:0 0;font-family:var(--sans);color:var(--ink)}
+  .scene{position:absolute;inset:0}
+  .scene.dark{color:var(--on-dark)}
+  .abs{position:absolute}
+  .serif{font-family:var(--serif);font-weight:400;letter-spacing:-.01em}
+  em.acc{font-style:italic;color:var(--accent)} .dark em.acc{color:var(--accent-dark)}
+  #darkbg{left:960px;top:540px;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--dark)}
+  .ph{border:2px dashed currentColor;opacity:.5;display:flex;align-items:center;justify-content:center;font:500 20px var(--mono);text-align:center;padding:20px}
+  .h1{font-family:var(--serif);font-size:104px;line-height:1.02}
+  .sub{font-size:30px;line-height:1.4;color:var(--ink-2)}
+  .step-left{position:absolute;left:120px;top:300px;width:600px}
+  .step-left .num{font:500 16px var(--mono);letter-spacing:.2em;color:var(--accent-dark);margin-bottom:26px}
+  .step-left h2{font-family:var(--serif);font-weight:400;font-size:78px;line-height:1.02;margin-bottom:28px}
+  .step-left p{font-size:25px;line-height:1.45;color:var(--fog)}
+  .cmd{background:var(--ink);color:var(--on-dark);border-radius:12px;padding:22px 30px;font:400 28px var(--mono);white-space:nowrap}
+  .cmd .p{color:var(--accent-dark);margin-right:14px}
+  #chrome{position:absolute;inset:0;pointer-events:none;z-index:50}
+  #chrome .c{position:absolute;width:22px;height:22px;opacity:.35}
+  #chrome .tag{position:absolute;top:34px;font:500 13px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;opacity:.5}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="darkbg" class="abs"></div>
+
+  <!-- 1 · PROBLEM: the reader's pain, in their words -->
+  <section class="scene" id="problem">
+    <div id="p-head" class="abs h1" style="left:120px;top:160px;width:860px">THE PAIN, IN ONE LINE.</div>
+    <div id="p-sub" class="abs sub" style="left:120px;top:440px;width:760px">What it costs today (time, tokens, rework).</div>
+    <div id="p-vis" class="abs ph" style="left:1040px;top:220px;width:760px;height:520px">ILLUSTRATION OF THE PAIN<br>(label it as illustration)</div>
+  </section>
+
+  <!-- 2 · MEET: name + one promise -->
+  <section class="scene" id="meet">
+    <div id="m-word" class="abs serif" style="left:0;right:0;top:330px;text-align:center;font-size:230px;line-height:1">PROJECT</div>
+    <div id="m-tag" class="abs serif" style="left:0;right:0;top:620px;text-align:center;font-size:52px">ONE PROMISE, <em class="acc">ACCENTED</em>.</div>
+    <div id="m-meta" class="abs" style="left:0;right:0;top:720px;text-align:center;font:500 16px var(--mono);letter-spacing:.3em;color:var(--ink-2)">WHAT IT IS · WHERE IT RUNS</div>
+  </section>
+
+  <!-- 3 · HOW: 3–4 steps, dark -->
+  <section class="scene dark" id="how">
+    <div class="step" id="how1">
+      <div class="step-left"><div class="num">01 / 03 · VERB</div><h2>STEP <em class="acc">ONE</em></h2><p>One sentence on what happens and why it matters.</p></div>
+      <div class="abs ph" style="left:880px;top:180px;width:930px;height:680px">REAL FOOTAGE / REAL OUTPUT</div>
+    </div>
+    <div class="step" id="how2">
+      <div class="step-left"><div class="num">02 / 03 · VERB</div><h2>STEP <em class="acc">TWO</em></h2><p>One sentence.</p></div>
+      <div class="abs ph" style="left:880px;top:180px;width:930px;height:680px">REAL FOOTAGE / REAL OUTPUT</div>
+    </div>
+    <div class="step" id="how3">
+      <div class="step-left"><div class="num">03 / 03 · VERB</div><h2>STEP <em class="acc">THREE</em></h2><p>One sentence.</p></div>
+      <div class="abs ph" style="left:880px;top:180px;width:930px;height:680px">REAL FOOTAGE / REAL OUTPUT</div>
+    </div>
+  </section>
+
+  <!-- 4 · PROOF: one verified result with its source -->
+  <section class="scene" id="proof">
+    <div id="r-head" class="abs h1" style="left:120px;top:150px;width:840px">THE <em class="acc">PROOF</em>.</div>
+    <div id="r-num" class="abs serif" style="left:120px;top:430px;font-size:160px;line-height:1">0</div>
+    <div id="r-unit" class="abs sub" style="left:120px;top:610px;width:760px">UNIT AND WHAT WAS MEASURED</div>
+    <div id="r-vis" class="abs ph" style="left:1040px;top:120px;width:760px;height:800px">REAL EXPORT / CHART FROM MEASURED DATA</div>
+    <div id="r-foot" class="abs" style="left:120px;top:930px;width:820px;font:400 15px/1.5 var(--mono);color:var(--ink-2)">SOURCE · SAMPLE · CONDITIONS · LIMITS</div>
+  </section>
+
+  <!-- 5 · INSTALL: the exact public command -->
+  <section class="scene" id="install">
+    <div id="i-word" class="abs serif" style="left:0;right:0;top:250px;text-align:center;font-size:190px;line-height:1">PROJECT</div>
+    <div id="i-tag" class="abs serif" style="left:0;right:0;top:470px;text-align:center;font-size:56px">CLOSING LINE. <em class="acc">ACCENT.</em></div>
+    <div id="i-cmd" class="abs cmd" style="left:50%;top:600px"><span class="p">›</span><span id="i-type"></span></div>
+    <div id="i-foot" class="abs" style="left:0;right:0;top:720px;text-align:center;font:500 18px var(--mono);color:var(--ink-2)">github.com/OWNER/REPO · LICENSE</div>
+  </section>
+
+  <div id="chrome">
+    <div class="c" style="left:28px;top:28px;border-left:1.5px solid;border-top:1.5px solid"></div>
+    <div class="c" style="right:28px;top:28px;border-right:1.5px solid;border-top:1.5px solid"></div>
+    <div class="c" style="left:28px;bottom:28px;border-left:1.5px solid;border-bottom:1.5px solid"></div>
+    <div class="c" style="right:28px;bottom:28px;border-right:1.5px solid;border-bottom:1.5px solid"></div>
+    <div class="tag" style="left:64px">PROJECT · VERSION</div>
+    <div class="tag" id="chapter" style="right:64px"></div>
+  </div>
+</div>
+
+<script>
+/* ================= engine (keep) ================= */
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, x) => a + (b - a) * x;
+const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+const cubic = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const backOut = (x) => { const c = 1.5; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+/* set opacity + transform; hidden when fully transparent, otherwise inherit (never 'visible') */
+function show(el, o, dy = 0, extra = '') {
+  el.style.opacity = o;
+  el.style.visibility = o <= 0.001 ? 'hidden' : '';
+  el.style.transform = `translateY(${dy}px) ${extra}`;
+}
+/* fade + rise in at a, fade out ending at b */
+function rise(el, t, a, b = 1e9, din = .6, dout = .35, dist = 28, extra = '') {
+  const inP = expoOut(prog(t, a, a + din));
+  const o = Math.min(inP, 1 - cubic(prog(t, b - dout, b)));
+  show(el, t < a || t > b ? 0 : o, (1 - inP) * dist, extra);
+}
+const typeText = (str, t, a, cps = 60) => str.slice(0, Math.max(0, Math.floor((t - a) * cps)));
+/* frame sequences extracted from real recordings: setFrame(img, 'assets/rec/', index) */
+function setFrame(img, dir, i) { const src = `${dir}${String(i).padStart(3, '0')}.jpg`; if (!img.src.endsWith(src)) img.src = src; }
+function preloadFrames(dir, count) {
+  return Array.from({ length: count }, (_, k) => { const im = new Image(); im.src = `${dir}${String(k + 1).padStart(3, '0')}.jpg`; return im.decode().catch(() => {}); });
+}
+
+/* ================= timeline (edit) ================= */
+const DURATION = 30;
+/* [id, start, end, dark?, chapter label]. Overlap neighbours by ~0.2s so cuts cross-fade. */
+const SCENES = [
+  ['problem', 0, 4.7, false, '01 · problem'],
+  ['meet', 4.5, 7.6, false, '02 · meet'],
+  ['how', 7.6, 19.7, true, '03 · how it works'],
+  ['proof', 19.5, 25.5, false, '04 · proof'],
+  ['install', 25.3, DURATION, false, '05 · install'],
+];
+const STEPS = [[7.9, 11.8], [11.8, 15.7], [15.7, 19.7]];
+const DARK_WIPE = [7.3, 8.0, 19.35, 19.9]; /* grow start/end, shrink start/end */
+const CMD = 'INSTALL COMMAND COPIED VERBATIM FROM THE README';
+
+const RENDER = {
+  problem(t) {
+    rise($('p-head'), t, .1, 4.5, .6, .3, 40);
+    rise($('p-sub'), t, 1.0, 4.5, .5, .3, 20);
+    rise($('p-vis'), t, .35, 4.5, .6, .3, 40);
+  },
+  meet(t) {
+    const p = expoOut(prog(t, 4.75, 5.5));
+    show($('m-word'), p * (1 - cubic(prog(t, 7.25, 7.55))), 0, `scale(${lerp(1.08, 1, p)})`);
+    rise($('m-tag'), t, 5.6, 7.55, .6, .3, 24);
+    rise($('m-meta'), t, 6.0, 7.55, .6, .3, 14);
+  },
+  how(t) {
+    STEPS.forEach(([a, b], i) => {
+      const el = $('how' + (i + 1));
+      const last = i === STEPS.length - 1;
+      const o = Math.min(expoOut(prog(t, a, a + .45)), 1 - cubic(prog(t, b - .3 + (last ? .4 : 0), b + (last ? .4 : 0))));
+      el.style.display = t >= a && t <= b + (last ? .4 : 0) ? '' : 'none';
+      el.style.opacity = o;
+      el.querySelector('.step-left').style.transform = `translateY(${(1 - expoOut(prog(t, a, a + .6))) * 26}px)`;
+    });
+  },
+  proof(t) {
+    rise($('r-head'), t, 19.8, 1e9, .6, .1, 30);
+    rise($('r-num'), t, 20.3, 1e9, .5, .1, 20);
+    $('r-num').textContent = Math.round(0 /* VERIFIED NUMBER */ * cubic(prog(t, 20.4, 21.6)));
+    rise($('r-unit'), t, 20.6, 1e9, .5, .1, 16);
+    rise($('r-vis'), t, 19.9, 1e9, .7, .1, 40);
+    rise($('r-foot'), t, 21.5, 1e9, .5, .1, 8);
+  },
+  install(t) {
+    rise($('i-word'), t, 25.5, 1e9, .8, .1, 30);
+    rise($('i-tag'), t, 25.9, 1e9, .6, .1, 20);
+    const cp = expoOut(prog(t, 26.3, 26.8));
+    $('i-cmd').style.opacity = cp;
+    $('i-cmd').style.transform = `translateX(-50%) translateY(${(1 - cp) * 16}px)`;
+    $('i-type').textContent = typeText(CMD, t, 26.5, 60);
+    rise($('i-foot'), t, 27.6, 1e9, .6, .1, 10);
+  },
+};
+
+/* ================= engine (keep) ================= */
+function render(t) {
+  let dark = false, chapter = '';
+  for (const [id, a, b, isDark, label] of SCENES) {
+    const on = t >= a && t <= b;
+    const el = $(id);
+    el.style.display = on ? '' : 'none';
+    if (!on) continue;
+    const fadeIn = a === 0 ? 1 : prog(t, a, a + .25);
+    const fadeOut = b >= DURATION ? 1 : 1 - prog(t, b - .25, b);
+    el.style.opacity = Math.min(fadeIn, fadeOut);
+    RENDER[id](t);
+    if (t >= a + .1 || !chapter) { chapter = label; dark = isDark; }
+  }
+  const [g0, g1, s0, s1] = DARK_WIPE;
+  const r = cubic(prog(t, g0, g1)) * (1 - cubic(prog(t, s0, s1))) * 2400;
+  $('darkbg').style.transform = `scale(${r / 10})`;
+  $('darkbg').style.visibility = r > 0 ? '' : 'hidden';
+  $('chrome').style.color = dark ? 'var(--on-dark)' : 'var(--ink)';
+  $('chapter').textContent = chapter;
+}
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080), st = $('stage');
+  st.style.transform = `scale(${s})`;
+  st.style.left = (innerWidth - 1920 * s) / 2 + 'px';
+  st.style.top = (innerHeight - 1080 * s) / 2 + 'px';
+}
+addEventListener('resize', fit);
+window.__duration = DURATION;
+window.__seek = (t) => render(clamp(t, 0, DURATION - 0.001));
+const PRELOAD = [/* ...preloadFrames('assets/rec/', 117) */];
+Promise.all([document.fonts.ready, ...PRELOAD, ...[...document.images].map((i) => i.decode().catch(() => {}))]).then(() => {
+  fit();
+  render(0);
+  window.__ready = true;
+  if (window.__recording) return; /* renderer drives time */
+  let start = performance.now() - (parseFloat(new URLSearchParams(location.search).get('t')) || 0) * 1000;
+  const tick = (now) => {
+    let t = (now - start) / 1000;
+    if (t >= DURATION) { start = now; t = 0; }
+    render(t);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+});
+</script>
+</body>
+</html>
