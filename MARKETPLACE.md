@@ -332,3 +332,27 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
   "license": "MIT"
 }
 ```
+
+### launch-video
+
+```json
+{
+  "name": "launch-video",
+  "version": "1.0.0",
+  "description": "为开源项目制作 30 秒发布宣传视频：痛点、原理、可核实证据与安装命令；真实素材、HTML 逐帧渲染、合成配乐。",
+  "trigger": "/launch-video",
+  "keywords": [
+    "launch video",
+    "promo video",
+    "open source",
+    "marketing",
+    "宣传视频",
+    "发布视频",
+    "开源推广"
+  ],
+  "compatibility": "Claude Code, Codex",
+  "install_path": "launch-video/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
