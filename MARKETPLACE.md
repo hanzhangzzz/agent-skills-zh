@@ -206,6 +206,22 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 }
 ```
 
+### model-prompt-audit
+
+```json
+{
+  "name": "model-prompt-audit",
+  "version": "1.0.0",
+  "description": "用当前官方模型指引审计全局配置：现取文档、提炼代际范式变化、标出反范式与未用上的做法，批准后再改",
+  "trigger": "/model-prompt-audit",
+  "keywords": ["prompt", "claude", "audit", "CLAUDE.md", "settings", "范式"],
+  "compatibility": "Claude Code, Codex",
+  "install_path": "model-prompt-audit/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### ci-review
 
 ```json

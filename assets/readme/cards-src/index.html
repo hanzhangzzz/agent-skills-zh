@@ -249,6 +249,22 @@ bash worker-reviewer.sh --loop</pre></div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
+  <div class="top"><span class="name">model-prompt-audit</span><span class="tag">提示词 · 范式审计</span></div>
+  <div class="one">现取当前模型官方指引，对照全局配置找反范式与未用上的做法，批准后再改</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>/model-prompt-audit
+
+我的 CLAUDE.md 过时了吗
+新模型该怎么改 prompt</pre></div>
+    <div class="pane"><h4>审计报告与提案表</h4><pre>1. 代际范式变化表（每行注明文档出处）
+2. 差距清单：反范式 / 过时 / 重复 / 模板 / 未用上
+3. 提案表：文件 · 动作 · 影响
+
+用户勾选后才改文件；改前备份到临时目录。</pre><div class="src">规则来自 model-prompt-audit/SKILL.md；此卡不是运行记录</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
   <div class="top"><span class="name">ci-review</span><span class="tag">CI 里 · 验证型 CR</span></div>
   <div class="one">每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查</div>
   <div class="grid">
