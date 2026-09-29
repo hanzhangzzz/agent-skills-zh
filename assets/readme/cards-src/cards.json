@@ -130,6 +130,16 @@
     "tagline": "有价值且完成才交付，无合格工作则 NO-OP"
   },
   {
+    "name": "model-prompt-audit",
+    "tag": "提示词 · 范式审计",
+    "one": "现取当前模型官方指引，对照全局配置找反范式与未用上的做法，批准后再改",
+    "input": "/model-prompt-audit\n\n我的 CLAUDE.md 过时了吗\n新模型该怎么改 prompt",
+    "out_label": "审计报告与提案表",
+    "output": "1. 代际范式变化表（每行注明文档出处）\n2. 差距清单：反范式 / 过时 / 重复 / 模板 / 未用上\n3. 提案表：文件 · 动作 · 影响\n\n用户勾选后才改文件；改前备份到临时目录。",
+    "src": "规则来自 model-prompt-audit/SKILL.md；此卡不是运行记录",
+    "tagline": "文档现取不用记忆，先提案后动手"
+  },
+  {
     "name": "ci-review",
     "tag": "CI 里 · 验证型 CR",
     "one": "每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查",

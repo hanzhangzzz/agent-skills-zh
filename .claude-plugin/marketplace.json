@@ -226,6 +226,16 @@
       "skills": [
         "./launch-video"
       ]
+    },
+    {
+      "name": "model-prompt-audit",
+      "source": "./",
+      "strict": false,
+      "description": "Audit global agent configuration against the current official prompting guide of the model in use: fetch guides live, derive generational paradigm shifts, flag anti-patterns and unused patterns, apply only after approval. 用当前官方模型指引审计全局配置，先提案后改",
+      "version": "1.0.0",
+      "skills": [
+        "./model-prompt-audit"
+      ]
     }
   ]
 }
