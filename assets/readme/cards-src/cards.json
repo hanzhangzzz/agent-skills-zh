@@ -45,6 +45,16 @@
     "tagline": "推文 / X 长文 / 整账号 → Markdown"
   },
   {
+    "name": "x-post",
+    "tag": "发布 → X",
+    "one": "用本机 Chrome 已登录的 X 账号发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图",
+    "input": "posts.md：\n主帖正文\nimage: ./card.png\n---\n第一条回复\n---\n第二条回复\n\nnode scripts/x_post.mjs --file posts.md          # 预览\nnode scripts/x_post.mjs --file posts.md --post   # 发布",
+    "out_label": "输出",
+    "output": "x-post-out/\n├── dry-run.png      预览截图，人审后再发\n├── posted.png       发布后帖子页截图\n└── result.json\n    {\"url\":\"https://x.com/<handle>/status/<id>\",\n     \"verified\":{\"posts\":4,\"image\":true}}\n\n登录态：解密 Chrome profile 的 X cookie 注入 agent-browser，\n临时文件用完即删；不用 X API",
+    "src": "输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、sqlite3）",
+    "tagline": "文字 / 线程 / 配图 → 发到 X"
+  },
+  {
     "name": "hkr-render",
     "tag": "Markdown → 公众号排版",
     "one": "Markdown 转为微信兼容 HTML；可选封面和草稿推送，后者需账号权限",

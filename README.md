@@ -6,7 +6,7 @@
 
 面向中文开发者，按需安装。这里有翻译、OCR、内容存档、文档可视化和仓库维护工具；每项的运行环境不同，先选你要完成的任务。
 
-[![Skills](https://img.shields.io/badge/skills-17-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-18-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -149,6 +149,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | 单篇公众号文章 → 本地 Markdown 与图片 | Node.js、Python 依赖、Chrome；脚本可安装本地 npm 依赖，受文章可访问性限制 |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/SKILL.md) | 小红书视频 → 视频文件与口播稿 | yt-dlp、ffmpeg、Whisper；受链接访问与平台限制，转录需复核 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |
+| [x-post](./x-post/SKILL.md) | 文字/线程/配图 → 发到 X，先预览后 --post | macOS；Chrome 已登录 X；agent-browser、sqlite3 |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → 公众号 HTML、可选封面与草稿 | 排版可独立使用；推草稿另需 AppID/Secret、相应 API 权限及 IP 白名单 |
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | 想法 → 生图提示词 | 文本编写只需 Agent；内置评测需 Node.js，实际生图另需图片工具 |
 | [repo-tidy](./repo-tidy/SKILL.md) | 安全准备分支/工作树，保留未证实合并的工作 | Git、Python 3；hook 与终端增强功能需单独配置 |
