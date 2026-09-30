@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-17-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-18-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -150,6 +150,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | One WeChat article → local Markdown and images | Node.js, Python dependencies, Chrome; wrapper can install local npm dependencies; article must be accessible |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/SKILL.md) | Xiaohongshu video → video and transcript | yt-dlp, ffmpeg, Whisper; platform/access limits apply; review transcription |
 | [x-article-download](./x-article-download/SKILL.md) | Tweets/articles/account content → local Markdown | Browser; batch path needs xreach, video needs yt-dlp/Whisper; some content requires login |
+| [x-post](./x-post/SKILL.md) | Text / thread / images → posted to X; dry-run first, then --post | macOS; Chrome logged in to X; agent-browser, sqlite3 |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → WeChat HTML, optional cover and draft | Formatting works independently; draft upload needs AppID/Secret, API permissions, and IP allowlisting |
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | Idea → image-generation prompt | Text writing needs an agent; evaluator needs Node.js; actual images need a separate image tool |
 | [repo-tidy](./repo-tidy/SKILL.md) | Prepare branches/worktrees while retaining unverified work | Git, Python 3; hooks and terminal integrations need separate setup |

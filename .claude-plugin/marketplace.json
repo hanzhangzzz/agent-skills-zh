@@ -226,6 +226,16 @@
       "skills": [
         "./launch-video"
       ]
+    },
+    {
+      "name": "x-post",
+      "source": "./",
+      "strict": false,
+      "description": "Publish a tweet or thread with images to X using the login in your local Chrome profile; dry-run first, then --post. 用本机 Chrome 登录态发 X 帖子和线程",
+      "version": "1.0.0",
+      "skills": [
+        "./x-post"
+      ]
     }
   ]
 }
