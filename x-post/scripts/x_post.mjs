@@ -237,6 +237,7 @@ async function main() {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
+// Compare real paths: skills are installed as symlinks, so argv[1] is often the link path.
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(new URL(import.meta.url))) {
   main().catch((error) => { console.error(`x_post: ${error.message}`); process.exit(1); });
 }
