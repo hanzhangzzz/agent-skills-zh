@@ -69,6 +69,8 @@ python3 <skill>/scripts/fetch_fonts.py --out fonts "Instrument Serif:ital@0;1" "
 - 保留引擎部分；在 `SCENES`、`STEPS`、`RENDER` 中写每幕动画。`render(t)` 必须是纯函数。
 - 代码、字段名、输出格式照源码写；示意值要在画面上标注。
 - 一幕一件事，标题 ≤ 8 个词。
+- 动效：进场用 `expoOut`（快起慢收）；缩放从 0.9 以上开始，不用回弹；画面互相叠化时，给淡出层加 2–4px 模糊过渡。
+- 音画同步：每个音效所在的帧，对应画面必须已经开始动。分组元素按音效节拍逐个出现，不整块同时出现。
 
 动手前读 `references/pitfalls.md`。
 
@@ -92,8 +94,11 @@ node <skill>/scripts/render.mjs --html promo.html --out out/silent.mp4
 内置音效：`click tick pop chime snap whoosh reveal type`。
 
 ```bash
+python3 <skill>/scripts/check_sync.py --video out/silent.mp4 --cues cues.json
 python3 <skill>/scripts/mix.py --video out/silent.mp4 --cues cues.json --out out/<project>-launch.mp4
 ```
+
+`check_sync.py` 会列出画面晚于音效的点：`LATE` 表示画面起动晚，`SLOW` 表示画面变化峰值晚超过 0.2s。这些只是嫌疑点，逐条用 `ffmpeg -ss <t-0.1> -i out/silent.mp4 -vf "fps=10,scale=480:-1,tile=4x2" -frames:v 1 cue.jpg` 看帧确认。真问题就改 HTML 或 cue 时间。如果同一窗口里有更大的场景变化，盖住了小元素，就是误报，交付时注明。
 
 默认配乐由 `scripts/synth_audio.py` 按视频时长合成。用户有授权明确的音乐时用 `--music <file>` 替换；不要使用来源或授权不明的音频。
 

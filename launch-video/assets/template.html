@@ -30,7 +30,7 @@
   .abs{position:absolute}
   .serif{font-family:var(--serif);font-weight:400;letter-spacing:-.01em}
   em.acc{font-style:italic;color:var(--accent)} .dark em.acc{color:var(--accent-dark)}
-  #darkbg{left:960px;top:540px;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--dark)}
+  #darkbg{inset:0;background:var(--dark)}
   .ph{border:2px dashed currentColor;opacity:.5;display:flex;align-items:center;justify-content:center;font:500 20px var(--mono);text-align:center;padding:20px}
   .h1{font-family:var(--serif);font-size:104px;line-height:1.02}
   .sub{font-size:30px;line-height:1.4;color:var(--ink-2)}
@@ -114,7 +114,6 @@ const prog = (t, a, b) => clamp((t - a) / (b - a));
 const lerp = (a, b, x) => a + (b - a) * x;
 const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
 const cubic = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-const backOut = (x) => { const c = 1.5; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
 /* set opacity + transform; hidden when fully transparent, otherwise inherit (never 'visible') */
 function show(el, o, dy = 0, extra = '') {
   el.style.opacity = o;
@@ -145,7 +144,8 @@ const SCENES = [
   ['install', 25.3, DURATION, false, '05 · install'],
 ];
 const STEPS = [[7.9, 11.8], [11.8, 15.7], [15.7, 19.7]];
-const DARK_WIPE = [7.3, 8.0, 19.35, 19.9]; /* grow start/end, shrink start/end */
+/* dark scene wipe: [enter start, enter end, exit start, exit end]. Each start = its whoosh cue time. */
+const DARK_WIPE = [7.3, 7.9, 19.35, 19.75];
 const CMD = 'INSTALL COMMAND COPIED VERBATIM FROM THE README';
 
 const RENDER = {
@@ -204,9 +204,17 @@ function render(t) {
     if (t >= a + .1 || !chapter) { chapter = label; dark = isDark; }
   }
   const [g0, g1, s0, s1] = DARK_WIPE;
-  const r = cubic(prog(t, g0, g1)) * (1 - cubic(prog(t, s0, s1))) * 2400;
-  $('darkbg').style.transform = `scale(${r / 10})`;
-  $('darkbg').style.visibility = r > 0 ? '' : 'hidden';
+  /* enter: dark circle grows to just cover the frame; exit: the light scene opens from the centre.
+     Both use expoOut so the motion is visible on the cue frame, not ~0.25s later. */
+  const R = Math.hypot(960, 540) + 2;
+  const r = R * expoOut(prog(t, g0, g1)), hole = R * expoOut(prog(t, s0, s1));
+  const bg = $('darkbg');
+  const mask = hole > 0 ? `radial-gradient(circle at 960px 540px, transparent ${hole.toFixed(1)}px, #000 ${(hole + 1).toFixed(1)}px)` : 'none';
+  bg.style.clipPath = `circle(${r.toFixed(1)}px at 960px 540px)`;
+  bg.style.visibility = r > .5 && hole < R - 1 ? '' : 'hidden';
+  /* dark scenes are cut by the same opening so their light text never lands on the paper */
+  for (const [id, , , isDark] of SCENES) if (isDark) $(id).style.maskImage = mask;
+  bg.style.maskImage = mask;
   $('chrome').style.color = dark ? 'var(--on-dark)' : 'var(--ink)';
   $('chapter').textContent = chapter;
 }
