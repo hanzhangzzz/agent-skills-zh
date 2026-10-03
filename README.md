@@ -145,7 +145,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [pdf-triptych](./pdf-triptych/SKILL.md) | 标准/规范 PDF → 骨架、细节、例子三联图 | 可读取的 PDF、全文理解与浏览器渲染检查；不是普通 OCR |
 | [md2view](./md2view/SKILL.md) | Markdown → 原文与重组视图的双栏 HTML | Python 3、模型与浏览器检查；来源锚点便于复核，不保证语义无遗漏 |
 | [readme-craft](./readme-craft/SKILL.md) | 开源项目证据 → 渐进式 README | 项目源码与可运行示例；3 秒/30 秒/1 分钟是信息设计目标，非实测承诺 |
-| [launch-video](./launch-video/SKILL.md) | 开源项目证据 → 30 秒发布宣传视频（MP4） | Node.js、Playwright/Chromium、ffmpeg、Python 3；画面取自真实素材，配乐音效由脚本合成；证据不足时不编数字 |
+| [launch-video](./launch-video/SKILL.md) | 开源项目证据 → 30 秒发布宣传视频（MP4）；先给 3 种风格候选和试样再出片 | Node.js、Playwright/Chromium、ffmpeg、Python 3；29 种风格（扁平、等轴、粘土 3D、HUD、像素、水墨等），画面取自真实素材，配乐音效按风格由脚本合成；证据不足时不编数字 |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | 单篇公众号文章 → 本地 Markdown 与图片 | Node.js、Python 依赖、Chrome；脚本可安装本地 npm 依赖，受文章可访问性限制 |
 | [xiaohongshu-downloader](./xiaohongshu-downloader/SKILL.md) | 小红书视频 → 视频文件与口播稿 | yt-dlp、ffmpeg、Whisper；受链接访问与平台限制，转录需复核 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |

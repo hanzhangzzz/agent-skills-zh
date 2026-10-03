@@ -221,7 +221,7 @@
       "name": "launch-video",
       "source": "./",
       "strict": false,
-      "description": "Make a 30-second launch video for an open-source project: pain, mechanism, verified proof, install command. Real footage, frame-exact HTML rendering, synthesized licence-free audio. 开源项目发布宣传视频",
+      "description": "Make a 30-second launch video for an open-source project: pain, mechanism, verified proof, install command. Proposes 3 of 29 visual styles with real-footage probes, then renders frame-exact HTML/three.js with style-matched, licence-free audio. 开源项目发布宣传视频",
       "version": "1.0.0",
       "skills": [
         "./launch-video"
