@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROJECT — launch video (3D)</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<!--
+  launch-video 3D starter · three.js under DOM typography.
+  Setup in the work dir: npm i three   (served by render.mjs over local HTTP, so ES modules load).
+  - The WebGL canvas is one layer; titles, captions and real screenshots stay in DOM for crisp type.
+  - Every pose is a function of t: no clock, no physics engine stepping, no OrbitControls.
+  - Replace the placeholder mesh with the style's subject (see references/styles/3d.md).
+-->
+<script type="importmap">
+{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+</script>
+<style>
+  :root{ --ink:#2B2230; --accent:#FF6F91; --sans:'Inter Tight', -apple-system, 'PingFang SC', sans-serif; --serif:'Instrument Serif', Georgia, serif; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  #stage{position:absolute;overflow:hidden;transform-origin:0 0;font-family:var(--sans);color:var(--ink);background:#F4E6EA}
+  #gl{position:absolute;inset:0;width:100%;height:100%}
+  .scene{position:absolute;inset:0}
+  .abs{position:absolute}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <section class="scene" id="meet">
+    <div id="m-word" class="abs" style="left:0;right:0;top:120px;text-align:center;font:400 180px/1 var(--serif)">PROJECT</div>
+    <div id="m-tag" class="abs" style="left:0;right:0;bottom:120px;text-align:center;font:500 40px var(--sans)">ONE PROMISE.</div>
+  </section>
+</div>
+<script src="engine.js"></script>
+<script type="module">
+import * as THREE from 'three';
+
+const W = 1920, H = 1080, DURATION = 4;
+const SS = 2; /* supersample: render at 2× and let the screenshot downscale → clean edges */
+
+const renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(SS);
+renderer.setSize(W, H, false);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#F4E6EA');
+const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+
+/* key + rim + soft fill; a shadow-catching floor sells weight */
+const key = new THREE.DirectionalLight('#ffffff', 2.4);
+key.position.set(4, 7, 5);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.radius = 6;
+scene.add(key, new THREE.HemisphereLight('#ffffff', '#d9b8c2', 1.1));
+const rim = new THREE.DirectionalLight('#cfe8ff', 1.4);
+rim.position.set(-5, 3, -4);
+scene.add(rim);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: .18 }));
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+/* placeholder subject: a matte clay blob that drops, squashes and settles */
+const subject = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), new THREE.MeshStandardMaterial({ color: '#FF8FAB', roughness: .85 }));
+subject.castShadow = true;
+scene.add(subject);
+
+const LAND = 0.9;
+function render3d(t) {
+  /* fall: closed-form y(t) so any frame can be rendered alone */
+  const fall = prog(t, 0, LAND);
+  const y = 1 + 5 * (1 - fall * fall);
+  const [sx, sy] = squash(t, LAND, .6, .25);
+  subject.position.set(0, (t < LAND ? y : 1) * sy, 0);
+  subject.scale.set(sx, sy, sx);
+  /* slow orbit + push-in */
+  const a = lerp(-.5, .35, cubic(prog(t, 0, DURATION)));
+  const d = lerp(14, 11.5, expoOut(prog(t, 0, DURATION)));
+  camera.position.set(Math.sin(a) * d, 2.6, Math.cos(a) * d);
+  camera.lookAt(0, 1.4, 0);
+  renderer.render(scene, camera);
+}
+
+LV.start({
+  duration: DURATION, width: W, height: H,
+  scenes: [['meet', 0, DURATION]],
+  render: {
+    meet(t) {
+      rise($('m-word'), t, LAND, 1e9, .6, .1, 30);
+      rise($('m-tag'), t, LAND + .4, 1e9, .5, .1, 16);
+    },
+  },
+  after: render3d, /* the 3D layer spans scenes, so it renders after the DOM scenes */
+});
+</script>
+</body>
+</html>

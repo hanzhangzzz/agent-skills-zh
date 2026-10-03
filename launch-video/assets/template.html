@@ -5,13 +5,9 @@
 <title>PROJECT — launch video</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <!--
-  launch-video template · 1920×1080.
+  launch-video template · editorial style (the default look) · 1920×1080.
   Replace every UPPERCASE placeholder and every .ph block with real, verified material.
-  Engine contract used by scripts/render.mjs: __duration, __seek(t), __ready, __recording.
-  Rules that keep frames correct:
-    - render(t) must be pure: derive every style from t, never from the previous frame.
-    - Toggle scenes with display (engine does it). Never set a child's visibility to 'visible':
-      it overrides a hidden parent and leaks elements into other scenes.
+  Time, scene switching and the render contract live in engine.js (copy it next to this file).
 -->
 <style>
   :root{
@@ -106,33 +102,8 @@
   </div>
 </div>
 
+<script src="engine.js"></script>
 <script>
-/* ================= engine (keep) ================= */
-const $ = (id) => document.getElementById(id);
-const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
-const prog = (t, a, b) => clamp((t - a) / (b - a));
-const lerp = (a, b, x) => a + (b - a) * x;
-const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
-const cubic = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-/* set opacity + transform; hidden when fully transparent, otherwise inherit (never 'visible') */
-function show(el, o, dy = 0, extra = '') {
-  el.style.opacity = o;
-  el.style.visibility = o <= 0.001 ? 'hidden' : '';
-  el.style.transform = `translateY(${dy}px) ${extra}`;
-}
-/* fade + rise in at a, fade out ending at b */
-function rise(el, t, a, b = 1e9, din = .6, dout = .35, dist = 28, extra = '') {
-  const inP = expoOut(prog(t, a, a + din));
-  const o = Math.min(inP, 1 - cubic(prog(t, b - dout, b)));
-  show(el, t < a || t > b ? 0 : o, (1 - inP) * dist, extra);
-}
-const typeText = (str, t, a, cps = 60) => str.slice(0, Math.max(0, Math.floor((t - a) * cps)));
-/* frame sequences extracted from real recordings: setFrame(img, 'assets/rec/', index) */
-function setFrame(img, dir, i) { const src = `${dir}${String(i).padStart(3, '0')}.jpg`; if (!img.src.endsWith(src)) img.src = src; }
-function preloadFrames(dir, count) {
-  return Array.from({ length: count }, (_, k) => { const im = new Image(); im.src = `${dir}${String(k + 1).padStart(3, '0')}.jpg`; return im.decode().catch(() => {}); });
-}
-
 /* ================= timeline (edit) ================= */
 const DURATION = 30;
 /* [id, start, end, dark?, chapter label]. Overlap neighbours by ~0.2s so cuts cross-fade. */
@@ -189,20 +160,8 @@ const RENDER = {
   },
 };
 
-/* ================= engine (keep) ================= */
-function render(t) {
-  let dark = false, chapter = '';
-  for (const [id, a, b, isDark, label] of SCENES) {
-    const on = t >= a && t <= b;
-    const el = $(id);
-    el.style.display = on ? '' : 'none';
-    if (!on) continue;
-    const fadeIn = a === 0 ? 1 : prog(t, a, a + .25);
-    const fadeOut = b >= DURATION ? 1 : 1 - prog(t, b - .25, b);
-    el.style.opacity = Math.min(fadeIn, fadeOut);
-    RENDER[id](t);
-    if (t >= a + .1 || !chapter) { chapter = label; dark = isDark; }
-  }
+/* ================= style-wide layers (editorial default) ================= */
+function after(t, current) {
   const [g0, g1, s0, s1] = DARK_WIPE;
   /* enter: dark circle grows to just cover the frame; exit: the light scene opens from the centre.
      Both use expoOut so the motion is visible on the cue frame, not ~0.25s later. */
@@ -215,32 +174,14 @@ function render(t) {
   /* dark scenes are cut by the same opening so their light text never lands on the paper */
   for (const [id, , , isDark] of SCENES) if (isDark) $(id).style.maskImage = mask;
   bg.style.maskImage = mask;
+  const [, , , dark, chapter] = current;
   $('chrome').style.color = dark ? 'var(--on-dark)' : 'var(--ink)';
   $('chapter').textContent = chapter;
 }
-function fit() {
-  const s = Math.min(innerWidth / 1920, innerHeight / 1080), st = $('stage');
-  st.style.transform = `scale(${s})`;
-  st.style.left = (innerWidth - 1920 * s) / 2 + 'px';
-  st.style.top = (innerHeight - 1080 * s) / 2 + 'px';
-}
-addEventListener('resize', fit);
-window.__duration = DURATION;
-window.__seek = (t) => render(clamp(t, 0, DURATION - 0.001));
-const PRELOAD = [/* ...preloadFrames('assets/rec/', 117) */];
-Promise.all([document.fonts.ready, ...PRELOAD, ...[...document.images].map((i) => i.decode().catch(() => {}))]).then(() => {
-  fit();
-  render(0);
-  window.__ready = true;
-  if (window.__recording) return; /* renderer drives time */
-  let start = performance.now() - (parseFloat(new URLSearchParams(location.search).get('t')) || 0) * 1000;
-  const tick = (now) => {
-    let t = (now - start) / 1000;
-    if (t >= DURATION) { start = now; t = 0; }
-    render(t);
-    requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
+
+LV.start({
+  duration: DURATION, scenes: SCENES, render: RENDER, after,
+  preload: [/* ...preloadFrames('assets/rec/', 117) */],
 });
 </script>
 </body>

@@ -6,6 +6,9 @@ so link it from the page as <link rel="stylesheet" href="fonts/fonts.css">.
 
 Usage: fetch_fonts.py --out fonts "Instrument Serif:ital@0;1" "Inter Tight:wght@400;500;600" "JetBrains Mono:wght@400;600"
        [--subsets latin,latin-ext]
+       fetch_fonts.py --out fonts-cjk --text-from promo.html "Ma Shan Zheng" "ZCOOL KuaiLe"
+--text-from downloads only the glyphs that appear in the given files (Google Fonts `text=`), the only practical way
+to self-host CJK fonts. Re-run it whenever the on-screen copy changes, or new characters fall back to a system font.
 """
 import argparse
 import os
@@ -26,10 +29,14 @@ def main():
     ap.add_argument("families", nargs="+", help='Google Fonts css2 family specs, e.g. "Inter Tight:wght@400;600"')
     ap.add_argument("--out", required=True)
     ap.add_argument("--subsets", default="latin")
+    ap.add_argument("--text-from", action="append", metavar="FILE", help="subset to the characters used in FILE (repeatable)")
     a = ap.parse_args()
     subsets = set(a.subsets.split(","))
 
     query = "&".join("family=" + urllib.parse.quote(f, safe=":;@,") for f in a.families)
+    if a.text_from:
+        chars = "".join(sorted({c for f in a.text_from for c in open(f, encoding="utf-8").read() if c.isprintable()}))
+        query += "&text=" + urllib.parse.quote(chars, safe="")
     try:
         css = get(f"https://fonts.googleapis.com/css2?{query}&display=swap").decode()
     except Exception as e:  # network or unknown family
@@ -37,8 +44,11 @@ def main():
 
     os.makedirs(a.out, exist_ok=True)
     rules = []
-    for subset, body in re.findall(r"/\* ([\w-]+) \*/\s*@font-face \{(.*?)\}", css, re.S):
-        if subset not in subsets:
+    # text= responses carry no subset comments: take every block, tagged "text"
+    blocks = ([("text", b) for b in re.findall(r"@font-face \{(.*?)\}", css, re.S)] if a.text_from
+              else re.findall(r"/\* ([\w-]+) \*/\s*@font-face \{(.*?)\}", css, re.S))
+    for subset, body in blocks:
+        if not a.text_from and subset not in subsets:
             continue
         fam = re.search(r"font-family: '([^']+)'", body).group(1)
         style = re.search(r"font-style: (\w+)", body).group(1)

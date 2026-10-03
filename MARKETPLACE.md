@@ -355,7 +355,7 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
 {
   "name": "launch-video",
   "version": "1.0.0",
-  "description": "为开源项目制作 30 秒发布宣传视频：痛点、原理、可核实证据与安装命令；真实素材、HTML 逐帧渲染、合成配乐。",
+  "description": "为开源项目制作 30 秒发布宣传视频：痛点、原理、可核实证据与安装命令；按项目从 29 种视觉风格中给出 3 个候选并渲染试样，真实素材、HTML/three.js 逐帧渲染、按风格合成配乐。",
   "trigger": "/launch-video",
   "keywords": [
     "launch video",
