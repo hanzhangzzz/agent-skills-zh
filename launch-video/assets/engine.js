@@ -49,7 +49,8 @@
   /* start({ duration, width, height, scenes, render, after, preload })
        scenes:  [[id, start, end, ...extra]] — overlap neighbours by ~0.2s; the engine cross-fades them.
        render:  { [id]: (t) => void } — called only while that scene is on.
-       after:   (t, current) => void — style-wide layers (wipes, chrome); current = the scene row on top.
+       after:   (t, current) => void — style-wide layers (wipes, chrome); current = the scene row on top
+                (never null: during a gap between scenes it is the last scene that started).
        preload: promises to await before __ready (fonts, frames, textures, 3D setup). */
   function start({ duration, width = 1920, height = 1080, scenes, render = {}, after = () => {}, preload = [] }) {
     const stage = $('stage');
@@ -69,7 +70,8 @@
         if (render[id]) render[id](t);
         if (t >= a + .1 || !current) current = row;
       }
-      after(t, current);
+      /* in a gap between scenes, the last scene that started stays current */
+      after(t, current ?? scenes.filter((r) => r[1] <= t).pop() ?? scenes[0]);
     }
     function fit() {
       const s = Math.min(innerWidth / width, innerHeight / height);
