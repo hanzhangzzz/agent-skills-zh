@@ -181,6 +181,9 @@ function after(t, current) {
 
 LV.start({
   duration: DURATION, scenes: SCENES, render: RENDER, after,
+  /* editorial carries its light↔dark cuts with the circle wipe above; its light→light cuts (problem→meet,
+     proof→install) still lean on the engine cross-fade. Pick a protagonist or wipe and set 'none' to drop it. */
+  transition: 'fade',
   preload: [/* ...preloadFrames('assets/rec/', 117) */],
 });
 </script>

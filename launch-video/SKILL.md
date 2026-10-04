@@ -1,7 +1,7 @@
 ---
 name: launch-video
 description: |
-  为开源项目制作约 30 秒的发布宣传视频（1080p MP4，16:9 或 9:16，带配乐和音效）：痛点 → 亮相 → 原理 → 可核实的证据 → 安装命令。先按项目、渠道和受众从 29 种视觉风格（扁平动态图形、动态排版、等轴 2.5D、数据新闻、粘土 3D、弥散玻璃、Synthwave、故障艺术、HUD、粒子成形、像素、水墨、剪纸、一笔线条等）中给出 3 个候选，并用真实素材渲染试样；选定后用 HTML/SVG/Canvas/three.js 写动画，逐帧渲染合成。产品画面来自真实录屏、真实输出和源码，配乐与音效按风格由脚本合成，无第三方授权问题。用于“给项目做宣传视频”“发布视频”“launch video”“做成赛博/水墨/粘土风的介绍视频”“给几个视频风格选”“README/推文配视频”等请求。与 readme-craft 同属开源项目分发系列。不用于实拍剪辑、AI 生成视频或纯 GIF 录屏。
+  为开源项目制作约 30 秒的发布宣传视频（1080p MP4，16:9 或 9:16，带配乐和音效）：痛点 → 亮相 → 原理 → 可核实的证据 → 安装命令。先按项目、渠道和受众从 30 种视觉风格（扁平动态图形、动态排版、等轴 2.5D、数据新闻、粘土 3D、弥散玻璃、Synthwave、故障艺术、HUD、粒子成形、像素、水墨、剪纸、一笔线条等）中给出 3 个候选，并用真实素材渲染试样；选定后用 HTML/SVG/Canvas/three.js 写动画，逐帧渲染合成。产品画面来自真实录屏、真实输出和源码，配乐与音效按风格由脚本合成，无第三方授权问题。用于“给项目做宣传视频”“发布视频”“launch video”“做成赛博/水墨/粘土风的介绍视频”“给几个视频风格选”“README/推文配视频”等请求。与 readme-craft 同属开源项目分发系列。不用于实拍剪辑、AI 生成视频或纯 GIF 录屏。
 trigger: /launch-video
 compatibility: Claude Code, Codex
 license: MIT
@@ -69,7 +69,12 @@ ffmpeg -v error -y -pattern_type glob -i 'out/probes/*/t*.png' -vf "scale=960:-1
 
 ## 3. 分镜
 
-按 `references/storyboard.md` 的五幕结构写分镜表：幕、时间、标题、一句解释、画面素材及其来源、真实性标签。再加上所选风格配方里的五幕映射、原生转场和签名镜头。用户未指定时默认：英文、16:9、30 秒、强调色取自产品主色。9:16 渠道按竖屏重新排版，不裁切横屏画面。
+按 `references/storyboard.md` 的五幕结构写分镜表：幕、时间、标题、一句解释、画面素材及其来源、真实性标签、**主角位置**。再加上所选风格配方里的五幕映射、原生转场和签名镜头。用户未指定时默认：英文、16:9、30 秒、强调色取自产品主色。9:16 渠道按竖屏重新排版，不裁切横屏画面。
+
+分镜必须满足两条，否则重排：
+
+- **有一个贯穿主角**（圆点、消息卡、光标、一条线……）从第一幕活到最后一幕，每次换幕由它的位移、变形或放大完成；不靠淡入淡出切换。
+- **第 3 幕先演机制**：用风格的原生动作把产品机制演出来，真实截图在机制讲完后作证据停 ≥ 2 秒。界面本身就是产品价值时才以截图为主。
 
 方向或素材存在重大不确定（选哪个项目、面向哪个渠道、证据是否可用）时，先向用户确认；其余按默认推进。
 
@@ -98,6 +103,9 @@ python3 <skill>/scripts/fetch_fonts.py --out fonts-cjk --text-from promo.html "M
 按分镜和风格配方实现每一幕：
 
 - `render(t)` 必须是纯函数：DOM 样式、Canvas 像素、3D 姿态全部由 `t` 算出；随机数只用 `rng(seed)`；运动用闭式函数，不逐帧积分。
+- 时间写在拍网格上：`const B = beats(bpm)`（bpm 取 mood 默认或 cues.json 里的值），幕切换、落定、锁定、cue 全部写成 `B(n)` 或 `B(n) + 小偏移`。
+- 用 `engine.js` 的运动词汇，不只用 `rise`：落定用 `spring` / `squash`，标题用 `riseChars` 逐字从遮罩升起，数字用 `counter`，主角用 `travel` 沿路径走、`morphRect` 放大成下一幕的元素，连接器用 `dashFlow`，决策用 `reel`。`rise` 只给次要文字。
+- 幕间切换由主角或风格原生转场完成，`LV.start({ transition: 'none' })`；只有 editorial 的浅底对浅底切换允许 `'fade'`。
 - 代码、字段名、输出格式照源码写；示意值要在画面上标注。
 - 一幕一件事，标题 ≤ 8 个词。文字停留时间按 `references/styles.md` 的阅读时间规则计算。
 - 动效与转场遵循所选风格的配方（editorial 用 `expoOut` 快起慢收、不回弹；扁平和粘土用 `backOut` / `squash`；像素和拼贴用 12fps 步进）。全片只用一套转场语法。
@@ -113,6 +121,15 @@ node <skill>/scripts/render.mjs --html promo.html --out out/silent.mp4
 ```
 
 画布尺寸取页面的 `LV.start({ width, height })`，竖屏无需额外参数。逐张查看静帧：残影、溢出、占位符、文字可读性、风格签名是否成立、真实素材是否看得清。`render.mjs` 报页面错误时必须修复，不能忽略。
+
+静帧看不出“动得够不够”，再做运动检查：
+
+```bash
+python3 <skill>/scripts/motion_check.py --video out/silent.mp4 --scenes <各幕起点，逗号分隔>
+ffmpeg -v error -y -ss <幕起点-0.5> -t 1 -i out/silent.mp4 -vf "fps=10,scale=480:-1,tile=5x2" -frames:v 1 out/cut-<n>.jpg
+```
+
+`motion_check.py` 列出每秒运动量和 ≥ 2 秒的静止段（STILL）；静止段要么补主角动作、`pulse` 或 `dashFlow`，要么确认是刻意停留给人读。每个幕边界抽一条 10fps 帧条看一眼：应当看到主角位移或元素变形跨过边界，而不是一边淡出一边淡入。
 
 ## 7. 配乐与音效
 
@@ -149,7 +166,7 @@ ffmpeg -v error -y -i out/<project>-launch.mp4 -vf "fps=1,scale=480:-1,tile=6x5"
 - 成片路径
 - 所选风格及理由（以及未选的候选和 `out/candidates.jpg`）
 - 源 HTML 与 `cues.json`
-- 分镜摘要：每幕内容及素材来源
+- 分镜摘要：每幕内容、素材来源、主角在这一幕的位置
 - 真实性说明：哪些是真实录屏，哪些是示意
 - 验证结果
 - 修改方式：改 HTML 或 cues 后重跑第 6、7 步；换风格就回到第 2 步
