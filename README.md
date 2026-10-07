@@ -147,7 +147,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [readme-craft](./readme-craft/SKILL.md) | 开源项目证据 → 渐进式 README | 项目源码与可运行示例；3 秒/30 秒/1 分钟是信息设计目标，非实测承诺 |
 | [launch-video](./launch-video/SKILL.md) | 开源项目证据 → 30 秒发布宣传视频（MP4）；先给 3 种风格候选和试样再出片 | Node.js、Playwright/Chromium、ffmpeg、Python 3；30 种风格（扁平、等轴、调度看板、粘土 3D、HUD、像素、水墨等），画面取自真实素材，配乐音效按风格由脚本合成；证据不足时不编数字 |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | 单篇公众号文章 → 本地 Markdown 与图片 | Node.js、Python 依赖、Chrome；脚本可安装本地 npm 依赖，受文章可访问性限制 |
-| [xiaohongshu](./xiaohongshu/SKILL.md) | 小红书搜索、单篇归档与本地材料召回 | Python 标准库、Chrome；媒体按需使用 yt-dlp、ffmpeg、Whisper；风控即停，OCR/向量检索尚未实现 |
+| [xiaohongshu](./xiaohongshu/SKILL.md) | 小红书搜索、单篇归档、本地材料召回与平台草稿 | Python 标准库、Chrome；媒体按需使用 yt-dlp、ffmpeg、Whisper；草稿存在专用浏览器本地且不发布；风控即停，OCR/向量检索尚未实现 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |
 | [x-post](./x-post/SKILL.md) | 文字/线程/配图 → 发到 X，先预览后 --post | macOS；Chrome 已登录 X；agent-browser、sqlite3 |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → 公众号 HTML、可选封面与草稿 | 排版可独立使用；推草稿另需 AppID/Secret、相应 API 权限及 IP 白名单 |

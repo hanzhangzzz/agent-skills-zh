@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -207,6 +208,182 @@ assert all(k in headers for k in ['x-s','x-t','x-s-common'])
                 xhs.note_reference('https://xhslink.com/fixture')
             self.assertEqual(build.call_count, 1)
             self.assertEqual(error.exception.code, 'INVALID_INPUT')
+
+
+
+class FakePage:
+    """Stands in for the creator page: enough behaviour to pin the bugs this flow actually hit."""
+
+    def __init__(self, title_commits_on=1, newest_override=None):
+        self.title = ''
+        self.committed = ''
+        self.body = ''
+        self.images = 0
+        self.video = None
+        self.drafts = []
+        self.saved_toast = False
+        self.fills = 0
+        self.title_commits_on = title_commits_on
+        self.newest_override = newest_override
+        self.closed_hosts = []
+        self.opened = []
+        self.closed_targets = []
+        self.card_text = None
+
+    # -- CDP surface -------------------------------------------------
+    def close_tabs(self, host):
+        self.closed_hosts.append(host)
+        return 0
+
+    def open(self, url):
+        self.opened.append(url)
+        return f'T{len(self.opened)}', f'S{len(self.opened)}'
+
+    def call(self, method, params=None, session=None):
+        if method == 'Target.closeTarget':
+            self.closed_targets.append(params['targetId'])
+        return {}
+
+    def close(self):
+        pass
+
+    def text(self, session):
+        listing = ' '.join(f'{t} 保存于2026-10-07 00:0{i}:00 编辑 删除' for i, t in enumerate(reversed(self.drafts)))
+        return (f'草稿箱({len(self.drafts)}) 上传图文 请及时发布。 {listing} '
+                + (f'{self.committed} ' if self.committed else '') + ('保存成功' if self.saved_toast else ''))
+
+    def evaluate(self, session, expression):
+        if 'location.href' in expression and 'publish' in expression:
+            return True
+        if expression == 'location.href':
+            return xhs.PUBLISH_URL
+        if 'includes(' in expression:
+            return json.loads(expression[expression.index('(') + 1:-1]) == self.committed
+        if '.innerText' in expression and 'ProseMirror' in expression:
+            return self.body
+        return True
+
+    def wait(self, session, expression, seconds, step=1.0):
+        if '草稿箱' in expression:
+            return True
+        if 'upload-input' in expression:
+            return True
+        if '/18' in expression:
+            return f"'{self.images}'" in expression
+        if 'ProseMirror' in expression:
+            return True
+        if 'edit-text-button-text' in expression or '下一步' in expression:
+            return True
+        if 'd-text' in expression:
+            return True
+        if 'save-disabled' in expression:
+            return True
+        if '保存成功' in expression:
+            return self.saved_toast
+        return self.evaluate(session, expression)
+
+    def fill_input(self, session, selector, value):
+        self.fills += 1
+        self.title = value
+        if self.fills >= self.title_commits_on:
+            self.committed = value
+        return value
+
+    def insert_text(self, session, text):
+        self.card_text = (self.card_text or '') + text
+        self.body += text
+
+    def press(self, session, key, code):
+        if key == 'Enter':
+            self.body += '\n'
+
+    def set_files(self, session, selector, files):
+        if any(str(f).endswith('.mp4') for f in files):
+            self.video = files
+        else:
+            self.images = len(files)
+
+    def click_text(self, session, text):
+        if text == '暂存离开':
+            self.drafts.append(self.committed or '暂无笔记标题')
+            self.saved_toast = True
+
+
+class Drafting(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.media = self.root / 'a.webp'
+        self.media.write_bytes(b'x')
+        patch_sleep = patch.object(xhs.time, 'sleep')
+        patch_sleep.start()
+        self.addCleanup(patch_sleep.stop)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_draft(self, page, title='标题', body='正文', images=(), video=None):
+        browser = unittest.mock.Mock()
+        browser.connect.return_value = page
+        return xhs.draft(browser, title, body, list(images), video)
+
+    def test_missing_media_and_empty_fields_never_open_a_browser(self):
+        browser = unittest.mock.Mock()
+        for kwargs in ({'images': [self.root / 'gone.webp']}, {'title': ' '}, {'body': ' '}):
+            with self.assertRaises(Failure) as exc:
+                xhs.draft(browser, kwargs.get('title', '标题'), kwargs.get('body', '正文'), kwargs.get('images', []), None)
+            self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        browser.connect.assert_not_called()
+
+    def test_too_many_images_is_refused_before_opening_a_browser(self):
+        browser = unittest.mock.Mock()
+        with self.assertRaises(Failure) as exc:
+            xhs.draft(browser, '标题', '正文', [self.media] * 19, None)
+        self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        browser.connect.assert_not_called()
+
+    def test_title_is_rewritten_until_the_editor_echoes_it(self):
+        page = FakePage(title_commits_on=3)  # editor drops the first writes while hydrating
+        result = self.run_draft(page, title='会被丢弃的标题', images=[self.media])
+        self.assertEqual(page.fills, 3)
+        self.assertEqual(page.drafts, ['会被丢弃的标题'])
+        self.assertEqual(result['mode'], 'image')
+
+    def test_title_never_committed_saves_nothing(self):
+        page = FakePage(title_commits_on=99)
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, images=[self.media])
+        self.assertEqual(exc.exception.code, 'DRAFT_UNCONFIRMED')
+        self.assertEqual(page.drafts, [])
+
+    def test_untitled_newest_draft_is_reported_not_claimed_as_saved(self):
+        page = FakePage()
+        page.click_text = lambda session, text: (page.drafts.append('暂无笔记标题'), setattr(page, 'saved_toast', True))
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, title='我的标题', images=[self.media])
+        self.assertEqual(exc.exception.code, 'DRAFT_UNCONFIRMED')
+        self.assertIn('暂无笔记标题', exc.exception.message)
+
+    def test_text_mode_uses_the_card_flow_and_does_not_retype_the_body(self):
+        page = FakePage()
+        result = self.run_draft(page, body='第一行\n第二行')
+        self.assertEqual(result['mode'], 'text')
+        self.assertEqual(page.images, 0)
+        self.assertEqual(page.card_text, '第一行 第二行')  # newlines flattened for the card, typed once
+
+    def test_stale_creator_tabs_are_closed_before_drafting(self):
+        page = FakePage()
+        self.run_draft(page, images=[self.media])
+        self.assertEqual(page.closed_hosts, ['creator.xiaohongshu.com'])
+
+    def test_cleanup_failure_does_not_mask_a_saved_draft(self):
+        page = FakePage()
+        def call(method, params=None, session=None):
+            if method == 'Target.closeTarget':
+                raise Failure('CDP_ERROR', 'Browser command failed')
+            return {}
+        page.call = call
+        self.assertEqual(self.run_draft(page, images=[self.media])['title'], '标题')
 
 
 if __name__ == '__main__':

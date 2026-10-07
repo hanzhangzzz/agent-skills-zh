@@ -6,7 +6,7 @@ license: Apache-2.0
 metadata:
   trigger: /xiaohongshu
   compatibility: Codex, Claude Code; macOS/Linux, Python 3.10+
-  version: "3.0.0"
+  version: "3.1.0"
 ---
 
 # 小红书统一入口
@@ -33,7 +33,8 @@ metadata:
 | 下载单篇图文/视频 | 在 fetch 后加 `--media` |
 | 下载视频并提取口播 | 在 fetch 后加 `--transcribe`；产物标记为未人工校对 |
 | 查询已有材料 | `python3 "$SKILL_DIR/scripts/xhs.py" recall "关键词"`；离线关键词召回，最多默认5篇，不是向量语义检索 |
-| 写文案、发布、存平台草稿 | 阅读 `references/publishing.md`，不要调用尚未实现的 draft 命令 |
+| 存成平台草稿 | `python3 "$SKILL_DIR/scripts/xhs.py" draft --title "标题" --body "正文"`；加 `--image 路径`（可重复，最多18张）存图文，加 `--video 路径` 存视频，都不加则走平台「写文字」生成文字卡片。正文长可用 `--body-file 路径` |
+| 写文案、人工发布 | 阅读 `references/publishing.md`；draft 只存草稿，发布由用户在专用浏览器点击 |
 | 结束使用专用浏览器 | `python3 "$SKILL_DIR/scripts/xhs.py" close`；用户还在查看或处理登录时保留窗口 |
 
 ## 搜索与回答
@@ -52,6 +53,8 @@ search 保存候选记录与详情访问引用；只有 fetch 保存的完整材
 
 账号凭证只保存在本地私有文件，不输出到回答、日志、Git 或外部模型。只连接本脚本创建的 Chrome endpoint，不扫描主浏览器、不注入旧 Cookie。不承诺登录永久有效。
 
+draft 只写入草稿箱，不发布、不定时发布、不改动已发布笔记。草稿存在专用浏览器的本地存储里，不在账号云端：换浏览器或清除该 profile 数据即消失，也不会出现在手机 App。draft 会先关掉遗留的创作页标签，再开新标签操作，结束后回查草稿箱确认最新一条就是本次标题；标题未被确认时不会留下草稿。用户要求真正发布时，让其本人在专用浏览器里点击发布。
+
 ## 错误处理
 
 - `NEED_LOGIN`：用户在专用窗口重新登录，然后 login --finish；不自动切账号。
@@ -59,6 +62,9 @@ search 保存候选记录与详情访问引用；只有 fetch 保存的完整材
 - `INCOMPLETE_RESPONSE`：响应缺少必要数据，不能报告“没有结果”或“帖子已删除”。
 - `TOOL_FAILED`、`INVALID_VIDEO`：报告阶段未完成，保留已经保存的正文与部分文件；不要声称完整下载成功。
 - `BUSY`：同一 profile 有操作进行中，等待其结束，不绕开锁并行访问账号。
+- `UPLOAD_FAILED`：素材未被编辑器接收，此时没有保存任何草稿；检查文件格式与大小后重试，不要声称已存草稿。
+- `DRAFT_UNCONFIRMED`：没有拿到平台确认，或草稿箱里最新一条不是本次标题。报告未确认，让用户在专用浏览器核对；不要重复提交。
+- `PAGE_CHANGED`：创作页结构与脚本预期不符，可能是平台改版。报告具体步骤，不要改用猜测的选择器硬点。
 - `PERMISSION_DENIED`：报告不可写的安装/数据边界，不尝试绕过。
 
 ## 单入口安装

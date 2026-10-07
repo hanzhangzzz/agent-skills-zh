@@ -238,6 +238,157 @@ def fetch(api, library, value, media, transcribe):
     return {'note': note, 'directory': str(folder), 'processing': status}
 
 
+PUBLISH_URL = 'https://creator.xiaohongshu.com/publish/publish'
+TITLE_INPUT = "document.querySelector('input.d-text[placeholder=\"填写标题会有更多赞哦\"]')"
+EDITOR = "document.querySelector('.tiptap.ProseMirror')"
+
+
+def draft_count(text):
+    found = re.search(r'草稿箱\((\d+)\)', text)
+    return int(found[1]) if found else None
+
+
+def fill_title(cdp, session, title):
+    """Write the title and wait until the editor echoes it in the note preview.
+
+    An input value alone proves nothing: while the editor hydrates it keeps the typed value but not its own
+    state, and the draft then saves untitled. The preview renders that state, so it is the signal to trust.
+    """
+    committed = 'document.body.innerText.includes(%s)' % json.dumps(title)
+    for _ in range(6):
+        if cdp.fill_input(session, TITLE_INPUT, title) != title:
+            raise Failure('INVALID_INPUT', 'Title was not accepted in full (platform limit); nothing was saved')
+        if cdp.wait(session, committed, 4, 0.5):
+            return
+        time.sleep(1)
+    raise Failure('DRAFT_UNCONFIRMED', 'Editor never echoed the title in its preview; nothing was saved')
+
+
+def open_draft_box(cdp, tab):
+    """Read the draft box in its own tab: navigating the editor tab makes it autosave over the draft just written."""
+    target, session = cdp.open(PUBLISH_URL)
+    try:
+        if not cdp.wait(session, "/草稿箱\\(\\d+\\)/.test(document.body.innerText)", 30):
+            raise Failure('PAGE_CHANGED', 'Draft box counter not found on the publish page')
+        for label in ('草稿箱', tab):
+            cdp.evaluate(session, f"[...document.querySelectorAll('*')].filter(e => e.children.length <= 1 && (e.innerText || '').trim().startsWith('{label}')).slice(-1)[0].click()")
+            time.sleep(2)
+        return cdp.text(session)
+    finally:
+        try:
+            cdp.call('Target.closeTarget', {'targetId': target})
+        except Failure:
+            pass
+
+
+def newest_draft(text):
+    """Title of the most recently saved draft listed in the open draft-box tab."""
+    tail = text.split('请及时发布。', 1)[-1]
+    entries = re.findall(r'(.*?)\s*保存于\s*([\d-]+ [\d:]+)\s*编辑\s*删除', tail)
+    return (entries[0][0].strip(), entries[0][1]) if entries else (None, None)
+
+
+def type_lines(cdp, session, text):
+    for index, line in enumerate(text.split('\n')):
+        if index:
+            cdp.press(session, 'Enter', 13)
+        if line:
+            cdp.insert_text(session, line)
+    cdp.press(session, 'Escape', 27)  # closes the topic/mention suggestion popup that '#' or '@' opens
+
+
+def draft(browser, title, body, images, video):
+    """Save a note draft on the creator site through the dedicated Chrome. Drafts live in that browser's local storage."""
+    for path in [*images, *([video] if video else [])]:
+        if not path.is_file():
+            raise Failure('INVALID_INPUT', f'Media file not found: {path.name}')
+    if not title.strip() or not body.strip():
+        raise Failure('INVALID_INPUT', 'Title and body are required')
+    if len(images) > 18:
+        raise Failure('INVALID_INPUT', 'The editor accepts at most 18 images')
+    try:
+        cdp = browser.connect()
+    except Failure as exc:
+        if exc.code != 'NEED_LOGIN':
+            raise
+        browser.launch()
+        cdp = browser.connect()
+    cdp.close_tabs('creator.xiaohongshu.com')
+    target, session = cdp.open(PUBLISH_URL)
+    try:
+        if not cdp.wait(session, "/publish\\/publish/.test(location.href) && document.querySelector('.creator-tab') ? true : (/\\/login/.test(location.href) ? 'login' : false)", 30) or '/login' in cdp.evaluate(session, 'location.href'):
+            raise Failure('NEED_LOGIN', 'Creator site asked for login; sign in inside the dedicated browser')
+        cdp.wait(session, "/草稿箱\\(\\d+\\)/.test(document.body.innerText)", 20)
+        before = draft_count(cdp.text(session))
+        box = '视频笔记' if video else '图文笔记'
+        if video:
+            mode = 'video'
+            cdp.set_files(session, 'input.upload-input', [str(video)])
+            state = cdp.wait(session, "(t => /上传失败/.test(t) ? 'failed' : (/重新上传/.test(t) && !/上传中/.test(t) ? 'done' : ''))(document.body.innerText)", 900, 3)
+            if state != 'done':
+                raise Failure('UPLOAD_FAILED', 'Video upload did not complete; nothing was saved')
+        else:
+            cdp.evaluate(session, "[...document.querySelectorAll('.creator-tab')].find(e => e.innerText.trim() === '上传图文' && e.getBoundingClientRect().width).click()")
+            if images:
+                mode = 'image'
+                if not cdp.wait(session, "!!document.querySelector('input.upload-input')", 15):
+                    raise Failure('PAGE_CHANGED', 'Image upload input not found')
+                cdp.set_files(session, 'input.upload-input', [str(i) for i in images])
+                if not cdp.wait(session, f"(document.body.innerText.match(/(\\d+)\\/18/) || [])[1] === '{len(images)}'", 30 + 10 * len(images)):
+                    raise Failure('UPLOAD_FAILED', 'Not every image was accepted by the editor; nothing was saved')
+            else:
+                mode = 'text'  # platform "写文字": the body becomes a text card image, then the normal editor opens prefilled
+                cdp.evaluate(session, "[...document.querySelectorAll('button, .d-button')].find(e => e.innerText.trim() === '文字配图').click()")
+                if not cdp.wait(session, f"!!{EDITOR}", 15):
+                    raise Failure('PAGE_CHANGED', 'Text card editor not found')
+                cdp.evaluate(session, f"{EDITOR}.focus()")
+                cdp.insert_text(session, body.replace('\n', ' '))
+                if not cdp.wait(session, "(b => b && !b.className.includes('disabled'))(document.querySelector('.edit-text-button-text'))", 10):
+                    raise Failure('INVALID_INPUT', 'Platform rejected the text card content (length or format)')
+                cdp.evaluate(session, "document.querySelector('.edit-text-button').click()")
+                if not cdp.wait(session, "[...document.querySelectorAll('button')].some(b => b.innerText.trim() === '下一步')", 120, 2):
+                    raise Failure('UPLOAD_FAILED', 'Text card image was not generated')
+                cdp.evaluate(session, "[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '下一步').click()")
+        if not cdp.wait(session, f"!!{TITLE_INPUT}", 30):
+            raise Failure('PAGE_CHANGED', 'Note editor did not open')
+        cdp.evaluate(session, "(document.querySelector('.feature-guide__btn') || {click() {}}).click()")
+        fill_title(cdp, session, title)
+        if mode != 'text':
+            cdp.evaluate(session, f"{EDITOR}.focus()")
+            type_lines(cdp, session, body)
+        written = cdp.evaluate(session, f"{EDITOR}.innerText") or ''
+        if ''.join(written.split()) != ''.join(body.split()):
+            raise Failure('INVALID_INPUT', 'Body was not accepted in full (platform limit); nothing was saved')
+        if not cdp.wait(session, "(b => b && b.getAttribute('save-disabled') === 'false')(document.querySelector('xhs-publish-btn'))", 15):
+            raise Failure('PAGE_CHANGED', 'Save-draft button is not available')
+        confirmed = None
+        for _ in range(2):  # the toast is brief; one retry covers a click swallowed while the editor settles
+            cdp.click_text(session, '暂存离开')
+            confirmed = cdp.wait(session, "/保存成功/.test(document.body.innerText)", 8, 0.3)
+            if confirmed:
+                break
+        if not confirmed:
+            raise Failure('DRAFT_UNCONFIRMED', 'No save confirmation from the platform; check the dedicated browser')
+        # Confirm the saved draft itself, not just the toast: a stale editor tab elsewhere can overwrite the entry.
+        listed = open_draft_box(cdp, box)
+        after = draft_count(listed)
+        newest, saved_at = newest_draft(listed)
+        if newest != title:
+            raise Failure('DRAFT_UNCONFIRMED', f'Newest draft is {newest!r}, not {title!r}; close other creator tabs and retry')
+        if before is not None and after is not None and after <= before:
+            raise Failure('DRAFT_UNCONFIRMED', f'Draft box still holds {after} notes; verify in the dedicated browser')
+        return {'mode': mode, 'title': title, 'media': [p.name for p in images] + ([video.name] if video else []),
+                'draft_count': after, 'saved_at': saved_at, 'storage': 'dedicated_browser_local',
+                'note': 'Open the dedicated browser (xhs.py login) to review or publish the draft'}
+    finally:
+        try:
+            cdp.call('Target.closeTarget', {'targetId': target})
+        except Failure:
+            pass  # cleanup must not mask the outcome; a tab already gone is fine
+        finally:
+            cdp.close()
+
+
 def install(home, apply, restore=None):
     source = HERE.parent.resolve()
     home = home.expanduser().resolve()
@@ -322,6 +473,10 @@ def parser():
     search.add_argument('--sort', choices=['general', 'popular', 'latest'], default='general'); search.add_argument('--type', choices=['all', 'video', 'image'], default='all')
     download = sub.add_parser('fetch'); download.add_argument('reference'); download.add_argument('--media', action='store_true'); download.add_argument('--transcribe', action='store_true')
     recall = sub.add_parser('recall'); recall.add_argument('query'); recall.add_argument('--limit', type=int, default=5)
+    note = sub.add_parser('draft', help='Save a note draft (text / images / video) in the creator site via the dedicated browser')
+    note.add_argument('--title', required=True); text = note.add_mutually_exclusive_group(required=True)
+    text.add_argument('--body'); text.add_argument('--body-file', type=Path)
+    media = note.add_mutually_exclusive_group(); media.add_argument('--image', type=Path, action='append', default=[]); media.add_argument('--video', type=Path)
     installation = sub.add_parser('install'); installation.add_argument('--home', type=Path, default=Path.home())
     group = installation.add_mutually_exclusive_group(); group.add_argument('--apply', action='store_true'); group.add_argument('--restore', type=Path)
     return p
@@ -347,6 +502,9 @@ def operation(args, root):
         return {'browser': 'closed'}
     if args.command == 'login' and not args.finish and not args.session_file:
         return browser.launch()
+    if args.command == 'draft':
+        body = args.body_file.read_text(encoding='utf-8') if args.body_file else args.body
+        return draft(browser, args.title.strip(), body.strip(), args.image, args.video)
     current = root / 'current-account.json'
     credentials = root / 'credentials.json'
     if args.command == 'recall':

@@ -18,12 +18,13 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">xiaohongshu</span><span class="tag">搜索 → 本地知识材料</span></div>
-  <div class="one">一个 Skill 路由到确定性脚本：专用登录、搜索、单篇下载与本地召回</div>
+  <div class="one">一个 Skill 路由到确定性脚本：专用登录、搜索、单篇下载、本地召回，以及存成平台草稿</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>搜小红书上的 AI 游戏开发经验
 下载这篇笔记并提取口播
-根据已保存材料回答这个问题</pre></div>
-    <div class="pane"><h4>输出结构</h4><pre>xhs.py login / search / fetch / recall
+根据已保存材料回答这个问题
+把这段文案和两张图存成小红书草稿</pre></div>
+    <div class="pane"><h4>输出结构</h4><pre>xhs.py login / search / fetch / recall / draft
 
 用户数据目录/accounts/&lt;账号&gt;/
 ├── library.sqlite    搜索记录与知识索引
@@ -34,7 +35,9 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
     ├── video.mp4      视频按需下载
     └── video.txt      口播按需转录
 
-召回当前为关键词检索；OCR 与向量检索未实现</pre><div class="src">结构约定来自 xiaohongshu/SKILL.md；此卡不是运行截图</div></div>
+draft 支持文字/图文/视频三种模式，
+草稿存在专用浏览器本地，不发布；
+召回为关键词检索，OCR 与向量检索未实现</pre><div class="src">结构约定来自 xiaohongshu/SKILL.md；此卡不是运行截图</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

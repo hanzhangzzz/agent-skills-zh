@@ -136,9 +136,12 @@ class CDP:
             if first & 128:
                 return json.loads(fragments)
 
-    def call(self, method, params=None):
+    def call(self, method, params=None, session=None):
         self.sequence += 1
-        self.send(json.dumps({'id': self.sequence, 'method': method, 'params': params or {}}).encode())
+        message = {'id': self.sequence, 'method': method, 'params': params or {}}
+        if session:
+            message['sessionId'] = session
+        self.send(json.dumps(message).encode())
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             result = self.receive()
@@ -147,6 +150,96 @@ class CDP:
                     raise Failure('CDP_ERROR', 'Browser command failed')
                 return result.get('result', {})
         raise Failure('CDP_ERROR', 'Browser command timed out')
+
+    # Page helpers: one flat session per tab, real input events so framework-bound fields update.
+    def close_tabs(self, host):
+        """Close leftover tabs for `host`. An abandoned editor keeps autosaving and overwrites a fresh draft."""
+        closed = 0
+        for info in self.call('Target.getTargets').get('targetInfos', []):
+            if info.get('type') == 'page' and f'//{host}/' in info.get('url', ''):
+                try:
+                    self.call('Target.closeTarget', {'targetId': info['targetId']})
+                except Failure:
+                    continue  # a tab the user closed meanwhile is already gone
+                closed += 1
+        return closed
+
+    def open(self, url):
+        target = self.call('Target.createTarget', {'url': url, 'background': True})['targetId']
+        session = self.call('Target.attachToTarget', {'targetId': target, 'flatten': True})['sessionId']
+        return target, session
+
+    def evaluate(self, session, expression):
+        result = self.call('Runtime.evaluate', {'expression': expression, 'returnByValue': True}, session)
+        if 'exceptionDetails' in result:
+            raise Failure('PAGE_CHANGED', 'Expected page element is missing; the platform page may have changed')
+        return result['result'].get('value')
+
+    def text(self, session):
+        return self.evaluate(session, "document.body.innerText.replace(/\\s+/g, ' ')") or ''
+
+    def wait(self, session, expression, seconds, step=1.0):
+        """Poll until the expression is truthy. Evaluation errors mid-navigation are transient, not failures."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            try:
+                value = self.evaluate(session, expression)
+            except Failure as exc:
+                if exc.code != 'PAGE_CHANGED':
+                    raise
+                value = None
+            if value:
+                return value
+            time.sleep(step)
+        return None
+
+    def insert_text(self, session, text):
+        self.call('Input.insertText', {'text': text}, session)
+
+    def fill_input(self, session, selector, value):
+        """Set a framework-bound <input>. Typing alone leaves the component's own state empty,
+        so write through the native setter and fire the events the binding listens for."""
+        script = ('(() => {const e = %s; if (!e) return false;'
+                  ' const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;'
+                  ' e.focus(); set.call(e, %s);'
+                  ' for (const type of ["input", "change"]) e.dispatchEvent(new Event(type, {bubbles: true}));'
+                  ' return e.value;})()') % (selector, json.dumps(value))
+        return self.evaluate(session, script)
+
+    def press(self, session, key, code):
+        for kind in ('keyDown', 'keyUp'):
+            self.call('Input.dispatchKeyEvent', {'type': kind, 'key': key, 'code': key, 'windowsVirtualKeyCode': code}, session)
+
+    def set_files(self, session, selector, files):
+        root = self.call('DOM.getDocument', {'depth': 0}, session)['root']['nodeId']
+        node = self.call('DOM.querySelector', {'nodeId': root, 'selector': selector}, session).get('nodeId')
+        if not node:
+            raise Failure('PAGE_CHANGED', 'File input not found on the publish page')
+        self.call('DOM.setFileInputFiles', {'nodeId': node, 'files': files}, session)
+
+    def click_text(self, session, text):
+        """Click the element showing `text`, including inside closed shadow roots.
+
+        Uses a JS click on the resolved node: a background tab never receives synthesized
+        mouse events, and this page's buttons live in a shadow root JS cannot query.
+        """
+        self.call('DOM.getDocument', {'depth': -1, 'pierce': True}, session)
+        search = self.call('DOM.performSearch', {'query': text, 'includeUserAgentShadowDOM': True}, session)
+        nodes = self.call('DOM.getSearchResults', {'searchId': search['searchId'], 'fromIndex': 0, 'toIndex': search['resultCount']}, session).get('nodeIds', []) if search['resultCount'] else []
+        for node in nodes:
+            described = self.call('DOM.describeNode', {'nodeId': node}, session)['node']
+            if described['nodeName'] != '#text' or described.get('nodeValue', '').strip() != text:
+                continue
+            handle = self.call('DOM.resolveNode', {'nodeId': node}, session)['object']['objectId']
+            try:
+                self.call('Runtime.callFunctionOn', {
+                    'objectId': handle,
+                    'functionDeclaration': 'function(){const e=this.nodeType===3?this.parentElement:this;if(e.disabled||(e.className||"").includes("disabled"))throw new Error("disabled");e.click();}',
+                    'returnByValue': True}, session)
+            finally:
+                self.call('Runtime.releaseObject', {'objectId': handle}, session)
+            return
+        raise Failure('PAGE_CHANGED', f'Button "{text}" not found on the publish page')
 
     def close(self):
         self.socket.close()
