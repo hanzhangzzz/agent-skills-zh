@@ -17,24 +17,24 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 .src{font-size:13px;color:#9A8B7E;margin-top:auto;padding-top:8px}
 </style>
 <div class="card">
-  <div class="top"><span class="name">xiaohongshu-downloader</span><span class="tag">小红书视频 → 逐字稿</span></div>
-  <div class="one">收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中</div>
+  <div class="top"><span class="name">xiaohongshu</span><span class="tag">搜索 → 本地知识材料</span></div>
+  <div class="one">一个 Skill 路由到确定性脚本：专用登录、搜索、单篇下载与本地召回</div>
   <div class="grid">
-    <div class="pane in"><h4>输入 · 触发</h4><pre>https://xhslink.com/…
-https://www.xiaohongshu.com/explore/…
+    <div class="pane in"><h4>输入 · 触发</h4><pre>搜小红书上的 AI 游戏开发经验
+下载这篇笔记并提取口播
+根据已保存材料回答这个问题</pre></div>
+    <div class="pane"><h4>输出结构</h4><pre>xhs.py login / search / fetch / recall
 
-（收到小红书链接即自动触发，
- 也可说：小红书视频转文字）</pre></div>
-    <div class="pane"><h4>输出结构</h4><pre>&lt;OUTPUT_DIR&gt;/小红书-Obsidian加CloudCode打造个人生活操作系统/
-├── transcript.md          口播逐字稿（Markdown）
-├── videos/
-│   └── video.mp4
-└── transcripts/
-    ├── audio.srt          带时间轴
-    ├── audio.txt
-    └── audio-zh.md        英文视频附中文翻译
+用户数据目录/accounts/&lt;账号&gt;/
+├── library.sqlite    搜索记录与知识索引
+└── notes/&lt;帖子ID&gt;/
+    ├── source.json
+    ├── note.md
+    ├── image-001.jpg  图文按需下载
+    ├── video.mp4      视频按需下载
+    └── video.txt      口播按需转录
 
-中文口播直接保存；英文口播翻译后保存</pre><div class="src">输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）</div></div>
+召回当前为关键词检索；OCR 与向量检索未实现</pre><div class="src">结构约定来自 xiaohongshu/SKILL.md；此卡不是运行截图</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

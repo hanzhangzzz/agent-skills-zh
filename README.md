@@ -18,7 +18,7 @@
 | 你的任务 | 从这里开始 |
 | --- | --- |
 | 读懂英文文章、扫描书或长标准 | [文章翻译](./doc-reader/SKILL.md) · [扫描书 OCR](./scanned-book-ocr/SKILL.md) · [标准结构图](./pdf-triptych/SKILL.md) |
-| 把文章、视频内容留到本地 | [公众号](./wechat-article-md-local/SKILL.md) · [小红书视频](./xiaohongshu-downloader/SKILL.md) · [X 内容](./x-article-download/SKILL.md) |
+| 把文章、视频内容留到本地 | [公众号](./wechat-article-md-local/SKILL.md) · [小红书视频](./xiaohongshu/SKILL.md) · [X 内容](./x-article-download/SKILL.md) |
 | 让开源项目被看见、被试用 | [开源 README 写作](./readme-craft/SKILL.md) · [发布宣传视频](./launch-video/SKILL.md) |
 | 把已有内容变成可阅读、可发布的结果 | [双栏阅读视图](./md2view/SKILL.md) · [公众号排版](./hkr-render/SKILL.md) · [生图提示词](./gpt-image2-prompt-director/SKILL.md) |
 | 管好 Agent 的代码工作 | [分支与工作树](./repo-tidy/SKILL.md) · [跨仓库定位](./repo-map/SKILL.md) · [自主推进](./do-something/SKILL.md) · [CI 审查](./ci-review/SKILL.md) |
@@ -147,7 +147,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [readme-craft](./readme-craft/SKILL.md) | 开源项目证据 → 渐进式 README | 项目源码与可运行示例；3 秒/30 秒/1 分钟是信息设计目标，非实测承诺 |
 | [launch-video](./launch-video/SKILL.md) | 开源项目证据 → 30 秒发布宣传视频（MP4）；先给 3 种风格候选和试样再出片 | Node.js、Playwright/Chromium、ffmpeg、Python 3；30 种风格（扁平、等轴、调度看板、粘土 3D、HUD、像素、水墨等），画面取自真实素材，配乐音效按风格由脚本合成；证据不足时不编数字 |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | 单篇公众号文章 → 本地 Markdown 与图片 | Node.js、Python 依赖、Chrome；脚本可安装本地 npm 依赖，受文章可访问性限制 |
-| [xiaohongshu-downloader](./xiaohongshu-downloader/SKILL.md) | 小红书视频 → 视频文件与口播稿 | yt-dlp、ffmpeg、Whisper；受链接访问与平台限制，转录需复核 |
+| [xiaohongshu](./xiaohongshu/SKILL.md) | 小红书搜索、单篇归档与本地材料召回 | Python 标准库、Chrome；媒体按需使用 yt-dlp、ffmpeg、Whisper；风控即停，OCR/向量检索尚未实现 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |
 | [x-post](./x-post/SKILL.md) | 文字/线程/配图 → 发到 X，先预览后 --post | macOS；Chrome 已登录 X；agent-browser、sqlite3 |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → 公众号 HTML、可选封面与草稿 | 排版可独立使用；推草稿另需 AppID/Secret、相应 API 权限及 IP 白名单 |

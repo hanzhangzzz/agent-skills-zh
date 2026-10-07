@@ -148,13 +148,13 @@
       ]
     },
     {
-      "name": "xiaohongshu-downloader",
+      "name": "xiaohongshu",
       "source": "./",
       "strict": false,
-      "description": "Download a Xiaohongshu (RedNote) video and transcribe the voice-over with Whisper into a Markdown transcript. 小红书视频下载 + 口播逐字稿",
-      "version": "1.0.0",
+      "description": "小红书统一薄路由：专用账号登录、搜索、单篇下载与口播、本地关键词召回；内置签名源码，不依赖独立 CLI/MCP/RAG 服务。",
+      "version": "3.0.0",
       "skills": [
-        "./xiaohongshu-downloader"
+        "./xiaohongshu"
       ]
     },
     {
