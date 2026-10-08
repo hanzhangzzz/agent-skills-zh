@@ -430,13 +430,21 @@ def newest_draft(text):
     return (entries[0][0].strip(), entries[0][1]) if entries else (None, None)
 
 
-def type_lines(cdp, session, text):
-    for index, line in enumerate(text.split('\n')):
-        if index:
-            cdp.press(session, 'Enter', 13)
-        if line:
-            cdp.insert_text(session, line)
-    cdp.press(session, 'Escape', 27)  # closes the topic/mention suggestion popup that '#' or '@' opens
+def paste_body(cdp, session, text):
+    """Write the body as one synthetic paste so the editor itself splits it into paragraphs.
+
+    The editor tab is opened in the background, where synthesized Enter key events never reach the editor:
+    typing line by line with Enter silently merged every line into one paragraph. A paste keeps each line,
+    blank lines included, as its own paragraph.
+    """
+    script = ("(() => {const dt = new DataTransfer(); dt.setData('text/plain', %s);"
+              " %s.dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true}));})()") % (json.dumps(text), EDITOR)
+    cdp.evaluate(session, script)
+
+
+def editor_lines(cdp, session):
+    """One entry per editor paragraph; an empty paragraph renders as a <br> and reads back as ''."""
+    return cdp.evaluate(session, f"[...{EDITOR}.children].map(p => p.innerText.replace(/\\n/g, '').trim())") or []
 
 
 def draft(browser, title, body, images, video):
@@ -491,10 +499,13 @@ def draft(browser, title, body, images, video):
         fill_title(cdp, session, title)
         if mode != 'text':
             cdp.evaluate(session, f"{EDITOR}.focus()")
-            type_lines(cdp, session, body)
+            paste_body(cdp, session, body)
         written = cdp.evaluate(session, f"{EDITOR}.innerText") or ''
         if ''.join(written.split()) != ''.join(body.split()):
             raise Failure('INVALID_INPUT', 'Body was not accepted in full (platform limit); nothing was saved')
+        # Compare line by line: a whitespace-insensitive check alone let a body with every line break lost pass.
+        if mode != 'text' and editor_lines(cdp, session) != [line.strip() for line in body.split('\n')]:
+            raise Failure('INVALID_INPUT', 'Body line breaks were not preserved in the editor; nothing was saved')
         if not cdp.wait(session, "(b => b && b.getAttribute('save-disabled') === 'false')(document.querySelector('xhs-publish-btn'))", 15):
             raise Failure('PAGE_CHANGED', 'Save-draft button is not available')
         confirmed = None
