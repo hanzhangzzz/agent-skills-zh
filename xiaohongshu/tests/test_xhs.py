@@ -426,6 +426,12 @@ class Drafting(unittest.TestCase):
         self.assertEqual(result['topics'], ['历史人物', '自我认知'])
         self.assertEqual(page.drafts, ['标题'])
 
+    def test_topics_go_into_their_own_paragraph_after_a_mention_line(self):
+        page = FakePage(platform_topics={'历史人物'})
+        self.run_draft(page, body='第一段\n评论区 @点点 看看', images=[self.media], topics=['历史人物'])
+        self.assertEqual(page.body.split('\n'), ['第一段', '评论区 @点点 看看', ''])  # topics follow in the empty paragraph
+        self.assertEqual(page.topics, ['历史人物'])
+
     def test_unknown_topic_is_refused_before_saving(self):
         page = FakePage(platform_topics={'历史人物'})
         with self.assertRaises(Failure) as exc:
@@ -433,6 +439,19 @@ class Drafting(unittest.TestCase):
         self.assertEqual(exc.exception.code, 'INVALID_INPUT')
         self.assertIn('不存在的话题', exc.exception.message)
         self.assertEqual(page.drafts, [])
+
+    def test_refused_draft_reports_an_autosaved_leftover(self):
+        page = FakePage(platform_topics=set())
+        closing = page.call
+        def call(method, params=None, session=None):  # the real editor autosaves when its tab goes away
+            if method == 'Target.closeTarget' and params['targetId'] == 'T1' and '暂无笔记标题' not in page.drafts:
+                page.drafts.append('暂无笔记标题')
+            return closing(method, params, session)
+        page.call = call
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, images=[self.media], topics=['不存在的话题'])
+        self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        self.assertIn('autosaved an incomplete draft', exc.exception.message)
 
     def test_stale_creator_tabs_are_closed_before_drafting(self):
         page = FakePage()

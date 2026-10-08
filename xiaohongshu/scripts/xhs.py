@@ -459,7 +459,6 @@ def add_topics(cdp, session, topics):
     cdp.evaluate(session, f"(() => {{const e = {EDITOR}; e.focus(); const r = document.createRange();"
                           " r.selectNodeContents(e.lastElementChild); r.collapse(false);"
                           " const s = getSelection(); s.removeAllRanges(); s.addRange(r);})()")  # a paste leaves no caret
-    cdp.insert_text(session, '\n')
     for name in topics:
         cdp.insert_text(session, '#' + name)
         item = TOPIC_ITEM % json.dumps('#' + name)
@@ -483,6 +482,7 @@ def draft(browser, title, body, images, video, topics=()):
     cdp = attach(browser)
     cdp.close_tabs('creator.xiaohongshu.com')
     target, session = cdp.open(PUBLISH_URL)
+    before = None
     try:
         if not cdp.wait(session, "/publish\\/publish/.test(location.href) && document.querySelector('.creator-tab') ? true : (/\\/login/.test(location.href) ? 'login' : false)", 30) or '/login' in cdp.evaluate(session, 'location.href'):
             raise Failure('NEED_LOGIN', 'Creator site asked for login; sign in inside the dedicated browser')
@@ -523,12 +523,14 @@ def draft(browser, title, body, images, video, topics=()):
         fill_title(cdp, session, title)
         if mode != 'text':
             cdp.evaluate(session, f"{EDITOR}.focus()")
-            paste_body(cdp, session, body)
+            # With topics, the paste itself opens the empty last paragraph they go into: a typed newline there is
+            # swallowed whenever the last line holds an '@', which leaves the mention suggestion open.
+            paste_body(cdp, session, body + '\n' if topics else body)
         written = cdp.evaluate(session, f"{EDITOR}.innerText") or ''
         if ''.join(written.split()) != ''.join(body.split()):
             raise Failure('INVALID_INPUT', 'Body was not accepted in full (platform limit); nothing was saved')
         # Compare line by line: a whitespace-insensitive check alone let a body with every line break lost pass.
-        if mode != 'text' and editor_lines(cdp, session) != [line.strip() for line in body.split('\n')]:
+        if mode != 'text' and editor_lines(cdp, session) != [line.strip() for line in body.split('\n')] + ([''] if topics else []):
             raise Failure('INVALID_INPUT', 'Body line breaks were not preserved in the editor; nothing was saved')
         if topics:
             add_topics(cdp, session, topics)
@@ -553,6 +555,21 @@ def draft(browser, title, body, images, video, topics=()):
         return {'mode': mode, 'title': title, 'media': [p.name for p in images] + ([video.name] if video else []), 'topics': list(topics),
                 'draft_count': after, 'saved_at': saved_at, 'storage': 'dedicated_browser_local',
                 'note': 'Open the dedicated browser (xhs.py login) to review or publish the draft'}
+    except Failure as exc:
+        # The editor autosaves on its own, so a refused draft can still land in the box once its tab closes.
+        # Report that instead of claiming nothing was saved; deleting drafts is left to the user.
+        if before is None or exc.code == 'NEED_LOGIN':
+            raise
+        try:
+            cdp.call('Target.closeTarget', {'targetId': target})
+            time.sleep(2)
+            now = draft_count(open_draft_box(cdp, '视频笔记' if video else '图文笔记'))
+        except Failure:
+            raise exc from None
+        if now is not None and now > before:
+            raise Failure(exc.code, f'{exc.message} — but the editor autosaved an incomplete draft '
+                                    f'(draft box now holds {now}); delete it in the draft box before retrying') from None
+        raise
     finally:
         try:
             cdp.call('Target.closeTarget', {'targetId': target})
