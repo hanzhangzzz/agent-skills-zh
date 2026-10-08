@@ -226,8 +226,11 @@ assert all(k in headers for k in ['x-s','x-t','x-s-common'])
 class FakePage:
     """Stands in for the creator page: enough behaviour to pin the bugs this flow actually hit."""
 
-    def __init__(self, title_commits_on=1, newest_override=None, paste_merges_lines=False):
+    def __init__(self, title_commits_on=1, newest_override=None, paste_merges_lines=False, platform_topics=()):
         self.paste_merges_lines = paste_merges_lines
+        self.platform_topics = set(platform_topics)
+        self.typed_topic = None
+        self.topics = []
         self.title = ''
         self.committed = ''
         self.body = ''
@@ -270,11 +273,21 @@ class FakePage:
             return True
         if expression == 'location.href':
             return xhs.PUBLISH_URL
+        if 'creator-editor-topic-container' in expression:  # the suggestion list offers only existing topics
+            if self.typed_topic not in self.platform_topics:
+                return None
+            if expression.endswith('.click()'):
+                self.topics.append(self.typed_topic)
+            return True
+        if 'tiptap-topic' in expression:
+            return list(self.topics)
         if 'ClipboardEvent' in expression:  # the editor splits a paste into one paragraph per line
             start = expression.index("setData('text/plain', ") + len("setData('text/plain', ")
             text = json.JSONDecoder().raw_decode(expression[start:])[0]
             self.body += text.replace('\n', '') if self.paste_merges_lines else text
             return None
+        if 'lastElementChild.innerText' in expression:
+            return bool(self.body.split('\n')[-1].strip())
         if '.children].map' in expression:
             return [line.strip() for line in self.body.split('\n')]
         if 'includes(' in expression:
@@ -298,6 +311,8 @@ class FakePage:
             return True
         if 'save-disabled' in expression:
             return True
+        if 'creator-editor-topic-container' in expression:
+            return self.evaluate(session, expression)
         if '保存成功' in expression:
             return self.saved_toast
         return self.evaluate(session, expression)
@@ -310,6 +325,9 @@ class FakePage:
         return value
 
     def insert_text(self, session, text):
+        if text.startswith('#'):
+            self.typed_topic = text[1:]
+            return
         self.card_text = (self.card_text or '') + text
         self.body += text
 
@@ -341,10 +359,10 @@ class Drafting(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_draft(self, page, title='标题', body='正文', images=(), video=None):
+    def run_draft(self, page, title='标题', body='正文', images=(), video=None, topics=()):
         browser = unittest.mock.Mock()
         browser.connect.return_value = page
-        return xhs.draft(browser, title, body, list(images), video)
+        return xhs.draft(browser, title, body, list(images), video, list(topics))
 
     def test_missing_media_and_empty_fields_never_open_a_browser(self):
         browser = unittest.mock.Mock()
@@ -402,6 +420,55 @@ class Drafting(unittest.TestCase):
             self.run_draft(page, body='第一段\n第二段', images=[self.media])
         self.assertEqual(exc.exception.code, 'INVALID_INPUT')
         self.assertEqual(page.drafts, [])
+
+    def test_topics_are_picked_as_platform_topics(self):
+        page = FakePage(platform_topics={'历史人物', '自我认知'})
+        result = self.run_draft(page, images=[self.media], topics=['历史人物', '自我认知'])
+        self.assertEqual(page.topics, ['历史人物', '自我认知'])
+        self.assertEqual(result['topics'], ['历史人物', '自我认知'])
+        self.assertEqual(page.drafts, ['标题'])
+
+    def test_topics_go_into_their_own_paragraph_after_a_mention_line(self):
+        page = FakePage(platform_topics={'历史人物'})
+        self.run_draft(page, body='第一段\n评论区 @点点 看看', images=[self.media], topics=['历史人物'])
+        self.assertEqual(page.body.split('\n'), ['第一段', '评论区 @点点 看看', ''])  # topics follow in the empty paragraph
+        self.assertEqual(page.topics, ['历史人物'])
+
+    def test_text_mode_topics_also_get_their_own_paragraph(self):
+        page = FakePage(platform_topics={'历史人物'})
+        self.run_draft(page, body='评论区 @点点 看看', topics=['历史人物'])  # no media: the text-card flow
+        self.assertTrue(page.body.endswith('\n'))
+        self.assertEqual(page.topics, ['历史人物'])
+
+    def test_unconfirmed_save_is_not_called_an_incomplete_leftover(self):
+        page = FakePage()
+        page.click_text = lambda session, text: page.drafts.append('标题')  # saved, but no toast was seen
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, images=[self.media])
+        self.assertEqual(exc.exception.code, 'DRAFT_UNCONFIRMED')
+        self.assertNotIn('incomplete', exc.exception.message)
+        self.assertIn('may have been saved', exc.exception.message)
+
+    def test_unknown_topic_is_refused_before_saving(self):
+        page = FakePage(platform_topics={'历史人物'})
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, images=[self.media], topics=['历史人物', '不存在的话题'])
+        self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        self.assertIn('不存在的话题', exc.exception.message)
+        self.assertEqual(page.drafts, [])
+
+    def test_refused_draft_reports_an_autosaved_leftover(self):
+        page = FakePage(platform_topics=set())
+        closing = page.call
+        def call(method, params=None, session=None):  # the real editor autosaves when its tab goes away
+            if method == 'Target.closeTarget' and params['targetId'] == 'T1' and '暂无笔记标题' not in page.drafts:
+                page.drafts.append('暂无笔记标题')
+            return closing(method, params, session)
+        page.call = call
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, images=[self.media], topics=['不存在的话题'])
+        self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        self.assertIn('autosaved an incomplete draft', exc.exception.message)
 
     def test_stale_creator_tabs_are_closed_before_drafting(self):
         page = FakePage()
