@@ -226,7 +226,8 @@ assert all(k in headers for k in ['x-s','x-t','x-s-common'])
 class FakePage:
     """Stands in for the creator page: enough behaviour to pin the bugs this flow actually hit."""
 
-    def __init__(self, title_commits_on=1, newest_override=None):
+    def __init__(self, title_commits_on=1, newest_override=None, paste_merges_lines=False):
+        self.paste_merges_lines = paste_merges_lines
         self.title = ''
         self.committed = ''
         self.body = ''
@@ -269,6 +270,13 @@ class FakePage:
             return True
         if expression == 'location.href':
             return xhs.PUBLISH_URL
+        if 'ClipboardEvent' in expression:  # the editor splits a paste into one paragraph per line
+            start = expression.index("setData('text/plain', ") + len("setData('text/plain', ")
+            text = json.JSONDecoder().raw_decode(expression[start:])[0]
+            self.body += text.replace('\n', '') if self.paste_merges_lines else text
+            return None
+        if '.children].map' in expression:
+            return [line.strip() for line in self.body.split('\n')]
         if 'includes(' in expression:
             return json.loads(expression[expression.index('(') + 1:-1]) == self.committed
         if '.innerText' in expression and 'ProseMirror' in expression:
@@ -306,8 +314,7 @@ class FakePage:
         self.body += text
 
     def press(self, session, key, code):
-        if key == 'Enter':
-            self.body += '\n'
+        pass  # measured on the real editor: synthesized keys never reach a background tab, Enter included
 
     def set_files(self, session, selector, files):
         if any(str(f).endswith('.mp4') for f in files):
@@ -382,6 +389,19 @@ class Drafting(unittest.TestCase):
         self.assertEqual(result['mode'], 'text')
         self.assertEqual(page.images, 0)
         self.assertEqual(page.card_text, '第一行 第二行')  # newlines flattened for the card, typed once
+
+    def test_body_line_breaks_and_blank_lines_survive_as_paragraphs(self):
+        page = FakePage()
+        self.run_draft(page, body='第一段\n第二段\n\n#话题', images=[self.media])
+        self.assertEqual(page.body.split('\n'), ['第一段', '第二段', '', '#话题'])
+        self.assertEqual(page.drafts, ['标题'])
+
+    def test_lost_line_breaks_are_refused_before_saving(self):
+        page = FakePage(paste_merges_lines=True)  # the 2026-10-08 bug: every line merged into one paragraph
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, body='第一段\n第二段', images=[self.media])
+        self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        self.assertEqual(page.drafts, [])
 
     def test_stale_creator_tabs_are_closed_before_drafting(self):
         page = FakePage()
