@@ -447,7 +447,31 @@ def editor_lines(cdp, session):
     return cdp.evaluate(session, f"[...{EDITOR}.children].map(p => p.innerText.replace(/\\n/g, '').trim())") or []
 
 
-def draft(browser, title, body, images, video):
+TOPIC_ITEM = "[...document.querySelectorAll('#creator-editor-topic-container .item')].find(e => e.innerText.trim().split(/\\s/)[0] === %s && !/新建话题/.test(e.innerText))"   # never create a topic
+
+
+def add_topics(cdp, session, topics):
+    """Append topics as real platform topics, each picked from the editor's own suggestion list.
+
+    A pasted or typed '#name' stays plain text and never links to the topic page; only a picked suggestion
+    becomes a topic node. A name with no exact suggestion is refused so a draft never carries a fake topic.
+    """
+    cdp.evaluate(session, f"(() => {{const e = {EDITOR}; e.focus(); const r = document.createRange();"
+                          " r.selectNodeContents(e.lastElementChild); r.collapse(false);"
+                          " const s = getSelection(); s.removeAllRanges(); s.addRange(r);})()")  # a paste leaves no caret
+    cdp.insert_text(session, '\n')
+    for name in topics:
+        cdp.insert_text(session, '#' + name)
+        item = TOPIC_ITEM % json.dumps('#' + name)
+        if not cdp.wait(session, f"!!{item}", 8, 0.5):
+            raise Failure('INVALID_INPUT', f'No platform topic named {name!r}; nothing was saved')
+        cdp.evaluate(session, f"{item}.click()")
+    inserted = cdp.evaluate(session, f"[...{EDITOR}.querySelectorAll('a.tiptap-topic')].map(a => JSON.parse(a.dataset.topic).name)")
+    if inserted != list(topics):
+        raise Failure('INVALID_INPUT', 'Topics were not all inserted as platform topics; nothing was saved')
+
+
+def draft(browser, title, body, images, video, topics=()):
     """Save a note draft on the creator site through the dedicated Chrome. Drafts live in that browser's local storage."""
     for path in [*images, *([video] if video else [])]:
         if not path.is_file():
@@ -506,6 +530,8 @@ def draft(browser, title, body, images, video):
         # Compare line by line: a whitespace-insensitive check alone let a body with every line break lost pass.
         if mode != 'text' and editor_lines(cdp, session) != [line.strip() for line in body.split('\n')]:
             raise Failure('INVALID_INPUT', 'Body line breaks were not preserved in the editor; nothing was saved')
+        if topics:
+            add_topics(cdp, session, topics)
         if not cdp.wait(session, "(b => b && b.getAttribute('save-disabled') === 'false')(document.querySelector('xhs-publish-btn'))", 15):
             raise Failure('PAGE_CHANGED', 'Save-draft button is not available')
         confirmed = None
@@ -524,7 +550,7 @@ def draft(browser, title, body, images, video):
             raise Failure('DRAFT_UNCONFIRMED', f'Newest draft is {newest!r}, not {title!r}; close other creator tabs and retry')
         if before is not None and after is not None and after <= before:
             raise Failure('DRAFT_UNCONFIRMED', f'Draft box still holds {after} notes; verify in the dedicated browser')
-        return {'mode': mode, 'title': title, 'media': [p.name for p in images] + ([video.name] if video else []),
+        return {'mode': mode, 'title': title, 'media': [p.name for p in images] + ([video.name] if video else []), 'topics': list(topics),
                 'draft_count': after, 'saved_at': saved_at, 'storage': 'dedicated_browser_local',
                 'note': 'Open the dedicated browser (xhs.py login) to review or publish the draft'}
     finally:
@@ -789,6 +815,7 @@ def parser():
     note.add_argument('--title', required=True); text = note.add_mutually_exclusive_group(required=True)
     text.add_argument('--body'); text.add_argument('--body-file', type=Path)
     media = note.add_mutually_exclusive_group(); media.add_argument('--image', type=Path, action='append', default=[]); media.add_argument('--video', type=Path)
+    note.add_argument('--topic', action='append', default=[], help='Platform topic name without "#"; repeat for several. Each must exactly match an existing topic')
     installation = sub.add_parser('install'); installation.add_argument('--home', type=Path, default=Path.home())
     group = installation.add_mutually_exclusive_group(); group.add_argument('--apply', action='store_true'); group.add_argument('--restore', type=Path)
     return p
@@ -825,7 +852,7 @@ def operation(args, root, profile):
         return {'browser': 'closed'}
     if args.command == 'draft':
         body = args.body_file.read_text(encoding='utf-8') if args.body_file else args.body
-        return draft(browser, args.title.strip(), body.strip(), args.image, args.video)
+        return draft(browser, args.title.strip(), body.strip(), args.image, args.video, [t.strip().lstrip('#') for t in args.topic if t.strip()])
     current = profile / 'current-account.json'
     credentials = profile / 'credentials.json'
     if args.command == 'recall':
