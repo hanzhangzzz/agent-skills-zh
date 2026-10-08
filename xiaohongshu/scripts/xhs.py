@@ -459,6 +459,10 @@ def add_topics(cdp, session, topics):
     cdp.evaluate(session, f"(() => {{const e = {EDITOR}; e.focus(); const r = document.createRange();"
                           " r.selectNodeContents(e.lastElementChild); r.collapse(false);"
                           " const s = getSelection(); s.removeAllRanges(); s.addRange(r);})()")  # a paste leaves no caret
+    if cdp.evaluate(session, f"!!{EDITOR}.lastElementChild.innerText.trim()"):
+        # Topics need their own paragraph. A pasted newline opens it even when the last line holds an '@':
+        # there the mention suggestion stays open and swallows a typed newline, so '#name' would trail the '@'.
+        paste_body(cdp, session, '\n')
     for name in topics:
         cdp.insert_text(session, '#' + name)
         item = TOPIC_ITEM % json.dumps('#' + name)
@@ -482,7 +486,7 @@ def draft(browser, title, body, images, video, topics=()):
     cdp = attach(browser)
     cdp.close_tabs('creator.xiaohongshu.com')
     target, session = cdp.open(PUBLISH_URL)
-    before = None
+    before, submitted = None, False
     try:
         if not cdp.wait(session, "/publish\\/publish/.test(location.href) && document.querySelector('.creator-tab') ? true : (/\\/login/.test(location.href) ? 'login' : false)", 30) or '/login' in cdp.evaluate(session, 'location.href'):
             raise Failure('NEED_LOGIN', 'Creator site asked for login; sign in inside the dedicated browser')
@@ -523,20 +527,19 @@ def draft(browser, title, body, images, video, topics=()):
         fill_title(cdp, session, title)
         if mode != 'text':
             cdp.evaluate(session, f"{EDITOR}.focus()")
-            # With topics, the paste itself opens the empty last paragraph they go into: a typed newline there is
-            # swallowed whenever the last line holds an '@', which leaves the mention suggestion open.
-            paste_body(cdp, session, body + '\n' if topics else body)
+            paste_body(cdp, session, body)
         written = cdp.evaluate(session, f"{EDITOR}.innerText") or ''
         if ''.join(written.split()) != ''.join(body.split()):
             raise Failure('INVALID_INPUT', 'Body was not accepted in full (platform limit); nothing was saved')
         # Compare line by line: a whitespace-insensitive check alone let a body with every line break lost pass.
-        if mode != 'text' and editor_lines(cdp, session) != [line.strip() for line in body.split('\n')] + ([''] if topics else []):
+        if mode != 'text' and editor_lines(cdp, session) != [line.strip() for line in body.split('\n')]:
             raise Failure('INVALID_INPUT', 'Body line breaks were not preserved in the editor; nothing was saved')
         if topics:
             add_topics(cdp, session, topics)
         if not cdp.wait(session, "(b => b && b.getAttribute('save-disabled') === 'false')(document.querySelector('xhs-publish-btn'))", 15):
             raise Failure('PAGE_CHANGED', 'Save-draft button is not available')
         confirmed = None
+        submitted = True
         for _ in range(2):  # the toast is brief; one retry covers a click swallowed while the editor settles
             cdp.click_text(session, '暂存离开')
             confirmed = cdp.wait(session, "/保存成功/.test(document.body.innerText)", 8, 0.3)
@@ -567,6 +570,9 @@ def draft(browser, title, body, images, video, topics=()):
         except Failure:
             raise exc from None
         if now is not None and now > before:
+            if submitted:  # the save was clicked: the new entry may well be the complete note
+                raise Failure(exc.code, f'{exc.message} — the draft box now holds {now} notes; the note may have been '
+                                        'saved, check the draft box before retrying') from None
             raise Failure(exc.code, f'{exc.message} — but the editor autosaved an incomplete draft '
                                     f'(draft box now holds {now}); delete it in the draft box before retrying') from None
         raise

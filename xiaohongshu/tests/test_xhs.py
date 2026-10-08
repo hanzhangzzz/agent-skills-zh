@@ -286,6 +286,8 @@ class FakePage:
             text = json.JSONDecoder().raw_decode(expression[start:])[0]
             self.body += text.replace('\n', '') if self.paste_merges_lines else text
             return None
+        if 'lastElementChild.innerText' in expression:
+            return bool(self.body.split('\n')[-1].strip())
         if '.children].map' in expression:
             return [line.strip() for line in self.body.split('\n')]
         if 'includes(' in expression:
@@ -431,6 +433,21 @@ class Drafting(unittest.TestCase):
         self.run_draft(page, body='第一段\n评论区 @点点 看看', images=[self.media], topics=['历史人物'])
         self.assertEqual(page.body.split('\n'), ['第一段', '评论区 @点点 看看', ''])  # topics follow in the empty paragraph
         self.assertEqual(page.topics, ['历史人物'])
+
+    def test_text_mode_topics_also_get_their_own_paragraph(self):
+        page = FakePage(platform_topics={'历史人物'})
+        self.run_draft(page, body='评论区 @点点 看看', topics=['历史人物'])  # no media: the text-card flow
+        self.assertTrue(page.body.endswith('\n'))
+        self.assertEqual(page.topics, ['历史人物'])
+
+    def test_unconfirmed_save_is_not_called_an_incomplete_leftover(self):
+        page = FakePage()
+        page.click_text = lambda session, text: page.drafts.append('标题')  # saved, but no toast was seen
+        with self.assertRaises(Failure) as exc:
+            self.run_draft(page, images=[self.media])
+        self.assertEqual(exc.exception.code, 'DRAFT_UNCONFIRMED')
+        self.assertNotIn('incomplete', exc.exception.message)
+        self.assertIn('may have been saved', exc.exception.message)
 
     def test_unknown_topic_is_refused_before_saving(self):
         page = FakePage(platform_topics={'历史人物'})
