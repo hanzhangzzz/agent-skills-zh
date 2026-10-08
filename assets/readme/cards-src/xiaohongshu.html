@@ -18,15 +18,18 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 </style>
 <div class="card">
   <div class="top"><span class="name">xiaohongshu</span><span class="tag">搜索 → 本地知识材料</span></div>
-  <div class="one">一个 Skill 路由到确定性脚本：专用登录、搜索、翻收藏夹、单篇或批量下载、本地召回，以及存成平台草稿</div>
+  <div class="one">一个 Skill 路由到确定性脚本：多账号登录态、搜索、翻收藏夹、单篇或批量下载、本地召回，以及存成平台草稿</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>搜小红书上的 AI 游戏开发经验
-把我收藏里关于 UI 的几篇下载下来
+把小号收藏里关于 UI 的几篇下载下来
 下载这篇笔记并提取口播
-把这段文案和两张图存成小红书草稿</pre></div>
-    <div class="pane"><h4>输出结构</h4><pre>xhs.py login / search / albums / collected / fetch / recall / draft
+把这段文案和两张图存成工作号草稿</pre></div>
+    <div class="pane"><h4>输出结构</h4><pre>xhs.py profiles / login / search / albums
+       / collected / fetch / recall / draft
 
-用户数据目录/accounts/&lt;账号&gt;/
+用户数据目录/
+├── profiles/&lt;标签&gt;/   每号一套登录态与浏览器
+└── accounts/&lt;账号&gt;/
 ├── library.sqlite    搜索记录与知识索引
 └── notes/&lt;帖子ID&gt;/
     ├── source.json
@@ -35,6 +38,7 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
     ├── video.mp4      视频按需下载
     └── video.txt      口播按需转录
 
+--profile 标签 指定用哪个号；
 collected 按标题预筛收藏，选篇交给 Agent；
 fetch 可一次传多个 ID 批量下载；
 draft 支持文字/图文/视频三种模式，

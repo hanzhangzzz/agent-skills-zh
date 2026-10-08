@@ -300,6 +300,17 @@ class Browser:
         finally:
             cdp.close()
 
+    def running(self):
+        """Whether this profile's dedicated browser really answers, not just whether a port file exists."""
+        try:
+            cdp = self.connect()
+        except Failure as exc:
+            if exc.code in ('NEED_LOGIN', 'NETWORK_ERROR'):
+                return False
+            raise
+        cdp.close()
+        return True
+
     def close(self):
         cdp = self.connect()
         acknowledged = False
@@ -328,6 +339,17 @@ class Library:
     def __init__(self, root, account):
         self.directory = root / 'accounts' / hashlib.sha256(account.encode()).hexdigest()[:20]
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.open()
+
+    @classmethod
+    def at(cls, directory):
+        """Open an existing account library by directory, for reading across accounts."""
+        instance = cls.__new__(cls)
+        instance.directory = directory
+        instance.open()
+        return instance
+
+    def open(self):
         self.db = sqlite3.connect(self.directory / 'library.sqlite')
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''

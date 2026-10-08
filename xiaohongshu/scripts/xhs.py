@@ -519,6 +519,128 @@ def draft(browser, title, body, images, video):
             cdp.close()
 
 
+PROFILE_STATE = ('credentials.json', 'current-account.json', 'browser.json', 'browser-profile')
+PROFILE_LABEL = r'[\w-]{1,32}'
+MAX_PARALLEL_PROFILES = 2
+
+
+def profile_path(root, label):
+    """Per-account state: its own cookies, its own Chrome user data directory, its own lock.
+
+    Accounts must not share a browser profile: one cookie jar can only hold one logged-in account.
+    """
+    if not re.fullmatch(PROFILE_LABEL, label):
+        raise Failure('INVALID_INPUT', 'A profile label may only use letters, digits, Chinese characters, underscore and hyphen (at most 32)')
+    path = root / 'profiles' / label
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return path
+
+
+def migrate_single_profile(root):
+    """Move a pre-multi-account installation under profiles/default, login included.
+
+    Moving the files keeps the session: making the user scan a QR code again is the one cost this
+    refactor must not impose. A leftover at the old path, once profiles/default already holds that
+    state, is no longer the live state, so it is left alone instead of overwriting the new one.
+    """
+    target = root / 'profiles' / 'default'
+    pending = [name for name in PROFILE_STATE if (root / name).exists() and not (target / name).exists()]
+    if not pending:
+        return None
+    # Chrome keeps writing to its user data directory; moving it out from under a live browser
+    # splits the profile in two, so the old browser is closed before the move.
+    if 'browser-profile' in pending and (root / 'browser.json').is_file() and Browser(root).running():
+        Browser(root).close()
+    target.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for name in pending:
+        (root / name).rename(target / name)
+    return 'default'
+
+
+def default_label(root):
+    pointer = root / 'default-profile'
+    if pointer.is_file():
+        label = pointer.read_text().strip()
+        if re.fullmatch(PROFILE_LABEL, label):
+            return label
+    return 'default'
+
+
+@contextlib.contextmanager
+def parallel_slot(root):
+    """Cap how many profiles work at once: each extra account means another Chrome and another
+    request stream from the same address, which is what the platform's risk control watches."""
+    handles = []
+    try:
+        for index in range(MAX_PARALLEL_PROFILES):
+            handle = (root / f'slot-{index}.lock').open('w')
+            handles.append(handle)
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            yield
+            return
+        raise Failure('BUSY', f'{MAX_PARALLEL_PROFILES} accounts are already working; wait for one to finish instead of widening the footprint')
+    finally:
+        for handle in handles:
+            handle.close()
+
+
+def catalog(root, set_default, migrated):
+    """List the known accounts. The label the user chose is the key: nicknames change and repeat."""
+    if set_default:
+        if not (profile_path(root, set_default) / 'credentials.json').is_file():
+            raise Failure('NEED_LOGIN', f'Profile {set_default!r} has no verified login yet; run login --profile {set_default} first')
+        (root / 'default-profile').write_text(set_default)
+    current, items = default_label(root), []
+    for profile in sorted((root / 'profiles').glob('*')) if (root / 'profiles').is_dir() else []:
+        if not profile.is_dir():
+            continue
+        account = profile / 'current-account.json'
+        user = json.loads(account.read_text()) if account.is_file() else {}
+        credentials = profile / 'credentials.json'
+        items.append({'label': profile.name, 'nickname': user.get('nickname', ''), 'account_id': user.get('id', ''),
+                      'logged_in': credentials.is_file(), 'browser_running': Browser(profile).running(),
+                      'default': profile.name == current,
+                      'last_verified': time.strftime('%Y-%m-%d %H:%M', time.localtime(credentials.stat().st_mtime)) if credentials.is_file() else ''})
+    return {'profiles': items, 'default': current, 'migrated': migrated}
+
+
+def close_all(root):
+    """Close every profile's dedicated browser; leftover Chrome instances are the real cost of several accounts."""
+    closed, already_gone, failed = [], [], []
+    for profile in sorted((root / 'profiles').glob('*')) if (root / 'profiles').is_dir() else []:
+        if not (profile / 'browser.json').is_file():
+            continue
+        try:
+            Browser(profile).close()
+            closed.append(profile.name)
+        except Failure as exc:
+            if exc.code == 'NETWORK_ERROR':
+                (profile / 'browser.json').unlink(missing_ok=True)
+                already_gone.append(profile.name)
+            else:
+                failed.append({'profile': profile.name, 'code': exc.code, 'message': exc.message})
+    return {'closed': closed, 'already_gone': already_gone, 'failed': failed}
+
+
+def recall_all(root, query, limit):
+    """Keyword recall across every account library.
+
+    The saved material is public notes, so an answer archived under one account is still the right
+    answer for a question asked under another; only the platform sessions are account bound.
+    """
+    found = {}
+    for directory in sorted((root / 'accounts').glob('*')):
+        if not (directory / 'library.sqlite').is_file():
+            continue
+        with contextlib.closing(Library.at(directory)) as library:
+            for note in library.recall(query, limit):
+                found.setdefault(note['id'], note)
+    return sorted(found.values(), key=lambda note: note['updated'], reverse=True)[:limit]
+
+
 def install(home, apply, restore=None):
     source = HERE.parent.resolve()
     home = home.expanduser().resolve()
@@ -595,10 +717,14 @@ def install(home, apply, restore=None):
 def parser():
     p = argparse.ArgumentParser(description='One Xiaohongshu skill, local scripts and knowledge')
     p.add_argument('--data-dir', type=Path, default=Path.home() / '.local/share/xiaohongshu')
+    p.add_argument('--profile', help='Which account to act as (label from the profiles command); defaults to the recorded default profile')
     sub = p.add_subparsers(dest='command', required=True)
+    listing = sub.add_parser('profiles', help='List the known accounts and which one is the default')
+    listing.add_argument('--set-default', help='Make this label the account used when --profile is omitted')
     login = sub.add_parser('login'); login.add_argument('--finish', action='store_true')
     login.add_argument('--session-file', type=Path, help='Explicit one-time import of an already authorized cookie JSON; never auto-scan browsers')
-    sub.add_parser('status'); sub.add_parser('close')
+    sub.add_parser('status')
+    shutdown = sub.add_parser('close'); shutdown.add_argument('--all', action='store_true', help='Close the dedicated browser of every account, not just the selected one')
     search = sub.add_parser('search'); search.add_argument('query'); search.add_argument('--page', type=int, default=1)
     search.add_argument('--sort', choices=['general', 'popular', 'latest'], default='general'); search.add_argument('--type', choices=['all', 'video', 'image'], default='all')
     download = sub.add_parser('fetch', help='Read and save one or more notes; repeat the reference to download a batch')
@@ -609,6 +735,7 @@ def parser():
     saved.add_argument('--keyword', action='append', default=[], help='Keep candidates whose title contains this (repeatable, matched case-insensitively)')
     saved.add_argument('--limit', type=int, default=20); saved.add_argument('--pages', type=int, default=5, help='How many platform pages to scan (10 notes each)')
     recall = sub.add_parser('recall'); recall.add_argument('query'); recall.add_argument('--limit', type=int, default=5)
+    recall.add_argument('--all-accounts', action='store_true', help='Search the material saved under every account, not only the selected one')
     note = sub.add_parser('draft', help='Save a note draft (text / images / video) in the creator site via the dedicated browser')
     note.add_argument('--title', required=True); text = note.add_mutually_exclusive_group(required=True)
     text.add_argument('--body'); text.add_argument('--body-file', type=Path)
@@ -623,16 +750,27 @@ def execute(args):
         return install(args.home, args.apply, args.restore)
     root = args.data_dir.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with (root / 'run.lock').open('w') as lock:
+    migrated = migrate_single_profile(root)
+    if args.command == 'profiles':
+        return catalog(root, args.set_default, migrated)
+    if args.command == 'close' and args.all:
+        return close_all(root)
+    label = args.profile or default_label(root)
+    profile = profile_path(root, label)
+    with (profile / 'run.lock').open('w') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise Failure('BUSY', 'Another operation is running for this profile') from None
-        return operation(args, root)
+            raise Failure('BUSY', f'Another operation is already running for account {label!r}') from None
+        with parallel_slot(root):
+            result = operation(args, root, profile)
+    if not (root / 'default-profile').is_file() and (profile / 'credentials.json').is_file():
+        (root / 'default-profile').write_text(label)  # the first verified account becomes the default
+    return {**result, 'profile': label} if isinstance(result, dict) else result
 
 
-def operation(args, root):
-    browser = Browser(root)
+def operation(args, root, profile):
+    browser = Browser(profile)
     if args.command == 'close':
         browser.close()
         return {'browser': 'closed'}
@@ -641,15 +779,17 @@ def operation(args, root):
     if args.command == 'draft':
         body = args.body_file.read_text(encoding='utf-8') if args.body_file else args.body
         return draft(browser, args.title.strip(), body.strip(), args.image, args.video)
-    current = root / 'current-account.json'
-    credentials = root / 'credentials.json'
+    current = profile / 'current-account.json'
+    credentials = profile / 'credentials.json'
     if args.command == 'recall':
         if not 1 <= args.limit <= 50:
             raise Failure('INVALID_INPUT', 'Limit must be 1–50')
+        if args.all_accounts:
+            return {'mode': 'offline_keyword', 'scope': 'all_accounts', 'items': recall_all(root, args.query, args.limit)}
         if not current.is_file():
-            raise Failure('NEED_LOGIN', 'No local account selected')
+            raise Failure('NEED_LOGIN', 'This account has no verified login yet; run login, or pass --all-accounts to search every saved account')
         with contextlib.closing(Library(root, json.loads(current.read_text())['id'])) as library:
-            return {'mode': 'offline_keyword', 'items': library.recall(args.query, args.limit)}
+            return {'mode': 'offline_keyword', 'scope': 'this_account', 'items': library.recall(args.query, args.limit)}
     if args.command == 'login':
         cookies = json.loads(args.session_file.read_text()) if args.session_file else browser.cookies()
         if not isinstance(cookies, dict):

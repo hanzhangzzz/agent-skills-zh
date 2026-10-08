@@ -51,10 +51,10 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 ```json
 {
   "name": "xiaohongshu",
-  "version": "3.2.0",
-  "description": "小红书统一入口：专用登录、搜索、翻自己的收藏与收藏夹、单篇或批量图文/视频下载、口播转录、本地关键词召回，以及把文字/图文/视频存成平台草稿。内置签名源码，无独立 CLI/MCP/RAG 服务。",
+  "version": "3.3.0",
+  "description": "小红书统一入口：多账号登录态管理、搜索、翻自己的收藏与收藏夹、单篇或批量图文/视频下载、口播转录、本地关键词召回，以及把文字/图文/视频存成平台草稿。内置签名源码，无独立 CLI/MCP/RAG 服务。",
   "trigger": "/xiaohongshu",
-  "keywords": ["xiaohongshu", "rednote", "小红书", "搜索", "收藏夹", "批量下载", "草稿", "知识库", "Whisper"],
+  "keywords": ["xiaohongshu", "rednote", "小红书", "多账号", "矩阵号", "搜索", "收藏夹", "批量下载", "草稿", "Whisper"],
   "compatibility": "Codex, Claude Code; macOS/Linux",
   "install_path": "xiaohongshu/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",

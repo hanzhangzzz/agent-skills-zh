@@ -147,7 +147,7 @@ assert all(k in headers for k in ['x-s','x-t','x-s-common'])
         result = subprocess.run([sys.executable, '-S', str(HERE / 'scripts/xhs.py'), '--data-dir', str(self.root), 'login', '--session-file', str(path)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout)['error']['code'], 'INVALID_SESSION')
-        self.assertFalse((self.root / 'credentials.json').exists())
+        self.assertFalse((self.root / 'profiles/default/credentials.json').exists())
 
     def test_install_does_not_archive_its_own_installed_source(self):
         source = self.root / '.codex/skills/xiaohongshu'
@@ -197,7 +197,7 @@ assert all(k in headers for k in ['x-s','x-t','x-s-common'])
         result = subprocess.run([sys.executable, '-S', str(HERE / 'scripts/xhs.py'), *base, 'recall', '游戏'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['data']['items'][0]['body'], '完整的中文游戏正文')
-        self.assertEqual((self.root / 'credentials.json').stat().st_mode & 0o777, 0o600)
+        self.assertEqual((self.root / 'profiles/default/credentials.json').stat().st_mode & 0o777, 0o600)
 
     def test_share_redirect_rejects_foreign_destination_before_request(self):
         class Opener:
@@ -511,6 +511,151 @@ class Collections(unittest.TestCase):
             with self.assertRaises(Failure) as exc:
                 xhs.fetch_many(None, self.library, ['one', 'two'], False, False)
         self.assertEqual(exc.exception.code, 'INCOMPLETE_RESPONSE')
+
+
+class Accounts(unittest.TestCase):
+    """Several accounts on one machine: the risk is state leaking between them."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def login(self, label, account, nickname):
+        cookies = self.root / f'{label}.json'
+        cookies.write_text(json.dumps({'a1': 'fixture', 'web_session': f'secret-{label}'}))
+        def response(url, payload=None, headers=None):
+            return {'success': True, 'data': {'user_id': account, 'nickname': nickname, 'guest': False}}
+        with patch.object(xhs, 'json_request', side_effect=response), patch.object(xhs.time, 'sleep'):
+            return xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), '--profile', label, 'login', '--session-file', str(cookies)]))
+
+    def test_two_accounts_keep_separate_sessions_and_browser_profiles(self):
+        self.assertEqual(self.login('工作号', 'account-one', '甲')['user']['nickname'], '甲')
+        self.assertEqual(self.login('小号', 'account-two', '乙')['user']['nickname'], '乙')
+        first, second = self.root / 'profiles/工作号', self.root / 'profiles/小号'
+        self.assertEqual(json.loads((first / 'credentials.json').read_text())['cookies']['web_session'], 'secret-工作号')
+        self.assertEqual(json.loads((second / 'credentials.json').read_text())['cookies']['web_session'], 'secret-小号')
+        self.assertNotEqual(xhs.Browser(first).connection, xhs.Browser(second).connection)
+        self.assertEqual((self.root / 'default-profile').read_text(), '工作号', 'the first verified account becomes the default')
+
+    def test_default_account_is_used_when_no_profile_is_given(self):
+        self.login('工作号', 'account-one', '甲')
+        self.login('小号', 'account-two', '乙')
+        listed = xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'profiles', '--set-default', '小号']))
+        self.assertEqual(listed['default'], '小号')
+        self.assertEqual({p['label']: p['nickname'] for p in listed['profiles']}, {'工作号': '甲', '小号': '乙'})
+        self.assertNotIn('secret-', json.dumps(listed), 'the account list must not carry cookies')
+        used = []
+        def response(url, payload=None, headers=None):
+            used.append(headers['cookie'])
+            return {'success': True, 'data': {'user_id': 'account-two', 'nickname': '乙', 'guest': False}}
+        with patch.object(xhs, 'json_request', side_effect=response), patch.object(xhs.time, 'sleep'):
+            status = xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'status']))
+        self.assertEqual((status['profile'], status['user']['nickname']), ('小号', '乙'))
+        self.assertIn('secret-小号', used[0], 'status without --profile must use the default account session')
+
+    def test_setting_a_default_requires_a_verified_login(self):
+        with self.assertRaises(Failure) as exc:
+            xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'profiles', '--set-default', '没登录过']))
+        self.assertEqual(exc.exception.code, 'NEED_LOGIN')
+        self.assertFalse((self.root / 'default-profile').exists())
+
+    def test_profile_labels_cannot_escape_the_data_directory(self):
+        for label in ('../evil', 'a/b', '', '.', 'x' * 33):
+            with self.assertRaises(Failure) as exc:
+                xhs.profile_path(self.root, label)
+            self.assertEqual(exc.exception.code, 'INVALID_INPUT')
+        self.assertFalse((self.root.parent / 'evil').exists())
+
+    def test_existing_single_account_install_is_migrated_without_a_new_login(self):
+        write_json(self.root / 'credentials.json', {'cookies': {'a1': 'fixture'}, 'user': {'id': 'account-one'}})
+        write_json(self.root / 'current-account.json', {'id': 'account-one', 'nickname': '甲'})
+        (self.root / 'browser-profile').mkdir()
+        (self.root / 'browser-profile/Cookies').write_text('chrome state')
+        listed = xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'profiles']))
+        self.assertEqual(listed['migrated'], 'default')
+        self.assertEqual([(p['label'], p['nickname'], p['logged_in']) for p in listed['profiles']], [('default', '甲', True)])
+        self.assertEqual((self.root / 'profiles/default/browser-profile/Cookies').read_text(), 'chrome state')
+        self.assertFalse((self.root / 'credentials.json').exists())
+        self.assertIsNone(xhs.migrate_single_profile(self.root), 'migration must not run twice')
+
+    def test_migration_closes_the_running_browser_before_moving_its_profile(self):
+        write_json(self.root / 'credentials.json', {'cookies': {'a1': 'fixture'}, 'user': {'id': 'account-one'}})
+        write_json(self.root / 'browser.json', {'port': 1, 'websocket': 'ws://127.0.0.1:1/x'})
+        (self.root / 'browser-profile').mkdir()
+        (self.root / 'browser-profile/Cookies').write_text('chrome state')
+        closed = []
+        class Fake:
+            def __init__(self, path):
+                self.path = path
+            def running(self):
+                return True
+            def close(self):
+                closed.append(self.path)
+        with patch.object(xhs, 'Browser', Fake):
+            self.assertEqual(xhs.migrate_single_profile(self.root), 'default')
+        self.assertEqual(closed, [self.root], 'moving a live Chrome user data directory splits the profile')
+        self.assertEqual((self.root / 'profiles/default/browser-profile/Cookies').read_text(), 'chrome state')
+
+    def test_a_leftover_at_the_old_path_never_overwrites_the_migrated_profile(self):
+        write_json(self.root / 'profiles/default/credentials.json', {'cookies': {'a1': 'live'}, 'user': {'id': 'account-one'}})
+        (self.root / 'profiles/default/browser-profile').mkdir()
+        (self.root / 'profiles/default/browser-profile/Cookies').write_text('live state')
+        (self.root / 'browser-profile').mkdir()
+        (self.root / 'browser-profile/Cookies').write_text('stale shell')
+        self.assertIsNone(xhs.migrate_single_profile(self.root))
+        self.assertEqual((self.root / 'profiles/default/browser-profile/Cookies').read_text(), 'live state')
+
+    def test_only_two_accounts_work_at_once(self):
+        with xhs.parallel_slot(self.root), xhs.parallel_slot(self.root):
+            with self.assertRaises(Failure) as exc:
+                with xhs.parallel_slot(self.root):
+                    pass
+        self.assertEqual(exc.exception.code, 'BUSY')
+        with xhs.parallel_slot(self.root):
+            pass  # the slots are released again
+
+    def test_the_same_account_cannot_run_twice_at_once(self):
+        profile = xhs.profile_path(self.root, 'default')
+        with (profile / 'run.lock').open('w') as holder:
+            __import__('fcntl').flock(holder, __import__('fcntl').LOCK_EX | __import__('fcntl').LOCK_NB)
+            with self.assertRaises(Failure) as exc:
+                xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'status']))
+        self.assertEqual(exc.exception.code, 'BUSY')
+
+    def test_close_all_reports_each_account_and_clears_dead_endpoints(self):
+        for label in ('一号', '二号', '三号'):
+            write_json(xhs.profile_path(self.root, label) / 'browser.json', {'port': 1, 'websocket': 'ws://127.0.0.1:1/x'})
+        xhs.profile_path(self.root, '没开浏览器的号')
+        class Fake:
+            def __init__(self, profile):
+                self.profile = profile
+            def close(self):
+                if self.profile.name == '二号':
+                    raise Failure('NETWORK_ERROR', 'already gone')
+                if self.profile.name == '三号':
+                    raise Failure('BROWSER_CLOSE_UNCONFIRMED', 'still running')
+        with patch.object(xhs, 'Browser', Fake):
+            result = xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'close', '--all']))
+        self.assertEqual(result['closed'], ['一号'])
+        self.assertEqual(result['already_gone'], ['二号'])
+        self.assertEqual([f['profile'] for f in result['failed']], ['三号'])
+        self.assertFalse((self.root / 'profiles/二号/browser.json').exists())
+        self.assertTrue((self.root / 'profiles/三号/browser.json').exists(), 'an unconfirmed close must not drop the endpoint')
+
+    def test_recall_can_cross_accounts_because_the_material_is_public(self):
+        for account, title in (('account-one', '甲号存的 UI 规范'), ('account-two', '乙号存的 UI 调研')):
+            library = Library(self.root, account)
+            library.save({'id': account.encode().hex()[:24], 'title': title, 'body': 'ui', 'transcript': '',
+                          'url': 'https://www.xiaohongshu.com/explore/' + account.encode().hex()[:24], 'type': 'normal'})
+            library.close()
+        write_json(self.root / 'profiles/甲/current-account.json', {'id': 'account-one'})
+        base = ['--data-dir', str(self.root), '--profile', '甲', 'recall', 'UI']
+        mine = xhs.execute(xhs.parser().parse_args(base))
+        self.assertEqual([i['title'] for i in mine['items']], ['甲号存的 UI 规范'])
+        both = xhs.execute(xhs.parser().parse_args([*base, '--all-accounts']))
+        self.assertEqual({i['title'] for i in both['items']}, {'甲号存的 UI 规范', '乙号存的 UI 调研'})
+        self.assertEqual(both['scope'], 'all_accounts')
 
 
 if __name__ == '__main__':
