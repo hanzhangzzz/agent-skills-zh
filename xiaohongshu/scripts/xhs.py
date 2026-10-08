@@ -126,8 +126,8 @@ class API:
             raise Failure('INCOMPLETE_RESPONSE', 'Collection response lacks notes; this does not mean the collection is empty')
         items = []
         for note in data['notes']:
-            nid = note.get('note_id', '')
-            if not re.fullmatch('[0-9a-f]{24}', nid):
+            nid = note.get('note_id')
+            if not isinstance(nid, str) or not re.fullmatch('[0-9a-f]{24}', nid):
                 continue
             user = note.get('user') or {}
             items.append({'id': nid, 'title': note.get('display_title', ''), 'type': note.get('type'),
@@ -559,7 +559,9 @@ def migrate_single_profile(root):
         Browser(root).close()
     target.mkdir(parents=True, exist_ok=True, mode=0o700)
     for name in pending:
-        (root / name).rename(target / name)
+        source = root / name
+        if source.exists():  # closing the browser above already removes its endpoint file
+            source.rename(target / name)
     return 'default'
 
 

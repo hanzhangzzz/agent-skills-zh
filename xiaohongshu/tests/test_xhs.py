@@ -478,6 +478,13 @@ class Collections(unittest.TestCase):
             self.assertEqual(exc.exception.code, code)
         self.assertEqual(self.requests, [])
 
+    def test_a_broken_entry_is_skipped_instead_of_crashing_the_listing(self):
+        api = self.api_with_pages([{'cursor': '', 'has_more': False, 'notes': [
+            {'note_id': None, 'display_title': '占位'}, {'display_title': '没有 id'},
+            {'note_id': 'a' * 24, 'display_title': '正常一篇', 'type': 'normal', 'user': {'nickname': '作者'}, 'xsec_token': 't'}]}])
+        result = xhs.collected(api, self.library, 'uid', None, [], 20, 5)
+        self.assertEqual([i['title'] for i in result['items']], ['正常一篇'])
+
     def test_missing_notes_is_not_an_empty_collection(self):
         api = self.api_with_pages([{'has_more': False}])
         with self.assertRaises(Failure) as exc:
@@ -669,6 +676,23 @@ class Accounts(unittest.TestCase):
             self.assertEqual(xhs.migrate_single_profile(self.root), 'default')
         self.assertEqual(closed, [self.root], 'moving a live Chrome user data directory splits the profile')
         self.assertEqual((self.root / 'profiles/default/browser-profile/Cookies').read_text(), 'chrome state')
+
+    def test_closing_the_browser_during_migration_does_not_break_the_move(self):
+        write_json(self.root / 'credentials.json', {'cookies': {'a1': 'fixture'}, 'user': {'id': 'account-one'}})
+        write_json(self.root / 'browser.json', {'port': 1, 'websocket': 'ws://127.0.0.1:1/x'})
+        (self.root / 'browser-profile').mkdir()
+        root = self.root
+        class Fake:
+            def __init__(self, path):
+                self.path = path
+            def running(self):
+                return True
+            def close(self):
+                (root / 'browser.json').unlink()  # the real close removes its own endpoint file
+        with patch.object(xhs, 'Browser', Fake):
+            self.assertEqual(xhs.migrate_single_profile(self.root), 'default')
+        self.assertTrue((self.root / 'profiles/default/credentials.json').is_file())
+        self.assertFalse((self.root / 'profiles/default/browser.json').exists(), 'a closed endpoint is not carried over')
 
     def test_a_leftover_at_the_old_path_never_overwrites_the_migrated_profile(self):
         write_json(self.root / 'profiles/default/credentials.json', {'cookies': {'a1': 'live'}, 'user': {'id': 'account-one'}})
