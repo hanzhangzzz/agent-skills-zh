@@ -6,7 +6,7 @@ license: Apache-2.0
 metadata:
   trigger: /xiaohongshu
   compatibility: Codex, Claude Code; macOS/Linux, Python 3.10+
-  version: "3.3.0"
+  version: "3.3.1"
 ---
 
 # 小红书统一入口
@@ -17,7 +17,7 @@ metadata:
 
 - 从本 SKILL.md 的实际安装位置定位脚本；不假设安装在某个用户目录。
 - 登录、搜索、正文读取、本地召回只需要 Python 3.10+ 标准库与内置签名源码；首次登录还需要 Google Chrome。当前不支持 Windows。
-- 视频下载需要 yt-dlp、ffprobe；口播提取另需 Whisper medium 与 ffmpeg。缺少相应工具时报告 `MISSING_TOOL`，不要自动全局安装。
+- 视频下载需要 yt-dlp、ffprobe；口播提取另需 Whisper medium 与 ffmpeg。除 PATH 外还会在 `~/.local/bin`、`/opt/homebrew/bin`、`/usr/local/bin`、`~/bin` 里找这些工具（cron、launchd 不读登录 shell 的 PATH）。仍找不到时报告 `MISSING_TOOL`，不要自动全局安装。
 - 只在用户请求相应能力时使用媒体工具；普通搜索不自动下载全部帖子。
 
 示例中的 `$SKILL_DIR` 代表已定位的本 Skill 目录。所有命令输出单个 JSON 对象，包含 `ok`、`schema_version` 和 `data` 或 `error`。检查真实字段，不根据退出码独自推断内容完整。
@@ -96,6 +96,8 @@ draft 只写入草稿箱，不发布、不定时发布、不改动已发布笔�
 ## 单入口安装
 
 先运行 `python3 "$SKILL_DIR/scripts/xhs.py" install` 查看迁移对象。用户已要求统一本机入口时执行 `install --apply`：旧小红书入口移到不可发现的备份目录，Codex 与 Claude 各保留指向同一源码的 xiaohongshu 链接。
+
+换一台电脑时：代码跟仓库走，登录态不跟着走。新机器上先 `install --apply` 建链接，再 `login` 扫码登录每个要用的账号（`--profile 标签` 分别登），数据目录和素材库都是本机的，不与旧机同步。
 
 恢复使用 `install --restore "返回的备份目录"`。安装程序不修改已有用户知识或 Chrome profile；安装成功不表示当前会话已经重新加载技能，必要时新开会话验证发现结果。
 

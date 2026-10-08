@@ -116,6 +116,18 @@ assert all(k in headers for k in ['x-s','x-t','x-s-common'])
         self.assertEqual(len(db.recall('需要', 5)), 1)
         db.close()
 
+    def test_tools_installed_per_user_are_found_without_a_login_shell_path(self):
+        folder = self.root / 'user-bin'
+        folder.mkdir()
+        binary = folder / 'yt-dlp'
+        binary.write_text('#!/bin/sh\necho downloaded\n')
+        binary.chmod(0o755)
+        with patch.object(xhs.shutil, 'which', return_value=None), patch.object(xhs, 'TOOL_PATHS', (str(folder),)):
+            self.assertEqual(xhs.tool('yt-dlp', []), 'downloaded\n')
+            with self.assertRaises(Failure) as exc:
+                xhs.tool('whisper', [])
+        self.assertEqual(exc.exception.code, 'MISSING_TOOL')
+
     def test_credentials_not_forwarded_to_other_domains(self):
         with self.assertRaises(Failure):
             xhs.note_reference('https://example.com/explore/' + NID)

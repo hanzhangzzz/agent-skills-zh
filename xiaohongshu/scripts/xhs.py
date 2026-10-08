@@ -181,10 +181,16 @@ class Redirect(Exception):
         self.url = url
 
 
+TOOL_PATHS = ('~/.local/bin', '/opt/homebrew/bin', '/usr/local/bin', '~/bin')
+
+
 def tool(command, args):
-    binary = shutil.which(command)
+    # PATH is not the same everywhere this runs: cron, launchd and desktop launchers do not read a
+    # login shell, so a tool the user installed per-user is invisible there. Look where they live.
+    binary = shutil.which(command) or next((str(found) for found in (Path(folder).expanduser() / command for folder in TOOL_PATHS)
+                                            if found.is_file() and os.access(found, os.X_OK)), None)
     if not binary:
-        raise Failure('MISSING_TOOL', f'Install {command} for this operation')
+        raise Failure('MISSING_TOOL', f'Install {command}, or put it on PATH or in one of {", ".join(TOOL_PATHS)}')
     result = subprocess.run([binary, *args], capture_output=True, text=True)
     if result.returncode:
         raise Failure('TOOL_FAILED', f'{command} failed (exit {result.returncode}); partial output is retained, no automatic retry')
