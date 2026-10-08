@@ -1,12 +1,12 @@
 ---
 name: xiaohongshu
 description: |
-  小红书统一入口：登录自己的专用账号、搜索帖子、下载单篇图文或视频并提取口播、检索逐次积累的本地材料；也支持小红书文案起草及已授权发布的浏览器指引。用于搜小红书、下载小红书、提取口播、基于小红书材料回答、写小红书文案。不依赖独立小红书 CLI、MCP 或 RAG 服务。
+  小红书统一入口：登录自己的专用账号、搜索帖子、翻自己的收藏与收藏夹、下载单篇或批量图文视频并提取口播、检索逐次积累的本地材料；也支持小红书文案起草、存平台草稿及已授权发布的浏览器指引。用于搜小红书、下载小红书、下载我收藏的帖子、提取口播、基于小红书材料回答、写小红书文案。不依赖独立小红书 CLI、MCP 或 RAG 服务。
 license: Apache-2.0
 metadata:
   trigger: /xiaohongshu
   compatibility: Codex, Claude Code; macOS/Linux, Python 3.10+
-  version: "3.1.0"
+  version: "3.2.0"
 ---
 
 # 小红书统一入口
@@ -29,13 +29,24 @@ metadata:
 | 首次登录 | `python3 "$SKILL_DIR/scripts/xhs.py" login`；让用户在有头专用 Chrome 完成登录，再执行 `login --finish` |
 | 登录检查 | `python3 "$SKILL_DIR/scripts/xhs.py" status` |
 | 搜索帖子 | `python3 "$SKILL_DIR/scripts/xhs.py" search "关键词"`；可用 `--page`、`--sort general/popular/latest`、`--type all/video/image` |
-| 读取并保存帖子正文 | `python3 "$SKILL_DIR/scripts/xhs.py" fetch "帖子链接或ID"` |
+| 读取并保存帖子正文 | `python3 "$SKILL_DIR/scripts/xhs.py" fetch "帖子链接或ID"`；一次传多个链接或 ID 即批量下载，逐篇处理 |
+| 列出我的收藏夹 | `python3 "$SKILL_DIR/scripts/xhs.py" albums`；读专用浏览器里的个人主页收藏夹标签页（浏览器没开会自动后台启动），结果缓存供下次按名字取用 |
+| 找我收藏过的帖子 | `python3 "$SKILL_DIR/scripts/xhs.py" collected`；`--album 收藏夹名` 只看一个收藏夹，`--keyword 词` 按标题预筛（可重复），`--limit`、`--pages` 控制取多少（收藏列表每页约 10 篇，收藏夹每页约 30 篇） |
 | 下载单篇图文/视频 | 在 fetch 后加 `--media` |
 | 下载视频并提取口播 | 在 fetch 后加 `--transcribe`；产物标记为未人工校对 |
 | 查询已有材料 | `python3 "$SKILL_DIR/scripts/xhs.py" recall "关键词"`；离线关键词召回，最多默认5篇，不是向量语义检索 |
 | 存成平台草稿 | `python3 "$SKILL_DIR/scripts/xhs.py" draft --title "标题" --body "正文"`；加 `--image 路径`（可重复，最多18张）存图文，加 `--video 路径` 存视频，都不加则走平台「写文字」生成文字卡片。正文长可用 `--body-file 路径` |
 | 写文案、人工发布 | 阅读 `references/publishing.md`；draft 只存草稿，发布由用户在专用浏览器点击 |
 | 结束使用专用浏览器 | `python3 "$SKILL_DIR/scripts/xhs.py" close`；用户还在查看或处理登录时保留窗口 |
+
+## 收藏夹批量下载
+
+用户要「把收藏里关于某主题的几篇下载下来」时：
+
+1. 先 `albums` 看有没有对应主题的收藏夹。有就 `collected --album 名字`；没有就 `collected --keyword 词`，词取用户说法及其常见写法（如 ui、UI、设计）。标题预筛只匹配标题，漏召回很正常，必要时放宽关键词或加大 `--pages`。
+2. 读返回的标题自己判断哪几篇真属于该主题，再确认篇数；用户说「几篇」且没给数字时按最近 3–5 篇并说明取了几篇。平台返回的是收藏页顺序，脚本不另外按时间排序。
+3. 把选中的 ID 一次性交给 `fetch ID1 ID2 ... --media`，需要口播再加 `--transcribe`。转录在 CPU 上大约是视频时长的 2–4 倍（实测 6 分钟视频约 22 分钟），先按这个量级告诉用户预计耗时，再开始跑。
+4. 逐篇结果在 `notes` 里，失败的在 `failed` 里。报告实际成功几篇、落在哪个目录，不要把请求篇数当成功篇数。遇到 `RISK_CONTROL` 或 `NEED_LOGIN` 时脚本会停下并把其余标成 `SKIPPED`，照实报告。
 
 ## 搜索与回答
 
@@ -49,7 +60,7 @@ metadata:
 
 数据默认放在用户主目录下 `.local/share/xiaohongshu`，可在子命令前用 `--data-dir` 指定。每个已核实账号使用独立的 SQLite 和笔记目录；Skill 源码与用户知识分离。
 
-search 保存候选记录与详情访问引用；只有 fetch 保存的完整材料进入本地召回。按帖子 ID 去重，已保存正文、媒体和字幕可复用，不重复跑转录。价格、日期等需要新鲜数据时不要把旧缓存当现状；当前需要更新单篇内容时先说明缓存范围，由用户决定是否重新获取。
+search、collected 保存候选记录与详情访问引用；收藏夹标称篇数可能大于接口实际能取到的篇数，已删除或已不可见的帖子仍计入显示数字，按返回的条目报告而不是按标称数字；只有 fetch 保存的完整材料进入本地召回。collected 不改动平台上的收藏，只读；收藏夹列表取自专用浏览器渲染的页面（平台没有可签名的列表接口），收藏夹里的帖子仍走接口。按帖子 ID 去重，已保存正文、媒体和字幕可复用，不重复跑转录。价格、日期等需要新鲜数据时不要把旧缓存当现状；当前需要更新单篇内容时先说明缓存范围，由用户决定是否重新获取。
 
 账号凭证只保存在本地私有文件，不输出到回答、日志、Git 或外部模型。只连接本脚本创建的 Chrome endpoint，不扫描主浏览器、不注入旧 Cookie。不承诺登录永久有效。
 
@@ -65,6 +76,7 @@ draft 只写入草稿箱，不发布、不定时发布、不改动已发布笔�
 - `UPLOAD_FAILED`：素材未被编辑器接收，此时没有保存任何草稿；检查文件格式与大小后重试，不要声称已存草稿。
 - `DRAFT_UNCONFIRMED`：没有拿到平台确认，或草稿箱里最新一条不是本次标题。报告未确认，让用户在专用浏览器核对；不要重复提交。
 - `PAGE_CHANGED`：创作页结构与脚本预期不符，可能是平台改版。报告具体步骤，不要改用猜测的选择器硬点。
+- `ALBUM_UNKNOWN`、`ALBUM_AMBIGUOUS`：收藏夹名没缓存或匹配到多个。先跑 `albums`，或用返回的完整名字、收藏夹链接重试；不要猜 ID。
 - `PERMISSION_DENIED`：报告不可写的安装/数据边界，不尝试绕过。
 
 ## 单入口安装

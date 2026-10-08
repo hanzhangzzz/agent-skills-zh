@@ -335,7 +335,18 @@ class Library:
             CREATE TABLE IF NOT EXISTS refs(id TEXT PRIMARY KEY,token TEXT NOT NULL,source TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS searches(query TEXT NOT NULL,created REAL NOT NULL,items TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS sessions(key TEXT PRIMARY KEY,search_id TEXT NOT NULL,used REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS albums(id TEXT PRIMARY KEY,name TEXT NOT NULL,notes INTEGER,seen REAL NOT NULL);
         ''')
+
+    def albums_save(self, albums):
+        """Cache the album list so later calls can resolve a name without reopening the browser."""
+        for album in albums:
+            self.db.execute('INSERT INTO albums VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,notes=excluded.notes,seen=excluded.seen',
+                            (album['id'], album['name'], album.get('notes'), time.time()))
+        self.db.commit()
+
+    def albums_list(self):
+        return [dict(row) for row in self.db.execute('SELECT id,name,notes,seen FROM albums ORDER BY seen DESC,name')]
 
     def search_session(self, query, sort, kind, ttl=600):
         """Reuse one platform search_id per (query, sort, kind) so later pages continue the same result set."""
@@ -359,6 +370,12 @@ class Library:
         self.db.execute('INSERT INTO searches VALUES(?,?,?)', (query, time.time(), json.dumps(items, ensure_ascii=False)))
         for item in items:
             self.db.execute('INSERT OR REPLACE INTO refs VALUES(?,?,?)', (item['id'], item.get('xsec_token', ''), 'pc_search'))
+        self.db.commit()
+
+    def reference_save(self, items):
+        """Keep each note's xsec_token so a later fetch can open the note detail."""
+        for item in items:
+            self.db.execute('INSERT OR REPLACE INTO refs VALUES(?,?,?)', (item['id'], item.get('xsec_token', ''), item.get('source', 'pc_feed')))
         self.db.commit()
 
     def reference(self, note_id):

@@ -386,5 +386,132 @@ class Drafting(unittest.TestCase):
         self.assertEqual(self.run_draft(page, images=[self.media])['title'], '标题')
 
 
+class FakeProfile:
+    """Stands in for the profile album tab: the list is rendered, so duplicates and labels are the risk."""
+
+    def __init__(self, links, href='https://www.xiaohongshu.com/user/profile/u?tab=fav&subTab=board'):
+        self.links, self.href, self.closed = links, href, []
+
+    def open(self, url):
+        self.opened = url
+        return 'T1', 'S1'
+
+    def evaluate(self, session, expression):
+        if expression == 'location.href':
+            return self.href
+        return self.links
+
+    def wait(self, session, expression, seconds, step=1.0):
+        return True
+
+    def call(self, method, params=None, session=None):
+        self.closed.append(params['targetId'])
+        return {}
+
+    def close(self):
+        pass
+
+
+class Collections(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.library = Library(self.root, 'one')
+        self.addCleanup(self.library.close)
+        self.addCleanup(self.tmp.cleanup)
+
+    def api_with_pages(self, pages):
+        api = xhs.API({'a1': 'fixture'})
+        self.requests = []
+        def request(path, payload=None, params=None):
+            self.requests.append((path, params))
+            return pages[len(self.requests) - 1]
+        api.request = request
+        return api
+
+    def page(self, titles, cursor='', more=False):
+        return {'cursor': cursor, 'has_more': more,
+                'notes': [{'note_id': f'{index:024x}', 'display_title': title, 'type': 'video',
+                           'user': {'nickname': '作者'}, 'xsec_token': f'token-{index}'} for index, title in enumerate(titles)]}
+
+    def test_collected_prefilters_by_title_and_keeps_tokens_for_the_download(self):
+        api = self.api_with_pages([self.page(['UI 设计规范', '炒饭'], 'C1', True), self.page(['ui 组件库', '烤串'])])
+        result = xhs.collected(api, self.library, 'uid', None, ['Ui'], 20, 5)
+        self.assertEqual([i['title'] for i in result['items']], ['UI 设计规范', 'ui 组件库'])
+        self.assertEqual(result['scanned_pages'], 2)
+        self.assertFalse(result['has_more'])
+        self.assertNotIn('xsec_token', result['items'][0])
+        self.assertEqual(self.library.reference(result['items'][0]['id'])['token'], 'token-0', 'fetch needs the token this listing saw')
+        self.assertEqual(self.requests[1][1]['cursor'], 'C1', 'the second page must continue the first')
+
+    def test_collected_stops_at_the_page_budget_instead_of_walking_the_whole_collection(self):
+        api = self.api_with_pages([self.page(['无关'], f'C{i}', True) for i in range(5)])
+        result = xhs.collected(api, self.library, 'uid', None, ['ui'], 20, 2)
+        self.assertEqual((result['scanned_pages'], result['matched'], result['has_more']), (2, 0, True))
+
+    def test_album_scope_reads_the_album_not_the_whole_collection(self):
+        self.library.albums_save([{'id': 'b' * 24, 'name': 'ui 设计', 'notes': 3}])
+        api = self.api_with_pages([self.page(['随便一篇'])])
+        result = xhs.collected(api, self.library, 'uid', 'ui', [], 20, 5)
+        self.assertEqual(result['scope'], 'album:ui 设计')
+        self.assertEqual(self.requests[0][0], '/api/sns/web/v1/board/note')
+        self.assertEqual(self.requests[0][1]['board_id'], 'b' * 24)
+
+    def test_unknown_or_ambiguous_album_never_reaches_the_platform(self):
+        self.library.albums_save([{'id': 'b' * 24, 'name': 'ui 设计', 'notes': 1}, {'id': 'c' * 24, 'name': 'ui 组件', 'notes': 1}])
+        api = self.api_with_pages([])
+        for value, code in (('不存在', 'ALBUM_UNKNOWN'), ('ui', 'ALBUM_AMBIGUOUS')):
+            with self.assertRaises(Failure) as exc:
+                xhs.collected(api, self.library, 'uid', value, [], 20, 5)
+            self.assertEqual(exc.exception.code, code)
+        self.assertEqual(self.requests, [])
+
+    def test_missing_notes_is_not_an_empty_collection(self):
+        api = self.api_with_pages([{'has_more': False}])
+        with self.assertRaises(Failure) as exc:
+            xhs.collected(api, self.library, 'uid', None, [], 20, 5)
+        self.assertEqual(exc.exception.code, 'INCOMPLETE_RESPONSE')
+
+    def test_albums_are_deduped_and_counted_from_the_rendered_page(self):
+        page = FakeProfile([['/board/' + 'b' * 24 + '?source=web_user_page', 'ui 设计\n笔记・12'],
+                            ['/board/' + 'b' * 24, 'ui 设计\n笔记・12'],
+                            ['/board/' + 'c' * 24, '娃'],
+                            ['/livelist?channel_type=web_board_page', '直播']])
+        browser = unittest.mock.Mock()
+        browser.connect.return_value = page
+        result = xhs.albums(browser, self.library, 'uid')
+        self.assertEqual([(a['name'], a['notes']) for a in result['albums']], [('ui 设计', 12), ('娃', None)])
+        self.assertEqual({a['name'] for a in self.library.albums_list()}, {'ui 设计', '娃'})
+        self.assertEqual(page.closed, ['T1'], 'the page opened for reading must be closed again')
+
+    def test_albums_report_a_login_redirect_instead_of_an_empty_list(self):
+        page = FakeProfile([], href='https://www.xiaohongshu.com/login')
+        browser = unittest.mock.Mock()
+        browser.connect.return_value = page
+        with self.assertRaises(Failure) as exc:
+            xhs.albums(browser, self.library, 'uid')
+        self.assertEqual(exc.exception.code, 'NEED_LOGIN')
+        self.assertEqual(self.library.albums_list(), [])
+
+    def test_batch_download_survives_one_bad_note_but_stops_on_risk_control(self):
+        plan = {'good-1': None, 'bad': Failure('INVALID_INPUT', 'fixture'), 'risky': Failure('RISK_CONTROL', 'stop'), 'after': None}
+        def one(api, library, reference, media, transcribe):
+            if plan[reference]:
+                raise plan[reference]
+            return {'note': {'id': reference}, 'processing': {}}
+        with patch.object(xhs, 'fetch', side_effect=one):
+            result = xhs.fetch_many(None, self.library, list(plan), False, False)
+        self.assertEqual([n['note']['id'] for n in result['notes']], ['good-1'])
+        self.assertEqual([(f['reference'], f['code']) for f in result['failed']],
+                         [('bad', 'INVALID_INPUT'), ('risky', 'RISK_CONTROL'), ('after', 'SKIPPED')])
+        self.assertEqual(result['stopped_after'], 'RISK_CONTROL')
+
+    def test_batch_download_with_nothing_saved_is_an_error_not_an_empty_success(self):
+        with patch.object(xhs, 'fetch', side_effect=Failure('INCOMPLETE_RESPONSE', 'fixture')):
+            with self.assertRaises(Failure) as exc:
+                xhs.fetch_many(None, self.library, ['one', 'two'], False, False)
+        self.assertEqual(exc.exception.code, 'INCOMPLETE_RESPONSE')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -108,6 +108,33 @@ class API:
                               'author': card.get('user', {}).get('nickname', ''), 'url': f'https://www.xiaohongshu.com/explore/{nid}', 'xsec_token': item.get('xsec_token', '')})
         return items, bool(data.get('has_more'))
 
+    def collected(self, uid, cursor):
+        """One page of the account's collected notes, newest collection first (platform order)."""
+        data = self.request('/api/sns/web/v2/note/collect/page', None,
+                            {'num': '30', 'cursor': cursor, 'user_id': uid, 'image_formats': 'jpg,webp,avif', 'xsec_token': '', 'xsec_source': ''})
+        return self.listing(data, 'pc_collect')
+
+    def album_notes(self, board_id, cursor):
+        """One page of the notes kept in a single album (收藏夹)."""
+        data = self.request('/api/sns/web/v1/board/note', None,
+                            {'board_id': board_id, 'cursor': cursor, 'num': '30', 'image_formats': 'jpg,webp,avif'})
+        return self.listing(data, 'pc_board')
+
+    @staticmethod
+    def listing(data, source):
+        if not isinstance(data.get('notes'), list):
+            raise Failure('INCOMPLETE_RESPONSE', 'Collection response lacks notes; this does not mean the collection is empty')
+        items = []
+        for note in data['notes']:
+            nid = note.get('note_id', '')
+            if not re.fullmatch('[0-9a-f]{24}', nid):
+                continue
+            user = note.get('user') or {}
+            items.append({'id': nid, 'title': note.get('display_title', ''), 'type': note.get('type'),
+                          'author': user.get('nickname') or user.get('nick_name', ''),
+                          'url': f'https://www.xiaohongshu.com/explore/{nid}', 'xsec_token': note.get('xsec_token', ''), 'source': source})
+        return items, data.get('cursor') or '', bool(data.get('has_more'))
+
     def note(self, nid, token, source):
         data = self.request('/api/sns/web/v1/feed', {'source_note_id': nid, 'image_formats': ['jpg', 'webp', 'avif'], 'extra': {'need_body_topic': '1'}, 'xsec_source': source, 'xsec_token': token})
         items = data.get('items', [])
@@ -238,6 +265,115 @@ def fetch(api, library, value, media, transcribe):
     return {'note': note, 'directory': str(folder), 'processing': status}
 
 
+STOP_CODES = ('RISK_CONTROL', 'NEED_LOGIN')
+
+
+def fetch_many(api, library, references, media, transcribe):
+    """Download several notes in one run, one after another.
+
+    A single bad reference must not cost the whole batch, but risk control or a lost session must:
+    continuing then only trains the platform on us, so the rest is reported as skipped.
+    """
+    notes, failed, stopped = [], [], None
+    for reference in references:
+        if stopped:
+            failed.append({'reference': reference, 'code': 'SKIPPED', 'message': f'Stopped after {stopped}; nothing was requested for this note'})
+            continue
+        try:
+            notes.append(fetch(api, library, reference, media, transcribe))
+        except Failure as exc:
+            failed.append({'reference': reference, 'code': exc.code, 'message': exc.message})
+            if exc.code in STOP_CODES:
+                stopped = exc.code
+    if not notes:
+        raise Failure(failed[0]['code'], failed[0]['message'])
+    return {'notes': notes, 'failed': failed, 'stopped_after': stopped}
+
+
+PROFILE_ALBUMS = 'https://www.xiaohongshu.com/user/profile/{}?tab=fav&subTab=board'
+ALBUM_LINKS = "[...document.querySelectorAll('a[href*=\"/board/\"]')].map(a => [a.getAttribute('href'), (a.innerText || '').trim()])"
+
+
+def attach(browser):
+    try:
+        return browser.connect()
+    except Failure as exc:
+        if exc.code != 'NEED_LOGIN':
+            raise
+        browser.launch()
+        return browser.connect()
+
+
+def albums(browser, library, uid):
+    """Read the account's album (收藏夹) list from the dedicated browser.
+
+    The web client renders albums without an XHR this script could sign; /api/sns/web/v1/board/user
+    answers code -1 for every parameter set, so the rendered page is the only source for the list.
+    The notes inside an album still come from the API.
+    """
+    cdp = attach(browser)
+    try:
+        target, session = cdp.open(PROFILE_ALBUMS.format(uid))
+        try:
+            if not cdp.wait(session, f"/\\/login/.test(location.href) || {ALBUM_LINKS}.length > 0 || /还没有|暂无/.test(document.body.innerText)", 40):
+                raise Failure('PAGE_CHANGED', 'Album list did not render on the profile page')
+            if '/login' in (cdp.evaluate(session, 'location.href') or ''):
+                raise Failure('NEED_LOGIN', 'Profile page asked for login; sign in inside the dedicated browser')
+            found = {}
+            for href, label in cdp.evaluate(session, ALBUM_LINKS) or []:
+                match = re.search(r'/board/([0-9a-f]{24})', href or '')
+                lines = [line.strip() for line in (label or '').split('\n') if line.strip()]
+                if not match or not lines:
+                    continue
+                count = re.search(r'(\d+)', lines[-1]) if len(lines) > 1 else None
+                found[match[1]] = {'id': match[1], 'name': lines[0], 'notes': int(count[1]) if count else None}
+            library.albums_save(found.values())
+            return {'albums': list(found.values()), 'source': 'dedicated_browser_page'}
+        finally:
+            try:
+                cdp.call('Target.closeTarget', {'targetId': target})
+            except Failure:
+                pass  # cleanup must not mask the list that was read
+    finally:
+        cdp.close()
+
+
+def resolve_album(library, value):
+    """Accept an album id, an album link, or a cached album name."""
+    value = value.strip()
+    found = re.search(r'/board/([0-9a-f]{24})', value)
+    if found or re.fullmatch('[0-9a-f]{24}', value):
+        return {'id': found[1] if found else value, 'name': ''}
+    known = library.albums_list()
+    matches = [a for a in known if a['name'] == value] or [a for a in known if value and value in a['name']]
+    if not matches:
+        raise Failure('ALBUM_UNKNOWN', f'No known album matches {value!r}; run albums first to read the list from the dedicated browser')
+    if len(matches) > 1:
+        raise Failure('ALBUM_AMBIGUOUS', 'Several albums match: ' + '、'.join(a['name'] for a in matches))
+    return matches[0]
+
+
+def collected(api, library, uid, album, keywords, limit, pages):
+    """Candidate notes from the account's collection, filtered by title keyword only.
+
+    Deciding which candidates are actually about the user's topic stays with the caller: the platform
+    returns truncated titles and no body here, so keyword filtering is a prefilter, not an answer.
+    """
+    chosen = resolve_album(library, album) if album else None
+    terms = [term.strip().lower() for term in keywords if term.strip()]
+    items, cursor, more, scanned = [], '', True, 0
+    while more and scanned < pages and len(items) < limit:
+        items_page, cursor, more = api.album_notes(chosen['id'], cursor) if chosen else api.collected(uid, cursor)
+        scanned += 1
+        library.reference_save(items_page)
+        items.extend(item for item in items_page if not terms or any(term in item['title'].lower() for term in terms))
+        if not cursor:
+            more = False
+    return {'scope': ('album:' + (chosen['name'] or chosen['id'])) if chosen else 'collected',
+            'filter': terms, 'scanned_pages': scanned, 'matched': len(items), 'has_more': more,
+            'items': [{k: v for k, v in item.items() if k != 'xsec_token'} for item in items[:limit]]}
+
+
 PUBLISH_URL = 'https://creator.xiaohongshu.com/publish/publish'
 TITLE_INPUT = "document.querySelector('input.d-text[placeholder=\"填写标题会有更多赞哦\"]')"
 EDITOR = "document.querySelector('.tiptap.ProseMirror')"
@@ -306,13 +442,7 @@ def draft(browser, title, body, images, video):
         raise Failure('INVALID_INPUT', 'Title and body are required')
     if len(images) > 18:
         raise Failure('INVALID_INPUT', 'The editor accepts at most 18 images')
-    try:
-        cdp = browser.connect()
-    except Failure as exc:
-        if exc.code != 'NEED_LOGIN':
-            raise
-        browser.launch()
-        cdp = browser.connect()
+    cdp = attach(browser)
     cdp.close_tabs('creator.xiaohongshu.com')
     target, session = cdp.open(PUBLISH_URL)
     try:
@@ -471,7 +601,13 @@ def parser():
     sub.add_parser('status'); sub.add_parser('close')
     search = sub.add_parser('search'); search.add_argument('query'); search.add_argument('--page', type=int, default=1)
     search.add_argument('--sort', choices=['general', 'popular', 'latest'], default='general'); search.add_argument('--type', choices=['all', 'video', 'image'], default='all')
-    download = sub.add_parser('fetch'); download.add_argument('reference'); download.add_argument('--media', action='store_true'); download.add_argument('--transcribe', action='store_true')
+    download = sub.add_parser('fetch', help='Read and save one or more notes; repeat the reference to download a batch')
+    download.add_argument('reference', nargs='+'); download.add_argument('--media', action='store_true'); download.add_argument('--transcribe', action='store_true')
+    sub.add_parser('albums', help='List the account albums (收藏夹); reads the profile page in the dedicated browser')
+    saved = sub.add_parser('collected', help='List collected notes, newest first, optionally one album only and prefiltered by title keyword')
+    saved.add_argument('--album', help='Album name (as listed by albums), album id, or album link')
+    saved.add_argument('--keyword', action='append', default=[], help='Keep candidates whose title contains this (repeatable, matched case-insensitively)')
+    saved.add_argument('--limit', type=int, default=20); saved.add_argument('--pages', type=int, default=5, help='How many platform pages to scan (10 notes each)')
     recall = sub.add_parser('recall'); recall.add_argument('query'); recall.add_argument('--limit', type=int, default=5)
     note = sub.add_parser('draft', help='Save a note draft (text / images / video) in the creator site via the dedicated browser')
     note.add_argument('--title', required=True); text = note.add_mutually_exclusive_group(required=True)
@@ -538,8 +674,14 @@ def operation(args, root):
             items, more = api.search(args.query, args.page, args.sort, args.type, library.search_session(args.query, args.sort, args.type))
             library.search_record(args.query, items)
             return {'items': [{k: v for k, v in i.items() if k != 'xsec_token'} for i in items], 'has_more': more, 'archived_full_notes': 0}
+        if args.command == 'albums':
+            return albums(browser, library, user['id'])
+        if args.command == 'collected':
+            if not 1 <= args.limit <= 100 or not 1 <= args.pages <= 20:
+                raise Failure('INVALID_INPUT', 'Limit must be 1–100 and pages 1–20')
+            return collected(api, library, user['id'], args.album, args.keyword, args.limit, args.pages)
         if args.command == 'fetch':
-            return fetch(api, library, args.reference, args.media, args.transcribe)
+            return fetch_many(api, library, args.reference, args.media, args.transcribe)
 
 
 def main():
