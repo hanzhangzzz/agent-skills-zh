@@ -525,6 +525,67 @@ class Collections(unittest.TestCase):
         self.assertEqual(exc.exception.code, 'INCOMPLETE_RESPONSE')
 
 
+class Signin(unittest.TestCase):
+    """Scanning is the user's only step; everything after it is the script's job."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        sleeper = patch.object(xhs.time, 'sleep')
+        sleeper.start()
+        self.addCleanup(sleeper.stop)
+
+    def browser(self, cookies_sequence):
+        browser = unittest.mock.Mock()
+        browser.cookies.side_effect = list(cookies_sequence)
+        return browser
+
+    def identity(self, *accounts):
+        answers = list(accounts)
+        def response(url, payload=None, headers=None):
+            return {'success': True, 'data': answers.pop(0) if len(answers) > 1 else answers[0]}
+        return patch.object(xhs, 'json_request', side_effect=response)
+
+    def test_login_waits_through_the_scan_and_finishes_by_itself(self):
+        pending = Failure('NEED_LOGIN', 'Complete login in the dedicated browser')
+        browser = self.browser([pending, pending, {'a1': 'fixture', 'web_session': 'scanned'}])
+        with self.identity({'user_id': 'account-one', 'nickname': '甲', 'guest': False}):
+            cookies = xhs.wait_for_scan(browser, 60)
+        self.assertEqual(cookies['web_session'], 'scanned')
+        self.assertEqual(browser.launch.call_count, 1, 'the window opens once and stays open while the user scans')
+        self.assertEqual(browser.cookies.call_count, 3)
+
+    def test_a_guest_session_is_not_mistaken_for_a_finished_scan(self):
+        guest = {'a1': 'fixture', 'web_session': 'guest'}
+        browser = self.browser([guest, {'a1': 'fixture', 'web_session': 'scanned'}])
+        with self.identity({'guest': True, 'user_id': ''}, {'user_id': 'account-one', 'nickname': '甲', 'guest': False}):
+            self.assertEqual(xhs.wait_for_scan(browser, 60)['web_session'], 'scanned')
+
+    def test_waiting_out_without_a_scan_reports_a_timeout_and_stores_nothing(self):
+        browser = self.browser([Failure('NEED_LOGIN', 'not scanned')] * 50)
+        with patch.object(xhs.time, 'monotonic', side_effect=[0, 999, 999]):
+            with self.assertRaises(Failure) as exc:
+                xhs.wait_for_scan(browser, 60)
+        self.assertEqual(exc.exception.code, 'LOGIN_TIMEOUT')
+        self.assertFalse((self.root / 'profiles/default/credentials.json').exists())
+
+    def test_login_stores_the_session_the_scan_produced(self):
+        pending = Failure('NEED_LOGIN', 'not scanned yet')
+        with patch.object(xhs, 'Browser') as factory, self.identity({'user_id': 'account-one', 'nickname': '甲', 'guest': False}):
+            factory.return_value.cookies.side_effect = [pending, {'a1': 'fixture', 'web_session': 'scanned'}]
+            result = xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), '--profile', '小号', 'login']))
+        self.assertEqual((result['user']['nickname'], result['profile']), ('甲', '小号'))
+        self.assertEqual(json.loads((self.root / 'profiles/小号/credentials.json').read_text())['cookies']['web_session'], 'scanned')
+
+    def test_finish_takes_what_is_there_instead_of_waiting(self):
+        with patch.object(xhs, 'Browser') as factory, self.identity({'user_id': 'account-one', 'nickname': '甲', 'guest': False}):
+            factory.return_value.cookies.return_value = {'a1': 'fixture', 'web_session': 'already-there'}
+            xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'login', '--finish']))
+            factory.return_value.launch.assert_not_called()
+            self.assertEqual(factory.return_value.cookies.call_count, 1)
+
+
 class Accounts(unittest.TestCase):
     """Several accounts on one machine: the risk is state leaking between them."""
 

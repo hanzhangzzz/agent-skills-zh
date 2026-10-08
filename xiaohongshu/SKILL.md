@@ -6,7 +6,7 @@ license: Apache-2.0
 metadata:
   trigger: /xiaohongshu
   compatibility: Codex, Claude Code; macOS/Linux, Python 3.10+
-  version: "3.3.1"
+  version: "3.4.0"
 ---
 
 # 小红书统一入口
@@ -19,6 +19,7 @@ metadata:
 - 登录、搜索、正文读取、本地召回只需要 Python 3.10+ 标准库与内置签名源码；首次登录还需要 Google Chrome。当前不支持 Windows。
 - 视频下载需要 yt-dlp、ffprobe；口播提取另需 Whisper medium 与 ffmpeg。除 PATH 外还会在 `~/.local/bin`、`/opt/homebrew/bin`、`/usr/local/bin`、`~/bin` 里找这些工具（cron、launchd 不读登录 shell 的 PATH）。仍找不到时报告 `MISSING_TOOL`，不要自动全局安装。
 - 只在用户请求相应能力时使用媒体工具；普通搜索不自动下载全部帖子。
+- 任何平台操作开始前先跑一次 `status`（要指定账号时用 `profiles` 先看标签）。拿到 `NEED_LOGIN` 就按下面的登录流程引导扫码，不要带着失效登录态往下跑。用户唯一需要做的动作是扫码，开窗口、等待、取 cookie、校验都由脚本完成。
 
 示例中的 `$SKILL_DIR` 代表已定位的本 Skill 目录。所有命令输出单个 JSON 对象，包含 `ok`、`schema_version` 和 `data` 或 `error`。检查真实字段，不根据退出码独自推断内容完整。
 
@@ -26,10 +27,10 @@ metadata:
 
 | 用户意图 | 执行 |
 |---|---|
-| 首次登录 | `python3 "$SKILL_DIR/scripts/xhs.py" login`；让用户在有头专用 Chrome 完成登录，再执行 `login --finish` |
+| 登录 | 先用一句话告诉用户「去新开的小红书专用 Chrome 扫码」，再执行 `python3 "$SKILL_DIR/scripts/xhs.py" login`。该命令开窗口并等扫码（默认最多 180 秒，`--wait` 可调），扫完自己收尾，不需要再跑第二条命令 |
 | 登录检查 | `python3 "$SKILL_DIR/scripts/xhs.py" status` |
 | 查看有哪些账号 | `python3 "$SKILL_DIR/scripts/xhs.py" profiles`；列出标签、昵称、登录是否有效、哪个是缺省账号 |
-| 再加一个账号 | `python3 "$SKILL_DIR/scripts/xhs.py" --profile 标签 login`，用户在新开的专用 Chrome 里登录该号，再 `--profile 标签 login --finish`。标签由用户起，只允许字母、数字、中文、下划线、连字符 |
+| 再加一个账号 | `python3 "$SKILL_DIR/scripts/xhs.py" --profile 标签 login`，同样是让用户扫码、脚本等待收尾。标签由用户起，只允许字母、数字、中文、下划线、连字符 |
 | 用指定账号执行 | 任何命令前加 `--profile 标签`（放在子命令之前）；省略时用缺省账号 |
 | 改缺省账号 | `python3 "$SKILL_DIR/scripts/xhs.py" profiles --set-default 标签` |
 | 搜索帖子 | `python3 "$SKILL_DIR/scripts/xhs.py" search "关键词"`；可用 `--page`、`--sort general/popular/latest`、`--type all/video/image` |
@@ -82,7 +83,8 @@ draft 只写入草稿箱，不发布、不定时发布、不改动已发布笔�
 
 ## 错误处理
 
-- `NEED_LOGIN`：用户在专用窗口重新登录，然后 login --finish；不自动切账号。
+- `NEED_LOGIN`：先告诉用户要扫码，再跑 `login`（会自己等待并收尾）；不自动切到别的账号。
+- `LOGIN_TIMEOUT`：等待期内没扫完，窗口仍开着。确认用户是否还要登录，要就再跑一次 `login`；不要改用别的账号或别的方式绕过。
 - `RISK_CONTROL`：停止本次平台请求，让用户查看专用浏览器，不更换代理、伪造验证或循环重试。
 - `INCOMPLETE_RESPONSE`：响应缺少必要数据，不能报告“没有结果”或“帖子已删除”。
 - `TOOL_FAILED`、`INVALID_VIDEO`：报告阶段未完成，保留已经保存的正文与部分文件；不要声称完整下载成功。

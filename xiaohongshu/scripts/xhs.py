@@ -647,6 +647,34 @@ def recall_all(root, query, limit):
     return sorted(found.values(), key=lambda note: note['updated'], reverse=True)[:limit]
 
 
+def wait_for_scan(browser, seconds):
+    """Open the dedicated browser and wait while the user scans, then return a verified session.
+
+    Scanning is the only part a person has to do; watching for the result is not, so the script waits
+    instead of handing the user a second command to run afterwards. Cookies are read locally while
+    waiting — only once a session cookie appears is the platform asked who it belongs to.
+    """
+    browser.launch()
+    deadline = time.monotonic() + seconds
+    while True:
+        cookies = None
+        try:
+            cookies = browser.cookies()
+        except Failure as exc:
+            if exc.code != 'NEED_LOGIN':
+                raise
+        if cookies is not None:
+            try:
+                API(cookies).identity()
+                return cookies
+            except Failure as exc:
+                if exc.code != 'NEED_LOGIN':
+                    raise
+        if time.monotonic() >= deadline:
+            raise Failure('LOGIN_TIMEOUT', 'No finished scan in the dedicated browser yet; the window stays open, run login again when the user is ready')
+        time.sleep(3)
+
+
 def install(home, apply, restore=None):
     source = HERE.parent.resolve()
     home = home.expanduser().resolve()
@@ -727,7 +755,9 @@ def parser():
     sub = p.add_subparsers(dest='command', required=True)
     listing = sub.add_parser('profiles', help='List the known accounts and which one is the default')
     listing.add_argument('--set-default', help='Make this label the account used when --profile is omitted')
-    login = sub.add_parser('login'); login.add_argument('--finish', action='store_true')
+    login = sub.add_parser('login', help='Open the dedicated browser, wait for the user to scan, and store the verified session')
+    login.add_argument('--finish', action='store_true', help='Take the session already present in the browser instead of waiting for a scan')
+    login.add_argument('--wait', type=int, default=180, help='Seconds to wait for the scan (default 180)')
     login.add_argument('--session-file', type=Path, help='Explicit one-time import of an already authorized cookie JSON; never auto-scan browsers')
     sub.add_parser('status')
     shutdown = sub.add_parser('close'); shutdown.add_argument('--all', action='store_true', help='Close the dedicated browser of every account, not just the selected one')
@@ -780,8 +810,6 @@ def operation(args, root, profile):
     if args.command == 'close':
         browser.close()
         return {'browser': 'closed'}
-    if args.command == 'login' and not args.finish and not args.session_file:
-        return browser.launch()
     if args.command == 'draft':
         body = args.body_file.read_text(encoding='utf-8') if args.body_file else args.body
         return draft(browser, args.title.strip(), body.strip(), args.image, args.video)
@@ -797,7 +825,14 @@ def operation(args, root, profile):
         with contextlib.closing(Library(root, json.loads(current.read_text())['id'])) as library:
             return {'mode': 'offline_keyword', 'scope': 'this_account', 'items': library.recall(args.query, args.limit)}
     if args.command == 'login':
-        cookies = json.loads(args.session_file.read_text()) if args.session_file else browser.cookies()
+        if args.session_file:
+            cookies = json.loads(args.session_file.read_text())
+        elif args.finish:
+            cookies = browser.cookies()
+        else:
+            if not 10 <= args.wait <= 600:
+                raise Failure('INVALID_INPUT', 'The scan wait must be 10–600 seconds')
+            cookies = wait_for_scan(browser, args.wait)
         if not isinstance(cookies, dict):
             raise Failure('INVALID_SESSION', 'Expected a cookie JSON object')
         cookies.pop('saved_at', None)
@@ -805,7 +840,7 @@ def operation(args, root, profile):
             raise Failure('INVALID_SESSION', 'Expected an authenticated cookie JSON object')
     else:
         if not credentials.is_file():
-            raise Failure('NEED_LOGIN', 'Run login then login --finish')
+            raise Failure('NEED_LOGIN', 'This account has no stored session; run login (it opens the browser and waits for the scan)')
         cookies = json.loads(credentials.read_text())['cookies']
     api = API(cookies)
     user = api.identity()
