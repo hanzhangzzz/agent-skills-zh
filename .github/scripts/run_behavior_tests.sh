@@ -21,6 +21,9 @@ run "agent instruction checkout" python3 .github/scripts/test_agent_instruction_
 run "git-push-guard" bash git-push-guard/scripts/test_hook.sh
 run "repo-tidy status hook" bash repo-tidy/scripts/test_git_repo_status.sh
 run "repo-tidy CLI" bash repo-tidy/tests/test_repo_tidy.sh "$WORK/repo-tidy"
+run "repo-tidy session cwd" bash repo-tidy/tests/test_session_cwd.sh "$WORK/session-cwd"
+run "repo-tidy Codex session isolation" python3 repo-tidy/tests/test_codex_session.py
+run "repo-tidy installer" bash repo-tidy/tests/test_install.sh "$WORK/repo-tidy-install"
 run "repo-map" bash repo-map/scripts/test_repo_map.sh
 run "harness" bash harness/scripts/test_harness.sh
 run "hkr-render network" python3 hkr-render/scripts/test_publish_network.py
