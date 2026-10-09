@@ -20,6 +20,7 @@ set -u
 
 LOG="${TMPDIR:-/tmp}/editor-here.log"
 STATE_DIR="${CLAUDE_HOME:-$HOME/.claude}/session-cwd"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG" 2>/dev/null; }
 
 open_it() {  # open_it <目录> <来源标签>
@@ -42,6 +43,12 @@ open_it() {  # open_it <目录> <来源标签>
 
 try_state() {  # try_state <键> <来源标签>；命中则打开
   [ -n "$1" ] || return 1
+  local codex_dir codex_rc
+  codex_dir="$(python3 "$SCRIPT_DIR/codex-session.py" target "$1" 2>/dev/null)"
+  codex_rc=$?
+  [ "$codex_rc" = "0" ] && open_it "$codex_dir" "$2-codex"
+  # 活跃 Codex 客户端未绑定时，旧终端文件可能属于其它 session，直接回退终端路径。
+  [ "$codex_rc" = "3" ] && return 1
   # 显式声明的任务目录优先：Codex 这类不能切 cwd 的 agent 靠它指路，
   # 而 <键> 每轮对话都会被 hook 刷成 cwd，会把声明冲掉
   local t="$STATE_DIR/$1.task"
@@ -68,9 +75,11 @@ if [ "$(uname -s)" = "Darwin" ]; then
   key="$(/usr/bin/osascript -e 'tell application "iTerm2" to get id of current session of current window' 2>/dev/null | tr -d '\r\n')"
   try_state "$key" "iterm"
 
-  # ③ Terminal.app：AppleScript 只给得出 tty
-  key="$(/usr/bin/osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null | tr -d '\r\n')"
-  try_state "tty-${key##*/}" "terminal-app"
+  # ③ iTerm2 没有窗口时再探测 Terminal.app，避免拿另一个应用的前台目录。
+  if [ -z "$key" ]; then
+    key="$(/usr/bin/osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null | tr -d '\r\n')"
+    try_state "tty-${key##*/}" "terminal-app"
+  fi
 fi
 
 # ④ 回退：终端自己的当前路径（旧行为）

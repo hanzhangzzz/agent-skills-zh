@@ -5,7 +5,7 @@
 #   Codex        ~/.codex/hooks.json（事件名与输入格式和 Claude Code 一致，
 #                实测 stdin 同样是 {"cwd":...,"hook_event_name":...}）
 #
-# 私人配置不进版本库，所以由这个脚本来改——只增不删、幂等、改前备份，
+# 私人配置不进版本库，所以由这个脚本来改——更新自己的旧命令、幂等、改前备份，
 # 绝不碰用户已有的其它 hook。装哪个看哪个存在，两个都没有则报错退出。
 #
 #   bash install.sh            安装（幂等，重复跑无副作用）
@@ -93,7 +93,7 @@ if [ "$MODE" = "status" ]; then
   MODE="check"
 fi
 
-# Codex 没有 EnterWorktree 工具，它用原生的 `codex --worktree`，
+# Codex 没有 EnterWorktree 工具，cwd hook 必须使用 --agent codex 做 thread 隔离，
 # 所以只装 SessionStart / UserPromptSubmit 这两类。
 TARGETS=""
 if [ -d "$CLAUDE_DIR" ] || [ "$MODE" = "install" ]; then
@@ -107,7 +107,8 @@ if [ -d "$CODEX_DIR" ]; then
 fi
 
 python3 - "$SCRIPT_DIR" "$MODE" $TARGETS <<'PY'
-import json, os, shutil, sys, time
+import json, os, shlex, shutil, sys, time
+from pathlib import Path
 
 script_dir, mode = sys.argv[1], sys.argv[2]
 targets = [t.split(":", 1) for t in sys.argv[3:]]
@@ -126,6 +127,24 @@ CLAUDE_ONLY = [
 
 def wanted(agent):
     return COMMON + (CLAUDE_ONLY if agent == "claude" else [])
+
+def command_for(agent, name):
+    command = shlex.quote(os.path.join(script_dir, name))
+    if agent == "codex" and name == "session-cwd.sh":
+        command += " --agent codex"
+    return command
+
+def owned_command(command, name):
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    path = Path(parts[0])
+    return (path.name == name and path.parent.name == "scripts"
+            and path.parent.parent.name == "repo-tidy"
+            and parts[1:] in ([], ["--agent", "codex"]))
 
 def load(path):
     try:
@@ -146,9 +165,11 @@ def scan(hooks, agent):
     """返回 (已注册, 未注册)，元素为 (event, matcher, name, timeout, cmd)"""
     present, missing = [], []
     for event, matcher, name, timeout in wanted(agent):
-        cmd = os.path.join(script_dir, name)
+        cmd = command_for(agent, name)
         found = any(
-            h.get("command") == cmd
+            (h.get("command") == cmd or
+             (agent == "codex" and name == "session-cwd.sh"
+              and h.get("command") == shlex.quote(os.path.join(script_dir, name))))
             for e in hooks.get(event, []) if isinstance(e, dict) and e.get("matcher") == matcher
             for h in e.get("hooks", []) if isinstance(h, dict)
         )
@@ -164,6 +185,19 @@ for agent, path in targets:
         rc = 1
         continue
     hooks = data.setdefault("hooks", {})
+    updated = []
+    if mode == "install":
+        # 升级旧安装及 worktree 路径，替换自己的命令，避免旧 hook 继续串写或重复执行。
+        for event, matcher, name, _ in wanted(agent):
+            command = command_for(agent, name)
+            for entry in hooks.get(event, []):
+                if not isinstance(entry, dict) or entry.get("matcher") != matcher:
+                    continue
+                for hook in entry.get("hooks", []):
+                    if isinstance(hook, dict) and owned_command(hook.get("command", ""), name):
+                        if hook["command"] != command:
+                            hook["command"] = command
+                            updated.append((event, name))
     present, missing = scan(hooks, agent)
 
     if mode == "check":
@@ -178,7 +212,7 @@ for agent, path in targets:
         continue
 
     if mode == "uninstall":
-        ours = {os.path.join(script_dir, n) for _, _, n, _ in wanted(agent)}
+        ours = {n for _, _, n, _ in wanted(agent)}
         removed = 0
         for event in list(hooks):
             entries = hooks.get(event)
@@ -189,7 +223,8 @@ for agent, path in targets:
                     continue
                 before = len(entry.get("hooks", []))
                 entry["hooks"] = [h for h in entry.get("hooks", [])
-                                  if not (isinstance(h, dict) and h.get("command") in ours)]
+                                  if not (isinstance(h, dict) and any(
+                                      owned_command(h.get("command", ""), name) for name in ours))]
                 removed += before - len(entry["hooks"])
                 if not entry["hooks"]:
                     entries.remove(entry)      # 整条空了才删，不动别人的
@@ -206,10 +241,12 @@ for agent, path in targets:
         continue
 
     # install
-    if not missing:
+    if not missing and not updated:
         print(f"  [{label}] ✓ {len(present)} 条均已注册，未改动")
         continue
     print(f"  [{label}] 备份: {backup(path)}")
+    for event, name in updated:
+        print(f"    ↻ {event:<17} {name}（更新本 skill 的命令路径/agent 参数）")
     for event, matcher, name, timeout, cmd in missing:
         entry = next((e for e in hooks.setdefault(event, [])
                       if isinstance(e, dict) and e.get("matcher") == matcher), None)
@@ -222,7 +259,7 @@ for agent, path in targets:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
-    print(f"  [{label}] ✓ 新增 {len(missing)} 条，原有 {len(present)} 条未动")
+    print(f"  [{label}] ✓ 新增 {len(missing)} 条，更新 {len(updated)} 条")
 
 if mode == "install":
     print("\nhook 热生效，无需重启。Codex 首次运行会要求确认信任新 hook。")

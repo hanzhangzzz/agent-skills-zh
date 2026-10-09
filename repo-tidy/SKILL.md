@@ -10,7 +10,8 @@ description: "Prepare safe task branches/worktrees, preserve active or unverifie
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
 - `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
-- `scripts/session-cwd.sh` —— 把本 session 的 cwd 写到 `~/.claude/session-cwd/<iTerm 会话 id>`。用户的编辑器快捷键按前台标签页 id 读它，于是打开的永远是 AI 当前所在目录——**子进程改不了父 shell 的 cwd，所以不能靠 shell 的当前目录**。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
+- `scripts/session-cwd.sh` —— Claude Code 按终端键记录 cwd；Codex 用 `--agent codex` 按真实 thread ID 隔离。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
+- `scripts/codex-session.py` —— 保存 Codex 会话目录及终端绑定，按客户端 PID、启动时间校验归属；共享后端继承的终端环境变量不能作为绑定依据
 - `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
 - `scripts/install.sh` —— 一键注册上面几个 hook 到 `~/.claude/settings.json`；幂等、改前备份、只增不删
 - `scripts/editor-here.sh` —— 绑到编辑器快捷键：按前台标签页 id 读位置文件，打开 AI 当前所在目录；读不到再回退到终端路径
@@ -21,7 +22,7 @@ description: "Prepare safe task branches/worktrees, preserve active or unverifie
 
 前置：`python3`、`git`、可写的 `~/.claude/`。缺任一项先停下说明，不带病安装。
 
-私人配置（`settings.json` / `CLAUDE.md`）不进版本库，所以用脚本改——幂等、改前备份、只增不删，不碰用户已有的其它 hook：
+私人配置（`settings.json` / `CLAUDE.md`）不进版本库，所以用脚本改——幂等、改前备份、升级自己的旧命令，不碰用户已有的其它 hook：
 
 ```bash
 bash "$SKILL_DIR/scripts/install.sh"             # 安装（可反复跑）
@@ -29,7 +30,7 @@ bash "$SKILL_DIR/scripts/install.sh" status      # 体检：依赖 / 核心层 /
 bash "$SKILL_DIR/scripts/install.sh" --uninstall # 只移除本 skill 注册的 hook
 ```
 
-**Claude Code 与 Codex 都装**，检测到哪个装哪个（`CLAUDE_HOME` / `CODEX_HOME` 可覆盖路径，测试用）。两边的 hook 事件名与 stdin 格式一致（都是 `{"cwd":...,"hook_event_name":...}`），所以脚本是同一份。
+**Claude Code 与 Codex 都装**，检测到哪个装哪个（`CLAUDE_HOME` / `CODEX_HOME` 可覆盖路径，测试用）。Codex cwd hook 使用 `--agent codex`，读取 stdin 的 `session_id` 与 `cwd`；升级时替换旧 hook 命令，避免重复注册。已安装的无参数命令会从祖先 agent 进程识别 Codex 并走同一隔离流程，更新源脚本即可生效，无需为了本次修复变更已有 hook 信任。
 
 | 事件 | matcher | 脚本 | Claude Code | Codex |
 |---|---|---|---|---|
@@ -63,7 +64,19 @@ Codex 运行中不能切工作目录，但**能用绝对路径在别的目录里
 
 声明存在 `<键>.task`，优先级高于 hook 写的 `<键>`：后者每轮对话都会被刷新成 cwd，不分开存会被冲掉。Claude Code 不需要声明——`EnterWorktree` 真的改了 cwd，hook 自动就写对了。
 
-Codex 侧拿不到 tty（hook 父进程无控制终端），只走 `TERM_SESSION_ID` 键——iTerm2 / Terminal.app 都设这个变量，够用。
+Codex 声明改为 `codex-<thread ID>.task`，cwd 存在 `codex-<thread ID>`。共享 app-server 的 `TERM_SESSION_ID` / tty 属于启动后端的终端，多个会话会继承同一份，**不得用它们写终端位置文件或猜测绑定**。
+
+独立后端（`codex --no-daemon`）可从祖先 TUI 客户端自动建立绑定。共享后端使用明确绑定：
+
+1. 核验终端 UUID、该终端的 Codex TUI 客户端及当前 thread ID；不要按仓库 cwd 或前台窗口猜测。同一目录可以有多个会话。
+2. 在当前 Codex 会话调用：
+   ```bash
+   bash "$SKILL_DIR/scripts/task-here.sh" --bind <已核验的终端 UUID>
+   ```
+   脚本从 `CODEX_THREAD_ID` / `CODEX_SESSION_ID` 获取当前 thread，核验该 UUID 有唯一的 TUI 客户端后保存绑定。缺 ID、无客户端或归属不唯一时拒绝。
+3. 任务目录继续用 `task-here.sh <目录>` 声明；每轮 cwd 刷新不会冲掉它。
+
+快捷键每次检查客户端 PID 和启动时间。客户端重启、绑定损坏、尚未绑定时回退该终端自己的路径，禁止读取可能属于其它 Codex 会话的旧位置文件。在同一 TUI 切换到另一个 Codex thread 后重新绑定；不要把原绑定当成新 thread 的归属证据。
 
 ### 两层能力，各自独立可用
 
@@ -73,7 +86,7 @@ Codex 侧拿不到 tty（hook 父进程无控制终端），只走 `TERM_SESSION
 
 ### 增强层：绑编辑器快捷键
 
-把 `scripts/editor-here.sh` 绑到快捷键（iTerm2 用 Preferences → Keys 的 Send Text / Run Coprocess，或 Hammerspoon / Karabiner 调用）。
+把 `scripts/editor-here.sh` 绑到快捷键（iTerm2 用 Preferences → Keys 的 Send Text / Run Coprocess，或 Hammerspoon / Karabiner 调用）。若快捷键调用自己的 launcher，让 launcher 转调这个脚本；不要复制脚本到 `~/bin`，否则相邻的 helper 找不到且后续更新不会生效。
 
 **不能直接绑 `code .`**：claude 运行期间终端的当前目录冻结在启动目录，子进程改不了父 shell 的 cwd，AI 切进 worktree 后 `code .` 打开的还是旧目录。
 
@@ -103,7 +116,7 @@ export SESSION_KEY_CMD="tmux display-message -p '#{pane_id}'"
 
 先跑 `install.sh status`，它会分层告诉你卡在哪一环：hook 没注册、终端认不出、位置文件不新鲜（hook 没在跑）、`editor-here.sh` 不可执行。
 
-快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash scripts/editor-here.sh` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`ai-session` 走的是位置文件，`terminal-path` 说明回退了）。
+快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash "$SKILL_DIR/scripts/editor-here.sh"` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`iterm-codex` 走经过校验的 Codex 绑定，`iterm` 走 Claude/终端位置文件，`terminal-path` 说明回退了）。Codex 检查 `<终端 UUID>.codex` 的绑定及 `codex-<thread ID>[.task]`，不要用继承的终端环境变量声明任务。
 
 ### 卸载
 

@@ -13,6 +13,24 @@
 #
 # 挂在 SessionStart / UserPromptSubmit / PostToolUse(EnterWorktree|ExitWorktree)。
 # 必须静默：这几个事件的 stdout 会被注入模型上下文。
+agent="${2:-}"
+if [ -z "${1:-}" ]; then
+  # 已安装的无参数 hook 原位升级：只识别 agent 进程，不使用它继承的终端键。
+  p=$PPID
+  for _ in 1 2 3 4 5 6 7 8; do
+    read -r parent _terminal command < <(ps -p "$p" -o ppid=,tty=,comm= 2>/dev/null)
+    case "${command##*/}" in
+      codex) agent="codex"; break ;;
+      claude) agent="claude"; break ;;
+    esac
+    case "$parent" in ""|0|1) break;; esac
+    p="$parent"
+  done
+fi
+if [ "$agent" = "codex" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  exec python3 "$SCRIPT_DIR/codex-session.py" write
+fi
 input=$(cat 2>/dev/null)
 
 STATE_DIR="${CLAUDE_HOME:-$HOME/.claude}/session-cwd"
@@ -54,7 +72,10 @@ fi
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 [ -n "$sid" ]      && printf '%s\n' "$cwd" > "$STATE_DIR/$sid" 2>/dev/null
 [ -n "$tty_name" ] && printf '%s\n' "$cwd" > "$STATE_DIR/tty-$tty_name" 2>/dev/null
+# 终端已由 Claude/原生终端 hook 接管，释放上一任 Codex 客户端留下的绑定。
+[ -n "$sid" ] && rm -f "$STATE_DIR/$sid.codex" 2>/dev/null
 rm -f "$STATE_DIR/.unsupported" 2>/dev/null   # 这个环境能用，清掉旧记号
 
-find "$STATE_DIR" -type f -mtime +7 -delete 2>/dev/null   # 关掉的标签页留下的旧文件
+# Codex 绑定可跨多天保持活跃，不能按位置文件的更新时间删除。
+find "$STATE_DIR" -type f ! -name '*.codex' ! -name 'codex-*' -mtime +7 -delete 2>/dev/null
 exit 0

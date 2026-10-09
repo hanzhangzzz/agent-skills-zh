@@ -159,5 +159,33 @@ CLAUDE_HOME="$H7" CODEX_HOME="$C7" bash "$INSTALL" --uninstall >/dev/null 2>&1
 [ "$(count_codex "$C7")" = "0" ] && [ "$(count_ours "$H7")" = "0" ] \
   && ok "--uninstall 同时清理两个 agent" || bad "双 agent 卸载" "codex=$(count_codex "$C7") claude=$(count_ours "$H7")"
 
+# 16. 升级旧的 Codex hook：添加 agent 参数、迁移源目录，不能重复追加旧命令。
+H9=$(fresh upgrade); C9="$SCRATCH/codex9"; mkdir -p "$C9"
+python3 - "$C9/hooks.json" <<'PY'
+import json,sys
+root="/old/repo-tidy/scripts/"
+d={"hooks": {"SessionStart": [{"matcher":"*","hooks":[
+    {"type":"command","command":root+"git-repo-status.sh","timeout":10},
+    {"type":"command","command":root+"session-cwd.sh","timeout":5}]}],
+    "UserPromptSubmit": [{"matcher":"*","hooks":[
+        {"type":"command","command":root+"session-cwd.sh","timeout":5}]}],
+    "Stop": [{"matcher":"*","hooks":[{"type":"command","command":"/user/keep.sh"}]}]}}
+json.dump(d,open(sys.argv[1],"w"))
+PY
+CLAUDE_HOME="$H9" CODEX_HOME="$C9" bash "$INSTALL" >/dev/null 2>&1
+CLAUDE_HOME="$H9" CODEX_HOME="$C9" bash "$INSTALL" >/dev/null 2>&1
+upgraded=$(python3 - "$C9/hooks.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1]))
+commands=[h["command"] for entries in d["hooks"].values() for e in entries for h in e["hooks"]]
+cwd=[c for c in commands if "session-cwd.sh" in c]
+print("ok" if len(cwd)==2 and all(c.endswith(" --agent codex") for c in cwd)
+      and not any(c.startswith("/old/") for c in commands) and "/user/keep.sh" in commands else "bad")
+PY
+)
+[ "$upgraded" = "ok" ] && [ "$(count_codex "$C9")" = "3" ] \
+  && ok "升级 Codex：迁移旧路径、添加 agent 参数，重复安装不重复注册" \
+  || bad "Codex 旧安装升级" "upgraded=$upgraded count=$(count_codex "$C9")"
+
 echo "── 通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ]
