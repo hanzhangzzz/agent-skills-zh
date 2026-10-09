@@ -80,7 +80,7 @@ out=$(printf '{"cwd":"%s"}' "$REPO" | bash "$FETCH_HOOK" 2>/dev/null)
 # 12. tty 键（Terminal.app 与 POSIX 终端靠这个）
 run_cwd "w0t0p1:FFF" "{\"cwd\":\"$TARGET\"}" >/dev/null
 tty_now=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); tty_now="${tty_now##*/}"
-if [ -n "$tty_now" ] && [ "$tty_now" != "??" ]; then
+if [ -n "$tty_now" ] && [ "$tty_now" != "??" ] && [ "$tty_now" != "?" ]; then
   [ "$(state "tty-$tty_now")" = "$TARGET" ] \
     && ok "同时按 tty 键写一份（tty-$tty_now）" || bad "tty 键" "实际: $(state "tty-$tty_now")"
 else
