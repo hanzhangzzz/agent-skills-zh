@@ -271,6 +271,8 @@ def fetch(api, library, value, media, transcribe):
     return {'note': note, 'directory': str(folder), 'processing': status}
 
 
+# RFC 6265 cookie-name = token：允许点等字符（创作服务平台的 cookie 名带点），排除空白、分隔符和控制字符，保证拼进 Cookie 头不出错
+COOKIE_NAME = re.compile(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+")
 STOP_CODES = ('RISK_CONTROL', 'NEED_LOGIN')
 
 
@@ -899,7 +901,7 @@ def operation(args, root, profile):
         if not isinstance(cookies, dict):
             raise Failure('INVALID_SESSION', 'Expected a cookie JSON object')
         cookies.pop('saved_at', None)
-        if not all(isinstance(k, str) and re.fullmatch(r'[A-Za-z0-9_-]+', k) and isinstance(v, str) and '\r' not in v and '\n' not in v for k, v in cookies.items()) or not cookies.get('a1') or not cookies.get('web_session'):
+        if not all(isinstance(k, str) and COOKIE_NAME.fullmatch(k) and isinstance(v, str) and '\r' not in v and '\n' not in v for k, v in cookies.items()) or not cookies.get('a1') or not cookies.get('web_session'):
             raise Failure('INVALID_SESSION', 'Expected an authenticated cookie JSON object')
     else:
         if not credentials.is_file():
