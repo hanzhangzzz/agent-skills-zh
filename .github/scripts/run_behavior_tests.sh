@@ -35,6 +35,7 @@ run "do-something value policy" python3 do-something/tests/test_flywheel_policy.
 run "ci-review verdict gate" bash ci-review/tests/test_verdict_gate.sh
 run "ci-review policy" python3 ci-review/tests/test_review_policy.py
 run "ci-review installer" bash ci-review/tests/test_install.sh
+run "audio-inbox" bash audio-inbox/tests/test_audio_inbox.sh
 run "launch-video audio" python3 launch-video/tests/test_synth_audio.py
 run "launch-video sync check" python3 launch-video/tests/test_check_sync.py
 run "launch-video motion check" python3 launch-video/tests/test_motion_check.py

@@ -208,6 +208,16 @@
       ]
     },
     {
+      "name": "audio-inbox",
+      "source": "./",
+      "strict": false,
+      "description": "macOS folder inbox: drop m4a/wav/video files and launchd converts them to mp3 in the background; output can sit in a cloud-drive sync folder. 音频收件箱，自动转 mp3",
+      "version": "1.0.0",
+      "skills": [
+        "./audio-inbox"
+      ]
+    },
+    {
       "name": "readme-craft",
       "source": "./",
       "strict": false,
