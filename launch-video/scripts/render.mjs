@@ -120,8 +120,10 @@ try {
       if (i % (fps * 5) === 0) console.log(`frame ${i}/${n}`);
     }
     mkdirSync(dirname(out), { recursive: true });
-    // with sub-frames: read at fps×sub, average each run of `sub` frames (tmix), then keep one frame per output frame
-    const blur = sub > 1 ? ['-vf', `tmix=frames=${sub},select='not(mod(n\\,${sub}))',setpts=N/${fps}/TB`] : [];
+    // with sub-frames: read at fps×sub, average each run of `sub` frames (tmix), then keep one frame per output frame.
+    // tmix at index n averages n-sub+1..n, so keep n = sub-1, 2sub-1, …: each kept frame blends exactly its own
+    // sub-frames and never the previous output frame's (a hard cut on a frame boundary stays clean).
+    const blur = sub > 1 ? ['-vf', `tmix=frames=${sub},select='eq(mod(n+1\\,${sub})\\,0)',setpts=N/${fps}/TB`] : [];
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps * sub), '-i', join(frames, '%06d.png'),
       ...blur, '-r', String(fps),
       '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow',
