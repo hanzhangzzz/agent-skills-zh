@@ -9,7 +9,9 @@
 // fetch() and canvas pixel reads of local images work.
 //
 // Usage (run from a directory where `npm i -D playwright` has been done):
-//   node <skill>/scripts/render.mjs --html promo.html [--out out/silent.mp4] [--fps 30]
+//   node <skill>/scripts/render.mjs --html promo.html [--out out/silent.mp4] [--fps 30] [--subframes 3]
+//     --subframes N  captures N sub-frames per output frame and blends them (ffmpeg tmix) → real motion blur on
+//                    fast moves. N× slower; use 1 (default) while iterating and 3 for the delivery render.
 //   node <skill>/scripts/render.mjs --html promo.html --stills 0.5,4,9.5   → out/stills/t<sec>.png (or --out <dir>)
 // Env: CHROMIUM_PATH=<browser binary> to reuse an existing Chromium instead of Playwright's download.
 import { createRequire } from 'node:module';
@@ -109,13 +111,19 @@ try {
     console.log(`✓ stills → ${dir}`);
   } else {
     const frames = mkdtempSync(join(tmpdir(), 'launch-video-frames-'));
+    const sub = Math.max(1, Math.round(Number(args.subframes ?? 1)));
     const n = Math.round(duration * fps);
     for (let i = 0; i < n; i++) {
-      await shot(i / fps, join(frames, `${String(i).padStart(5, '0')}.png`));
+      for (let k = 0; k < sub; k++) {
+        await shot((i + k / sub) / fps, join(frames, `${String(i * sub + k).padStart(6, '0')}.png`));
+      }
       if (i % (fps * 5) === 0) console.log(`frame ${i}/${n}`);
     }
     mkdirSync(dirname(out), { recursive: true });
-    const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps), '-i', join(frames, '%05d.png'),
+    // with sub-frames: read at fps×sub, average each run of `sub` frames (tmix), then keep one frame per output frame
+    const blur = sub > 1 ? ['-vf', `tmix=frames=${sub},select='not(mod(n\\,${sub}))',setpts=N/${fps}/TB`] : [];
+    const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps * sub), '-i', join(frames, '%06d.png'),
+      ...blur, '-r', String(fps),
       '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow',
       '-movflags', '+faststart', out], { stdio: 'inherit' });
     rmSync(frames, { recursive: true, force: true });

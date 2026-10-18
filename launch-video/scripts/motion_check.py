@@ -10,7 +10,12 @@ a screenshot sitting in a frame for 10 s is the slideshow problem.
 
 --scenes lists scene start times; the report then also prints the motion in the 0.5 s around each
 cut, so a cut carried by a cross-fade (one soft bump) reads differently from one carried by a
-moving element (sustained motion across the boundary). Exit code 1 when any STILL run is found.
+moving element (sustained motion across the boundary).
+
+POP lines mark single-frame spikes: one frame whose change is at least --pop times the frames on
+both sides of it (a flash, a leaked element, an image that swapped a frame late). Cuts are listed
+as POP too; a POP that is not on a planned cut is a bug. Exit code 1 when any STILL run or any
+POP away from a --scenes cut is found.
 """
 import argparse
 import subprocess
@@ -44,11 +49,35 @@ def still_runs(diffs, min_seconds):
     return runs
 
 
+def pops(diffs, ratio, floor=NOISE * 20):
+    """[(time_s, change, neighbour_max)] for 1–2 frame spikes `ratio`× above the frames on both sides.
+
+    A hard cut is one spiked frame; a one-frame flash or a leaked element is two (in and out)."""
+    found, i = [], 1
+    while i < len(diffs) - 1:
+        hit = None
+        for length in (1, 2):
+            if i + length >= len(diffs):
+                break
+            run = diffs[i:i + length]
+            nb = max(diffs[i - 1], diffs[i + length])
+            if min(run) >= floor and min(run) >= ratio * max(nb, 1.0):
+                hit = (i / FPS, max(run), nb)
+                i += length
+                break
+        if hit:
+            found.append(hit)
+        else:
+            i += 1
+    return found
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--video", required=True)
     ap.add_argument("--still", type=float, default=2.0, help="flag still runs at least this long (seconds)")
     ap.add_argument("--scenes", default="", help="comma-separated scene start times to inspect the cuts")
+    ap.add_argument("--pop", type=float, default=3.0, help="flag single frames whose change is this many × both neighbours")
     args = ap.parse_args()
 
     diffs = frame_diffs(args.video)
@@ -78,7 +107,18 @@ def main():
         print(f"\n{len(runs)} still run(s) ≥ {args.still}s. Add protagonist motion, pulse or dashFlow, or note it as a deliberate hold.")
     else:
         print(f"no still run ≥ {args.still}s")
-    sys.exit(1 if runs else 0)
+
+    stray = []
+    for t, d, nb in pops(diffs, args.pop):
+        on_cut = any(abs(t - c) <= 2 / FPS for c in cuts)
+        if not on_cut:
+            stray.append(t)
+        print(f"POP    {t:6.2f}s  {d:8.0f} px vs {nb:6.0f} around it{'  (planned cut)' if on_cut else ''}")
+    if stray:
+        print(f"\n{len(stray)} single-frame pop(s) off any cut: look at a 10 fps strip around each; a flash or a leaked element is a bug.")
+    elif not pops(diffs, args.pop):
+        print("no single-frame pop")
+    sys.exit(1 if runs or stray else 0)
 
 
 if __name__ == "__main__":
