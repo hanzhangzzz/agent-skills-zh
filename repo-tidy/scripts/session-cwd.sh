@@ -47,14 +47,21 @@ sid="${TERM_SESSION_ID:-$ITERM_SESSION_ID}"
 sid="${sid##*:}"                      # w0t0p1:UUID → UUID
 
 # ── 键 2：控制终端。hook 自身没有 tty，沿父进程链找第一个有的 ──
+# 这个进程就是 agent 本身，记为位置文件的 owner：agent 退出后标签页还在，
+# 文件不会被删，editor-here.sh 靠核对 owner 存活才不会打开过期目录。
 tty_name=""
+owner=""
 p=$PPID
 for _ in 1 2 3 4 5; do
   case "$p" in ""|0|1) break;; esac
   t=$(ps -o tty= -p "$p" 2>/dev/null | tr -d ' ')
   case "$t" in
     ""|"??"|"?") ;;
-    *) tty_name="${t##*/}"; break;;
+    *) tty_name="${t##*/}"
+       # 带启动时间防 PID 复用；LC_ALL=C 让读写两侧格式一致
+       started=$(LC_ALL=C ps -o lstart= -p "$p" 2>/dev/null | tr -s ' ' | sed 's/^ //;s/ $//')
+       [ -n "$started" ] && owner="owner $p $started"
+       break;;
   esac
   p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
 done
@@ -70,8 +77,12 @@ if [ -z "$sid" ] && [ -z "$tty_name" ]; then
 fi
 
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
-[ -n "$sid" ]      && printf '%s\n' "$cwd" > "$STATE_DIR/$sid" 2>/dev/null
-[ -n "$tty_name" ] && printf '%s\n' "$cwd" > "$STATE_DIR/tty-$tty_name" 2>/dev/null
+# 第 1 行 cwd（旧读者只读这一行），第 2 行 owner；拿不到 owner 就不写，读侧视为不可信
+record="$cwd"
+[ -n "$owner" ] && record="$cwd
+$owner"
+[ -n "$sid" ]      && printf '%s\n' "$record" > "$STATE_DIR/$sid" 2>/dev/null
+[ -n "$tty_name" ] && printf '%s\n' "$record" > "$STATE_DIR/tty-$tty_name" 2>/dev/null
 # 终端已由 Claude/原生终端 hook 接管，释放上一任 Codex 客户端留下的绑定。
 [ -n "$sid" ] && rm -f "$STATE_DIR/$sid.codex" 2>/dev/null
 rm -f "$STATE_DIR/.unsupported" 2>/dev/null   # 这个环境能用，清掉旧记号

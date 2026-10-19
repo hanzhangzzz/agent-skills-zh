@@ -104,6 +104,8 @@ Codex 声明改为 `codex-<thread ID>.task`，cwd 存在 `codex-<thread ID>`。�
 - `<UUID>` —— `TERM_SESSION_ID` 的 UUID 段，iTerm2 与 Terminal.app 都设这个变量
 - `tty-<name>` —— 控制终端名，POSIX 通用回退
 
+位置文件第 1 行是 cwd，第 2 行 `owner <PID> <启动时间>` 记写入它的 agent 进程。agent 退出后标签页和文件都还在，tty 也会被新标签页复用，所以 `editor-here.sh` 只在 owner 仍存活且启动时间一致时采信该文件（连同同键的 `.task`），否则回退终端当前路径。没有 owner 行的旧格式文件不采信，运行中的 session 下一轮对话就会被 hook 改写成新格式。
+
 其它终端设 `SESSION_KEY_CMD` 指定一条输出「当前标签页唯一键」的命令，`editor-here.sh` 会拿它去查同名或 `tty-` 前缀的位置文件。例如 tmux：
 
 ```bash
@@ -116,7 +118,7 @@ export SESSION_KEY_CMD="tmux display-message -p '#{pane_id}'"
 
 先跑 `install.sh status`，它会分层告诉你卡在哪一环：hook 没注册、终端认不出、位置文件不新鲜（hook 没在跑）、`editor-here.sh` 不可执行。
 
-快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash "$SKILL_DIR/scripts/editor-here.sh"` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`iterm-codex` 走经过校验的 Codex 绑定，`iterm` 走 Claude/终端位置文件，`terminal-path` 说明回退了）。Codex 检查 `<终端 UUID>.codex` 的绑定及 `codex-<thread ID>[.task]`，不要用继承的终端环境变量声明任务。
+快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash "$SKILL_DIR/scripts/editor-here.sh"` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`iterm-codex` 走经过校验的 Codex 绑定，`iterm` 走 Claude/终端位置文件，`terminal-path` 说明回退了，前面若有 `stale(...)` 表示该键的位置文件 owner 已退出）。Codex 检查 `<终端 UUID>.codex` 的绑定及 `codex-<thread ID>[.task]`，不要用继承的终端环境变量声明任务。
 
 ### 卸载
 

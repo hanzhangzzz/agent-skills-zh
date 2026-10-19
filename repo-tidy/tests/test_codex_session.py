@@ -29,6 +29,7 @@ class CodexSessionTests(unittest.TestCase):
             "202": {"key": "WEEK", "started": "start-202"},
         }
         self.parents = {}
+        self.claude_started = "start-claude"  # hook 父进程即 Claude；None 表示已退出
         self.fixture = self.root / "processes.json"
         binaries = self.root / "bin"
         binaries.mkdir()
@@ -51,6 +52,12 @@ class CodexSessionTests(unittest.TestCase):
                          for pid, row in self.processes.items())
         lines = ["#!/bin/sh", 'if [ "$1" = "-axo" ]; then',
                  "printf '%s\\n' " + shlex.quote(rows), "exit 0", "fi",
+                 # session-cwd.sh 记 owner、editor-here.sh 校验 owner 用的是 -o 在前的写法
+                 'if [ "$1" = "-o" ]; then case "$2" in',
+                 "tty=) echo ttys777; exit 0 ;;",
+                 "lstart=) " + ("printf '%s\\n' " + shlex.quote(self.claude_started) + "; exit 0"
+                               if self.claude_started else "exit 1") + " ;;",
+                 "esac; fi",
                  '[ "$1" = "eww" ] && shift', 'pid="$2"; field="$4"',
                  'case "$pid:$field" in']
         for pid, row in self.processes.items():
@@ -166,6 +173,13 @@ class CodexSessionTests(unittest.TestCase):
         self.run_script("session-cwd.sh", payload={"cwd": str(self.task)})
         self.assertFalse((self.state / "JEV.codex").exists())
         self.assertEqual(self.target("JEV"), str(self.task))
+        # Claude 也退出后，它留下的位置文件不能再被采信
+        self.claude_started = None
+        self.save_processes()
+        env = dict(self.env, SESSION_KEY_CMD="printf %s JEV", EDITOR_HERE_DRY="1")
+        result = self.run_script("editor-here.sh", env=env, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn(str(self.task), result.stdout)
 
     def test_managed_backend_cannot_bind_to_ancestor_terminal(self):
         self.processes["555"] = {"key": "JEV", "started": "server-start", "tty": "??",
