@@ -41,6 +41,14 @@ open_it() {  # open_it <目录> <来源标签>
   exit 0
 }
 
+owner_alive() {  # owner_alive <位置文件>：第 2 行记录的进程仍在且启动时间一致
+  local tag pid started now
+  read -r tag pid started < <(sed -n 2p "$1" 2>/dev/null)
+  [ "$tag" = "owner" ] && [ -n "$pid" ] && [ -n "$started" ] || return 1
+  now=$(LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' ' | sed 's/^ //;s/ $//')
+  [ -n "$now" ] && [ "$now" = "$started" ]
+}
+
 try_state() {  # try_state <键> <来源标签>；命中则打开
   [ -n "$1" ] || return 1
   local codex_dir codex_rc
@@ -49,6 +57,10 @@ try_state() {  # try_state <键> <来源标签>；命中则打开
   [ "$codex_rc" = "0" ] && open_it "$codex_dir" "$2-codex"
   # 活跃 Codex 客户端未绑定时，旧终端文件可能属于其它 session，直接回退终端路径。
   [ "$codex_rc" = "3" ] && return 1
+  local f="$STATE_DIR/$1"
+  [ -f "$f" ] || return 1
+  # 写它的 agent 已退出（或 tty 被新标签页复用）时文件仍在，不能采信
+  owner_alive "$f" || { log "stale($2): $1"; return 1; }
   # 显式声明的任务目录优先：Codex 这类不能切 cwd 的 agent 靠它指路，
   # 而 <键> 每轮对话都会被 hook 刷成 cwd，会把声明冲掉
   local t="$STATE_DIR/$1.task"
@@ -56,8 +68,6 @@ try_state() {  # try_state <键> <来源标签>；命中则打开
     local td; td="$(head -1 "$t" | tr -d '\r\n')"
     [ -n "$td" ] && [ -d "$td" ] && open_it "$td" "$2-task"
   fi
-  local f="$STATE_DIR/$1"
-  [ -f "$f" ] || return 1
   local d; d="$(head -1 "$f" | tr -d '\r\n')"
   [ -n "$d" ] && [ -d "$d" ] && open_it "$d" "$2"
   return 1
