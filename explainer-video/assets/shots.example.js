@@ -108,12 +108,16 @@ EX.shot({
     <div class="abs node" id="nt-a" style="--c:var(--blue)"><div class="ic">${ICON.phone}</div>你的手机</div>
     <div class="abs node" id="nt-b" style="--c:var(--purple)"><div class="ic">${ICON.tower}</div>基站 · 运营商</div>
     <div class="abs node" id="nt-c" style="--c:var(--green)"><div class="ic">${ICON.server}</div>服务器机房</div>
+    ${[...Array(8)].map((_, i) => `<div class="abs nt-hop" style="width:26px;height:26px;border-radius:50%;background:#fff;border:5px solid rgba(124,77,255,.35)"></div>`).join('')}
     <div class="abs t-label" id="nt-hops" style="left:0;right:0;top:760px;text-align:center">途经路由器 <b class="mono" id="nt-hn" style="color:var(--purple);font-size:40px">0</b> 台</div>
     <div class="abs card ring" id="nt-pkt" style="--c:var(--purple);padding:14px 26px;display:flex;align-items:center;gap:12px;font-weight:700;font-size:28px;color:var(--purple)">
       <span style="width:32px;height:32px;display:inline-flex">${ICON.lock}</span>数据包</div>`,
   init(el) {
     this.route = el.querySelector('#nt-route'); this.done = el.querySelector('#nt-done'); this.flow = el.querySelector('#nt-flow');
     this.n = ['#nt-a', '#nt-b', '#nt-c'].map((s) => el.querySelector(s)); this.pkt = el.querySelector('#nt-pkt'); this.hn = el.querySelector('#nt-hn');
+    /* small router hops along the route: positions computed once from the path geometry */
+    const L = this.route.getTotalLength(), skip = [0, .5, 1];
+    this.hops = [...el.querySelectorAll('.nt-hop')].map((d, i) => { const f = [.08, .16, .25, .34, .62, .71, .8, .9][i], pt = this.route.getPointAtLength(L * f); return { d, f, x: pt.x, y: pt.y }; });
   },
   render(el, u) {
     const pos = [[360, 560], [960, 560], [1560, 560]], arrive = [1.2, 3.9, 6.2];
@@ -125,6 +129,10 @@ EX.shot({
     });
     const p = cubic(prog(u, 1.2, 6.2));                                   /* protagonist rides the route */
     EX.drawPath(this.done, p);
+    this.hops.forEach((h, i) => {                                          /* skeleton: hops pop with the route, light when passed */
+      EX.place(h.d, h.x, h.y, lerp(.4, 1, spring(u - .4 - i * .05, 16, .55)), clamp((u - .4 - i * .05) / .15));
+      h.d.style.borderColor = p >= h.f ? 'var(--purple)' : '';
+    });
     dashFlow(this.flow, u, 60);                                           /* ambient motion while captions are read */
     const L = this.done.getTotalLength(), pt = this.done.getPointAtLength(L * p);
     EX.place(this.pkt, pt.x, pt.y - 80, 1, clamp((u - 1) / .2));

@@ -246,7 +246,7 @@
   /* ---------- layout lint: catches what a model cannot see ----------
      For every visible element that directly holds text: outside the 1920×1080 frame, font smaller than 20 px,
      colliding with another text element, hidden under the caption / HUD, or clipped by its own box. */
-  function lint() {
+  function lint({ composition = true } = {}) {
     const issues = [];
     const S = $('stage').getBoundingClientRect();
     const k = S.width / 1920;
@@ -277,6 +277,16 @@
       if (box.x < -2 || box.y < -2 || box.x + box.w > 1922 || box.y + box.h > 1082) issues.push(`OFFSCREEN ${name(el)} at ${box.x | 0},${box.y | 0} ${box.w | 0}×${box.h | 0}`);
       if (!inChrome && fs < 20 && o > .6) issues.push(`SMALL ${name(el)} font ${fs.toFixed(1)}px (min 20)`);
       if (el.scrollWidth > el.clientWidth + 2 && ['hidden', 'clip'].includes(getComputedStyle(el).overflowX)) issues.push(`CLIPPED ${name(el)} text wider than its box`);
+      const cs = getComputedStyle(el);
+      if (!inChrome && cs.color === 'rgba(0, 0, 0, 0)' && !(cs.webkitBackgroundClip === 'text' || cs.backgroundClip === 'text')) issues.push(`INVISIBLE ${name(el)} text is transparent (a .grad-text child lost its gradient clip?)`);
+      /* count the rendered lines of the element's own text (line boxes from a Range, not the element height) */
+      const ownText = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
+      const plain = ownText.map((n) => n.textContent).join('').trim();
+      if (!inChrome && plain.length <= 12 && !el.closest('.ch') && !el.classList.contains('ch')) {
+        const tops = new Set();
+        for (const n of ownText) { const rg = document.createRange(); rg.selectNodeContents(n); for (const q of rg.getClientRects()) if (q.width > 1) tops.add(Math.round(q.top / 4)); }
+        if (tops.size > 1) issues.push(`WRAP ${name(el)} short label "${plain}" breaks into ${tops.size} lines: widen its box or add white-space:nowrap`);
+      }
     });
     const inter = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
     const chromeBoxes = [...document.querySelectorAll('#cap-pill, #hud-chip, #hud-meter, #hud-rate')].filter((e) => vis(e) > .35).map((e) => {
@@ -292,7 +302,7 @@
     }
     /* composition: the union of everything painted in the current shot must fill and centre the safe area.
        Skipped for hud:false shots (hook, title, ending), which may be deliberately minimal. */
-    if (curShot && curShot.hud) {
+    if (curShot && composition) {
       let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
       curShot.el.querySelectorAll('*').forEach((el) => {
         if (el.tagName.toLowerCase() === 'svg' || vis(el) < .35) return;
@@ -317,9 +327,11 @@
       if (x1 < x0) issues.push('EMPTY nothing painted in this shot');
       else {
         const w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-        if (w * h < .3 * SW * SH || (w < .55 * SW && h < .55 * SH))
-          issues.push(`SPARSE content spans ${w | 0}×${h | 0}px (${(100 * w / SW) | 0}% × ${(100 * h / SH) | 0}% of the safe area): scale the main visual up or add the missing parts — target ≥ 60% of the width or height`);
-        if (Math.abs(cx - SCX) > .14 * SW || Math.abs(cy - SCY) > .16 * SH)
+        /* hook / title / ending (hud:false) may be minimal, but a title still has to read as a poster */
+        const sparse = curShot.hud ? (w * h < .3 * SW * SH || (w < .55 * SW && h < .55 * SH)) : (w * h < .1 * SW * SH && w < .45 * SW);
+        if (sparse)
+          issues.push(`SPARSE content spans ${w | 0}×${h | 0}px (${(100 * w / SW) | 0}% × ${(100 * h / SH) | 0}% of the safe area): scale the main visual up or add the missing parts — target ≥ 60% of the width or height` + (curShot.hud ? '' : ' (titles: ≥ 120 px type plus one strong shape)'));
+        if (curShot.hud && (Math.abs(cx - SCX) > .14 * SW || Math.abs(cy - SCY) > .16 * SH))
           issues.push(`OFF-CENTER content centre at ${cx | 0},${cy | 0}, safe-area centre is ${SCX},${SCY}: move the composition`);
       }
     }

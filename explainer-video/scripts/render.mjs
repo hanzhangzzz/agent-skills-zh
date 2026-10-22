@@ -135,12 +135,15 @@ try {
       if (!list) throw new Error('--stills shots needs window.__shots (explainer.js)');
       times = list.flatMap((s) => [(s.start + s.dur * .5).toFixed(2), (s.start + s.dur - .15).toFixed(2)]);
     }
+    // composition (SPARSE / OFF-CENTER) is judged on the mid-shot still only: a shot's last frames may be a deliberate
+    // morph into the next shot. Explicit --stills times are always judged.
+    const midShot = new Set(args.stills === 'shots' ? times.filter((_, i) => i % 2 === 0) : times);
     let lintCount = 0;
     for (const s of times) {
       const tt = Math.min(Number(s), duration - 0.001);
       await shot(tt, join(dir, `t${String(s).padStart(7, '0')}.png`));
       if (args.lint) {
-        const issues = await page.evaluate(() => (window.__lint ? window.__lint() : ['page has no __lint']));
+        const issues = await page.evaluate((c) => (window.__lint ? window.__lint({ composition: c }) : ['page has no __lint']), midShot.has(s));
         const cur = await page.evaluate((x) => (window.__shots || []).filter((r) => r.start <= x).pop()?.id ?? '', tt);
         for (const i of issues) console.log(`LINT t=${s} [${cur}] ${i}`);
         lintCount += issues.length;

@@ -54,6 +54,8 @@
   .t-label{font-size:24px;font-weight:500;color:var(--ink2)}
   .code{font:500 30px/1.6 var(--mono);color:var(--ink)}
   .grad-text{background:linear-gradient(90deg,var(--blue),var(--purple) 55%,var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+  /* splitChars/riseChars wrap each glyph in an inline-block span, which escapes the parent's text clip: give each glyph the clip itself */
+  .grad-text .ch{background:inherit;-webkit-background-clip:text;background-clip:text;color:transparent}
   svg.wire{position:absolute;inset:0;width:1920px;height:1080px;overflow:visible;pointer-events:none}
   svg.wire path{fill:none;stroke-width:4;stroke-linecap:round}
   /* ---------- add your own component CSS below ---------- */
