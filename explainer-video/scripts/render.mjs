@@ -111,22 +111,69 @@ async function shot(t, path) {
   else return page.screenshot({ path, type: 'png' });
 }
 
-// ink: share of safe-area pixels (x 80–1840, y 180–900) that differ from the bare background (content layers
-// hidden). White cards count; a thin outline on an empty frame does not. Explainer-only: needs #world #hud #cap.
-async function inkCoverage(full) {
-  await page.evaluate(() => { for (const id of ['world', 'hud', 'cap']) document.getElementById(id).style.visibility = 'hidden'; });
+// composition from pixels: diff the frame without HUD / caption against the bare background (#bg plus a scenery
+// backdrop), so DOM, SVG, canvas and WebGL content all count the same. Returns the ink share of the safe area (x 80–1840, y 180–900;
+// white cards count, a thin outline on an empty frame does not) and the box holding 99% of the ink over the whole frame.
+// Explainer-only: needs #bg #hud #cap inside #stage.
+async function inkStats() {
+  const layers = (ids, v) => page.evaluate(([ids, v]) => {
+    /* '*' = everything that is not background: #bg and a scenery backdrop (EX.backdrop without subject: true) stay */
+    const bg = (el) => el.id === 'bg' || (el.id === 'back' && !('subject' in el.dataset));
+    for (const el of document.getElementById('stage').children) if (ids === '*' ? !bg(el) : ids.includes(el.id)) el.style.visibility = v;
+  }, [ids, v]);
+  await layers(['hud', 'cap'], 'hidden');
+  const content = await page.screenshot({ type: 'png' });
+  await layers('*', 'hidden');
   const bare = await page.screenshot({ type: 'png' });
-  await page.evaluate(() => { for (const id of ['world', 'hud', 'cap']) document.getElementById(id).style.visibility = ''; });
+  await layers('*', '');
   return page.evaluate(async ([a, b]) => {
     const load = (d) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = 'data:image/png;base64,' + d; });
     const [ia, ib] = await Promise.all([load(a), load(b)]);
-    const cv = document.createElement('canvas'); cv.width = 1760; cv.height = 720; const g = cv.getContext('2d');
-    g.drawImage(ia, -80, -180); const A = g.getImageData(0, 0, 1760, 720).data;
-    g.drawImage(ib, -80, -180); const B = g.getImageData(0, 0, 1760, 720).data;
+    const W = 1920, H = 1080;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d', { willReadFrequently: true });
+    g.drawImage(ia, 0, 0); const A = g.getImageData(0, 0, W, H).data;
+    g.drawImage(ib, 0, 0); const B = g.getImageData(0, 0, W, H).data;
+    const ink = new Uint8Array(W * H), rowN = new Float64Array(H);
+    let safe = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      if (Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) <= 12) continue;
+      ink[y * W + x] = 1; rowN[y]++;
+      if (x >= 80 && x < 1840 && y >= 180 && y < 900) safe++;
+    }
+    // where the composition is: rows inked edge to edge are scenery bands (ground, sky, a full-bleed 3D or canvas
+    // backdrop); in those rows only what stands out from the row's own median colour counts. The HUD and caption
+    // bands (top / bottom 120 px) are left out so edge decorations do not drag the centre.
+    const col = new Float64Array(W), row = new Float64Array(H);
     let n = 0;
-    for (let i = 0; i < A.length; i += 4) if (Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) > 12) n++;
-    return n / (1760 * 720);
-  }, [full.toString('base64'), bare.toString('base64')]);
+    const ch = new Uint8Array(W);
+    for (let y = 120; y < H - 120; y++) {
+      const band = rowN[y] > .9 * W;
+      let med = null;
+      if (band) med = [0, 1, 2].map((c) => { for (let x = 0; x < W; x++) ch[x] = A[(y * W + x) * 4 + c]; return ch.slice().sort()[W >> 1]; });
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const on = band ? Math.max(Math.abs(A[i] - med[0]), Math.abs(A[i + 1] - med[1]), Math.abs(A[i + 2] - med[2])) > 24 : ink[y * W + x];
+        if (on) { n++; col[x]++; row[y]++; }
+      }
+    }
+    const span = (h) => { let c = 0, lo = 0, hi = h.length - 1; for (let i = 0; i < h.length; i++) { c += h[i]; if (c >= n * .005) { lo = i; break; } }
+      c = 0; for (let i = h.length - 1; i >= 0; i--) { c += h[i]; if (c >= n * .005) { hi = i; break; } } return [lo, hi]; };
+    const [x0, x1] = span(col), [y0, y1] = span(row);   // the box holding 99% of the counted ink
+    return { cover: safe / (1760 * 720), n, x0, x1, y0, y1 };
+  }, [content.toString('base64'), bare.toString('base64')]);
+}
+// EMPTY / SPARSE / OFF-CENTER / THIN for one mid-shot still; hud = the shot is an explained shot (not hook/title/ending)
+function compositionIssues(ink, hud) {
+  const SW = 1760, SH = 720, SCX = 960, SCY = 540;
+  if (ink.n < 500) return ['EMPTY nothing painted in this shot'];
+  const out = [];
+  const w = ink.x1 - ink.x0, h = ink.y1 - ink.y0, cx = (ink.x0 + ink.x1) / 2, cy = (ink.y0 + ink.y1) / 2;
+  const sparse = hud ? (w * h < .3 * SW * SH || (w < .55 * SW && h < .55 * SH)) : (w * h < .1 * SW * SH && w < .45 * SW);
+  if (sparse) out.push(`SPARSE content spans ${w | 0}×${h | 0}px (${(100 * w / SW) | 0}% × ${(100 * h / SH) | 0}% of the safe area): scale the main visual up or add the missing parts — target ≥ 60% of the width or height` + (hud ? '' : ' (titles: ≥ 120 px type plus one strong shape)'));
+  if (hud && (Math.abs(cx - SCX) > .14 * SW || Math.abs(cy - SCY) > .16 * SH)) out.push(`OFF-CENTER content centre at ${cx | 0},${cy | 0}, safe-area centre is ${SCX},${SCY}: move the composition`);
+  if (hud && ink.cover < 0.05) out.push(`THIN only ${(ink.cover * 100).toFixed(1)}% of the safe area is drawn (min 5%): fill shapes (gradient body, not outline only), enlarge them, or add the missing parts`);
+  return out;
 }
 
 let failed = false;
@@ -162,12 +209,9 @@ try {
       const png = await shot(tt, join(dir, `t${String(s).padStart(7, '0')}.png`));
       if (args.lint) {
         const issues = await page.evaluate((c) => (window.__lint ? window.__lint({ composition: c }) : ['page has no __lint']), midShot.has(s));
-        const cur = await page.evaluate((x) => (window.__shots || []).filter((r) => r.start <= x).pop()?.id ?? '', tt);
         const curRow = await page.evaluate((x) => (window.__shots || []).filter((r) => r.start <= x).pop() ?? null, tt);
-        if (midShot.has(s) && curRow?.hud && (await page.evaluate(() => !!document.getElementById('world')))) {
-          const ink = await inkCoverage(png);
-          if (ink < 0.05) issues.push(`THIN only ${(ink * 100).toFixed(1)}% of the safe area is drawn (min 5%): fill shapes (gradient body, not outline only), enlarge them, or add the missing parts`);
-        }
+        const cur = curRow?.id ?? '';
+        if (midShot.has(s) && (await page.evaluate(() => !!document.getElementById('bg')))) issues.push(...compositionIssues(await inkStats(), !!curRow?.hud));
         for (const i of issues) console.log(`LINT t=${s} [${cur}] ${i}`);
         lintCount += issues.length;
       }

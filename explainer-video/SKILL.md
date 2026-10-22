@@ -1,7 +1,7 @@
 ---
 name: explainer-video
 description: |
-  一句话生成 1.5–2.5 分钟的中文知识讲解动画视频（1080p MP4，配乐 + 音效 + 字幕，无需旁白）。用"把一个日常瞬间放慢成一段旅程"的结构讲清一个原理：一个主角（一句话、一笔钱、一颗光子）走过 6–10 站，每站一个概念，顶部仪表（计时器 / 距离 / 年份）显示走到了哪。画面由 HTML/SVG 按时间逐帧渲染，粉彩玻璃风格、HUD、字幕、转场、音效和版面检查都由模板提供，只需写每个镜头的画面。用于"做个视频讲讲 X 是怎么工作的""你按下 X 之后发生了什么""科普动画""讲解视频""explainer video"等请求。不用于实拍剪辑、AI 生图生视频、开源项目发布片（用 launch-video）。
+  一句话生成 1.5–2.5 分钟的中文知识讲解动画视频（1080p MP4，配乐 + 音效 + 字幕，无需旁白）。用"把一个日常瞬间放慢成一段旅程"的结构讲清一个原理：一个主角（一句话、一笔钱、一颗光子）走过 6–10 站，每站一个概念，顶部仪表（计时器 / 距离 / 年份）显示走到了哪。画面由 HTML/SVG/Canvas/three.js 按时间逐帧渲染；视觉世界按题材选（粉彩信息图、长卷跟拍、尺度穿越、3D 实物、等轴小世界、深色星空、数据可视化、纸艺手绘），镜头摆在一个大世界里由相机推拉摇移。HUD、字幕、相机、音效和版面检查由模板提供，只需写世界和镜头。用于"做个视频讲讲 X 是怎么工作的""你按下 X 之后发生了什么""科普动画""讲解视频""explainer video"等请求。不用于实拍剪辑、AI 生图生视频、开源项目发布片（用 launch-video）。
 trigger: /explainer-video
 compatibility: Claude Code, Codex
 license: MIT
@@ -9,11 +9,11 @@ license: MIT
 
 # explainer-video
 
-输入一句话题目，产出一支能直接发的讲解动画。质量来自三样东西：**结构**（主角 + 旅程 + 仪表 + 回扣）、**每个镜头的画面密度**、**渲染前后的自动检查**。模板已经负责背景、HUD、字幕、转场、音效和版面检查，你只写镜头。
+输入一句话题目，产出一支能直接发的讲解动画。质量来自四样东西：**结构**（主角 + 旅程 + 仪表 + 回扣）、**世界与镜头**（按题材选画风，造一个世界再用相机拍它）、**每个镜头的画面密度**、**渲染前后的自动检查**。模板已经负责 HUD、字幕、相机、转场、音效和版面检查，你只写世界和镜头。
 
-`<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/exemplar.md`（范例拆解）和 `references/visuals.md`（概念 → 画面配方）。
+`<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/exemplar.md`（范例拆解：结构）、`references/worlds.md`（视觉世界与运镜：画风和镜头）和 `references/visuals.md`（概念 → 画面配方）。
 
-省上下文的读法：`explainer.js` 和 `engine.js` 只读文件头注释（API 都在那里，各约 40 行），不要通读。`gallery.example.js` 有 57 KB，先 `grep -n "^/\* [0-9]" gallery.example.js` 看七个镜头的起始行，再用 `sed -n '<起>,<止>p'` 只读要用的那一段。
+省上下文的读法：`explainer.js` 和 `engine.js` 只读文件头注释（API 都在那里，各约 50 行），不要通读。`gallery.example.js` 有 57 KB，先 `grep -n "^/\* [0-9]" gallery.example.js` 看七个镜头的起始行，再用 `sed -n '<起>,<止>p'` 只读要用的那一段。
 
 ## 0. 初始化（任一失败即停止并告知用户）
 
@@ -33,9 +33,13 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 仪表：一个单调增长、可显示在顶部的量（例：回车后 0.000 → 3.000 s）
 站点：6–10 站，每站一个概念、主角在这一站的形态（例：打包加密 → 乱码；光纤 → 光脉冲；切分 → token 块）
 回扣：结尾用题目答案本身做画面（例：背景变成蓝天）
+视觉世界：按 references/worlds.md 第 1 节列 稳妥 / 契合 / 大胆 三个候选，写明选哪个、为什么（例：长卷旅程——咖啡本来就是走一条从农场到杯子的路）
+招牌镜头：2–3 个只有这个题目才有的镜头（例：镜头从一颗樱桃推进到果核里的两颗生豆）
 ```
 
 题目不是“一瞬间”时，按 `references/exemplar.md` 第 5 节换仪表（天数、公里、尺度、年份）。
+
+范例的粉彩信息图是保底，不是默认答案：题目有实体、有路线、跨尺度、讲历史或讲数据时，选更贴题材的世界（`worlds.md` 第 2 节写了每种世界的搭法、技法和坑）。所有世界共用同一套 HUD、字幕、仪表和检查。
 
 ## 2. 事实表
 
@@ -47,7 +51,7 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 在 `PLAN.md` 写镜头表，每行一个镜头：
 
-| 镜头 id | 章节 | 时长 | 仪表起止 | 主视觉（含主角形态） | 动作（按字幕时刻） | 字幕 |
+| 镜头 id | 章节 | 时长 | 仪表起止 | 世界位置 `at` 与镜头运动 | 主视觉（含主角形态） | 动作（按字幕时刻） | 字幕 |
 
 规则：
 
@@ -56,7 +60,8 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 - 字幕一句 ≤ 24 字，停留 ≥ 字数 / 6 + 1 秒。它说“此刻发生了什么”，像对朋友讲。每章第一次出现的术语用 `「术语」` 包起来，模板会用章节色高亮。
 - 仪表按真实值走，不必匀速：片子的时间按概念重要性分配，慢放倍数会自动算出来显示在右上角。
 - 每个镜头按 `references/visuals.md` 的密度清单设计：主视觉 + 主角 + 1–3 个标注 + 一个持续运动。
-- 每章至少一次主角跨镜头的 continuity cut（下一个镜头 `enter: 'cut'`）。
+- 每章至少一次主角跨镜头的 continuity cut（下一个镜头 `enter: 'cut'`）或相机连续运动（`fly` / `cam`）。
+- 镜头运动从 `worlds.md` 第 3 节选。至少一半讲解镜头的相机在动，全片至少一次尺度穿越或长距离跟拍；招牌镜头排在章节高潮处。先在纸上排世界地图：每个镜头在世界里的 `at`（站点相距 ≥ 1.5 屏，嵌套细节 s 取 0.05–0.15）。
 
 ## 4. 写 shots.js
 
@@ -69,6 +74,25 @@ EX.shot({ id, chapter, dur, meter: [起, 止], caps: [[秒, '字幕']], sfx: [[�
 EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0, 1, 2, 3] }, mood: 'calm' });
 ```
 
+世界与相机（详见 `explainer.js` 文件头和 `world.example.js`）：
+
+```js
+EX.world({ html, init(el), render(el, t) })     // 常驻的世界层（整条路、地图、地景），世界坐标，所有镜头都在它上面
+EX.backdrop({ html, init(el), render(el, t) })  // 贴屏的全幅底层：canvas 星空、three.js 场景；视差读 EX.cam(t)
+EX.shot({ …, at: [x, y, s], cam(u, d) { return [x, y, s] }, fly: 1.5 })
+EX.run({ …, theme: 'dark' })
+```
+
+- `at: [x, y, s]`：这个镜头的 1920×1080 画面放在世界里的中心点和缩放。不写就是 `[960, 540, 1]`；两个镜头 `at` 不同时，默认转场是相机飞过去（`enter: 'fly'`），s 不同时飞行会保持细节所在的点不动，看起来就是推进或拉远。
+- `cam(u, d)`：镜头内自定义相机（跟拍、横摇），返回世界坐标 `[x, y, s, 旋转度数]`，s 是屏幕装下多大一块世界（0.5 = 放大 2 倍）。不写时有 `at` 的镜头自动 3% 慢推。
+- 镜头里的坐标仍是这个镜头自己的 1920×1080：安全区、字号、`--lint` 规则不变。世界层用世界坐标。
+- three.js：工作目录 `npm i three`，`shots.js` 第一行 `import * as THREE from 'three'`（shots.js 按 ES module 加载，未声明的变量会报错）；画布放 `EX.backdrop({ subject: true, … })`（3D 场景就是主视觉，构图检查要算它；星空、天空这类纯背景不加 `subject`），文字用 DOM 标签贴在 `vector.project(camera)` 算出的屏幕点上，照 `three.example.js` 写。镜头的 `render` 先于 backdrop 执行，镜头里要投影 3D 点时先按 t 摆好场景和相机（示例里的 `setScene(t)`）。
+- 相机的坑：
+  - 不要给 `#world`、`#world-layer` 或它们的父级设 `opacity` / `transform`：会形成新的层叠上下文，世界层里的主角会沉到镜头下面。
+  - 从小镜头飞到大镜头（拉远）时，新镜头的文字等飞完（`u > fly`）再出现，否则会以几十倍大小扫过屏幕；推进前先让上一镜的卡片淡出。
+  - 世界层里的线宽、字号要考虑相机缩放 s：在 s = 3 的远景里，4 px 的线只剩 1.3 px。
+  - 左右撑满的文字盒（`left:0; right:0`）在 3% 慢推后会超出画框，报 `OFFSCREEN`，给它定宽。
+
 - 画面里出现和仪表同义的数字（大字“第 N 天”、时钟）时，用 `EX.meterAt(t)` 取值（`t` 是 `render` 的第 4 个参数），不要另写一套数字，否则会和顶部仪表对不上。
 - 仪表单位写 `s / ms / min / h / 天 / 年` 时，右上角自动显示“慢放 ×N”或“快进 ×N”；距离、层数这类非时间仪表不显示倍数。不想要倍数写 `rate: null`。
 - 章节颜色依次取 `EX.C.blue / purple / pink / cyan / green / orange / red / indigo`，相邻章节不同色。
@@ -80,7 +104,7 @@ EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0,
 - **尺寸给足**：一个镜头里所有内容合起来，至少占安全区宽度或高度的 60%，并且大致居中。常用尺寸：主卡片 1000–1300 × 420–560 px；节点图标 132 px，节点间距 ≥ 500 px；token 块字号 46–64 px；代码 34–40 px。宁大勿小，`--lint` 的 `SPARSE` / `OFF-CENTER` 会拦住太小和偏的画面。
 - **骨架先立**：主视觉的骨架（全部节点、卡片外框、坐标轴、格子）在镜头开始 1 秒内全部出现；之后的时间用来让主角移动、状态变化、标注弹出。不要把骨架拆成整段镜头里逐个出现，否则镜头中段画面是半空的。
 - `render` 必须是 `u` 的纯函数：不用 `Math.random`、`Date.now`、定时器、CSS animation/transition；随机用 `rng(seed)`，并在 `init` 里生成好。
-- 示例就是合格标准，写镜头前先读：`shots.example.js` 四个镜头（钩子大输入框、片名环形计时器 + 粒子、乱码扫描、骨架先立的路径）；`gallery.example.js` 七种常用画法（剖面 + 引线标注、放大镜插图、仪表盘 + 数字卡、曲线图 + 标注、地图航线、时间轴里程碑、对比条），效果见 `<skill>/assets/gallery.jpg`。缺哪种画面就从里面拿最接近的改，尺寸、层次和动法照抄。插画用渐变分层（底色 + 内层 + 高光 + 柔阴影），不画单薄的细线稿。
+- 示例就是合格标准，写镜头前先读：`world.example.js`（世界层 + 相机跟拍 + 尺度穿越 + canvas 星空 + 深色主题）和 `three.example.js`（3D 主体 + 3D 点上的标签），效果见 `<skill>/assets/worlds.jpg`；`shots.example.js` 四个镜头（钩子大输入框、片名环形计时器 + 粒子、乱码扫描、骨架先立的路径）；`gallery.example.js` 七种常用画法（剖面 + 引线标注、放大镜插图、仪表盘 + 数字卡、曲线图 + 标注、地图航线、时间轴里程碑、对比条），效果见 `<skill>/assets/gallery.jpg`。缺哪种画面就从里面拿最接近的改，尺寸、层次和动法照抄。插画用渐变分层（底色 + 内层 + 高光 + 柔阴影），不画单薄的细线稿。
 - `EX.pop` 和 `EX.place` 都写 `transform`，同一个元素只用一个；要定位又要弹出，把 `spring(...)` 传给 `place` 的缩放参数。SVG 元素也能用：`place` 移动的是它的原点，所以形状围绕 (0, 0) 画。
 - SVG 的 `id`（渐变、clipPath）全页共享，加镜头前缀（`eg-grad`、`gl-clip`）。恢复元素原色时写回颜色值，不要写 `style.color = ''`，那会退回默认深蓝。
 
@@ -96,7 +120,7 @@ node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每�
 
 `--lint` 打印两类问题，必须清零（退出码 0）才能进入下一步：
 
-- `LINT`（版面）：`SPARSE` 画面太空或主视觉太小、`THIN` 画得太淡太细（安全区里真正上色的像素不足 5%，常见于只画描边的线稿）、`OFF-CENTER` 构图偏、`EMPTY` 什么都没画、`OFFSCREEN` 出画、`SMALL` 字太小、`WRAP` 短标签折成多行、`INVISIBLE` 文字透明（看不见）、`OVERLAP` 文字互相压住、`UNDER-CAP-PILL` / `UNDER-HUD-*` 被字幕或 HUD 挡住、`CLIPPED` 文字被裁。`SPARSE` 的修法是把主视觉放大、补上缺的部分，或把骨架提前到镜头开头，不是加装饰。构图只按每个镜头的中点帧判，镜头末尾变形缩小去接下一个镜头不算违规。
+- `LINT`（版面）：`SPARSE` 画面太空或主视觉太小、`THIN` 画得太淡太细（安全区里真正上色的像素不足 5%，常见于只画描边的线稿）、`OFF-CENTER` 构图偏、`EMPTY` 什么都没画、`OFFSCREEN` 出画、`SMALL` 字太小、`WRAP` 短标签折成多行、`INVISIBLE` 文字透明（看不见）、`OVERLAP` 文字互相压住、`UNDER-CAP-PILL` / `UNDER-HUD-*` 被字幕或 HUD 挡住、`CLIPPED` 文字被裁。`SPARSE` 的修法是把主视觉放大、补上缺的部分，或把骨架提前到镜头开头，不是加装饰。构图只按每个镜头的中点帧判，镜头末尾变形缩小去接下一个镜头不算违规。构图按像素算（去掉 HUD 和字幕的画面对比只有背景的画面），DOM、SVG、canvas、WebGL 一视同仁；满幅背景层只算背景，主体仍要够大够居中。
 - `AUDIT`（节奏）：`CAPTION-LONG` / `CAPTION-FAST` 字幕太长或太快、`LONG` / `SHORT` 镜头时长不合理、`NO-TERM` 章节没命名术语、`METER-BACKWARDS` 仪表倒退、`DURATION` / `CHAPTERS` 总体规模不对。
 
 页面报错（`PAGE ERRORS`）必须修。查某一帧里某个元素的状态，用渲染器直接求值，不要自己写浏览器脚本：

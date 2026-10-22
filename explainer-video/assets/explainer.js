@@ -12,30 +12,50 @@
      caps: [[0, '再经「TLS 加密」：内容只剩乱码。'], [3.5, '…']],   bottom captions, u = local seconds;
                                                 「关键词」 is highlighted in the chapter colour
      sfx: [[1.2, 'pop'], [3, 'chime', .5]],     extra cues at local seconds (name, gain)
-     enter: 'dissolve' | 'cut',                 'cut' when this shot starts with the previous shot's last frame
-                                                (same protagonist, same place) — the seamless continuity cut
+     enter: 'dissolve' | 'cut' | 'fly',         'cut' when this shot starts with the previous shot's last frame
+                                                (same protagonist, same place) — the seamless continuity cut;
+                                                'fly' moves the camera from the previous shot to this one (default
+                                                whenever the two shots sit at different `at`)
+     at: [x, y, s],                             where this shot's 1920×1080 frame sits in the world: centre x, y and
+                                                scale s (0.1 = a tenth of the size, i.e. a detail inside a bigger shot).
+                                                Omit = [960, 540, 1], the plain screen. With `at`, the camera pushes in
+                                                3% over the shot unless you give cam.
+     cam(u, d) { return [x, y, s, rot] },       optional camera pose in world coordinates during the shot (pan, push,
+                                                orbit-like drift). s = how much world the screen shows (0.5 = 2× zoom).
+     fly: 1.2,                                  seconds of the camera move into this shot (enter 'fly')
      hud: true,                                 false hides HUD for hook / ending shots
      html: `<div class="card abs" id="tls-card">…</div>`,   built once
      init(el) {},                               optional, once after html is in the DOM (split chars, cache)
      render(el, u, d, t) {}                     pure: u = local time (can exceed d during the dissolve tail),
                                                 d = dur, t = global time. Never read the previous frame.
    })
-   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain })
+   EX.world({ html, init(el), render(el, t) })  optional persistent layer in world coordinates, under every shot:
+                                                the road, map or landscape the shots are stations on (camera films it)
+   EX.backdrop({ html, init(el), render(el, t), subject })  optional full-frame layer fixed to the screen, behind the
+                                                world: sky, starfield, particles (scenery: the composition lint ignores it), or
+                                                a three.js scene that holds the main subject (subject: true, so it counts).
+                                                Read EX.cam(t) to follow the camera.
+   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, theme: 'dark' })
      unit s / ms / min / h / 天 / 年 (or seconds: real seconds per unit) lets the rate pill show 慢放 ×N or 快进 ×N itself;
      meters that are not time (km, 层, 10ⁿ m) get no rate pill.
 
    Shot helpers (pure functions of u): EX.pop EX.fadeUp EX.fadeOut EX.place EX.drawPath EX.num EX.type EX.stagger
    EX.meterAt(t) — the HUD meter's value at global time t; any on-screen copy of the meter must read it
+   EX.cam(t) — camera pose [x, y, s, rot] at global time t
    Page contract for render.mjs: __duration __seek __ready (from engine.js) + __shots __cues __lint. */
 (function () {
   const C = { blue: '#3B6CF6', purple: '#7C4DFF', pink: '#E6458B', green: '#14B27A', orange: '#F59E0B', cyan: '#0EA5C6', red: '#EF4444', indigo: '#4F46E5' };
   const TOKEN_COLORS = [C.blue, C.purple, C.pink, C.cyan, C.green, C.orange, C.red, C.indigo];
   const chapters = [], shots = [];
-  const XFADE = 0.5;
+  const XFADE = 0.5, FLY = 1.2;
+  const HOME = [960, 540, 1];
   let curShot = null;   /* shot on top at the last rendered frame; lint() reads it */
+  let worldLayer = null, backLayer = null;
 
   function chapter(id, o) { chapters.push({ id, name: o.name, color: o.color || TOKEN_COLORS[chapters.length % 8] }); }
-  function shot(o) { shots.push(Object.assign({ enter: 'dissolve', hud: true, caps: [], sfx: [] }, o)); }
+  function shot(o) { shots.push(Object.assign({ hud: true, caps: [], sfx: [] }, o)); }
+  function world(o) { worldLayer = o; }
+  function backdrop(o) { backLayer = o; }
 
   /* ---------- helpers for shot authors (all pure in u) ---------- */
   /* spring pop-in at local time a: scale from s0 to 1 with overshoot, opacity in 0.15 s. Returns progress 0..1 */
@@ -94,6 +114,37 @@
     return lerp(cur.m0, cur.m1, clamp((t - cur.start) / cur.dur));
   }
 
+  /* camera pose [x, y, s, rot] at global time t: the shot's own pose (cam(u) or `at` with a 3% push-in),
+     and during a fly the move from where the previous shot's camera ended. */
+  function poseOf(s, u) {
+    if (typeof s.cam === 'function') { const p = s.cam(u, s.dur); return [p[0], p[1], p[2] ?? 1, p[3] || 0]; }
+    if (s.pos === HOME) return HOME;
+    return [s.pos[0], s.pos[1], s.pos[2] * lerp(1, .97, clamp(u / s.dur)), 0];
+  }
+  function camAt(t) {
+    let i = -1;
+    for (let k = 0; k < shots.length; k++) if (shots[k].start <= t) i = k;
+    if (i < 0) return poseOf(shots[0], 0);
+    const s = shots[i], u = t - s.start;
+    if (s.enter !== 'fly' || i === 0 || u >= s.flyDur) return poseOf(s, u);
+    /* fly between two fixed poses (where the previous camera stopped, where this one is when the fly ends) */
+    const prev = shots[i - 1];
+    return flyPose(poseOf(prev, prev.dur), poseOf(s, s.flyDur), cubic(u / s.flyDur));
+  }
+  /* zoom between two poses so one world point stays put on screen (the natural "push into a detail" move);
+     at equal scale it is a pan that pulls back a little in the middle so both ends are briefly in view */
+  function flyPose(a, b, p) {
+    const rot = lerp(a[3] || 0, b[3] || 0, p);
+    if (Math.abs(Math.log(a[2] / b[2])) < .05) {
+      const dist = Math.hypot(b[0] - a[0], b[1] - a[1]) / (1920 * a[2]);
+      const s = lerp(a[2], b[2], p) * (1 + Math.min(.6, .35 * dist) * Math.sin(Math.PI * p));
+      return [lerp(a[0], b[0], p), lerp(a[1], b[1], p), s, rot];
+    }
+    const s = Math.exp(lerp(Math.log(a[2]), Math.log(b[2]), p));
+    const w = (s - a[2]) / (b[2] - a[2]);          /* screen = (world - c) / s, so a fixed point needs c linear in s */
+    return [lerp(a[0], b[0], w), lerp(a[1], b[1], w), s, rot];
+  }
+
   /* ---------- build ---------- */
   function capHTML(text, color) {
     return text.replace(/「([^」]+)」/g, (_, k) => `<em style="color:${color}">“${k}”</em>`);
@@ -107,7 +158,13 @@
   /* start times and meter values of every shot (no DOM, so it can be checked offline: EX.planAudit()) */
   function timeline() {
     let t = 0, lastMeter = null;
-    shots.forEach((s) => {
+    shots.forEach((s, i) => {
+      s.pos = s.at ? [s.at[0], s.at[1], s.at[2] ?? 1] : HOME;
+      const prev = shots[i - 1];
+      const moved = prev && prev.pos.some((v, k) => Math.abs(v - s.pos[k]) > 1e-6);
+      /* a dissolve between shots in different places would cut the camera mid-fade: fly instead */
+      if (!s.enter || (s.enter === 'dissolve' && moved)) s.enter = moved ? 'fly' : 'dissolve';
+      s.flyDur = s.fly ?? FLY;
       s.start = t; t += s.dur;
       s.ch = chapters.find((c) => c.id === s.chapter) || null;
       s.color = s.ch ? s.ch.color : C.blue;
@@ -129,14 +186,23 @@
 
     /* timeline */
     const duration = timeline();
+    if (cfg.theme) stage.classList.add('theme-' + cfg.theme);
+    const layer = (o, id, parent, before) => {
+      const el = document.createElement('div');
+      el.id = id; el.className = 'layer'; el.innerHTML = o.html || '';
+      parent.insertBefore(el, before); o.el = el;
+    };
+    if (backLayer) { layer(backLayer, 'back', stage, world); if (backLayer.subject) backLayer.el.dataset.subject = ''; }
+    if (worldLayer) layer(worldLayer, 'world-layer', world, null);
     shots.forEach((s) => {
       const sec = document.createElement('section');
       sec.className = 'shot'; sec.id = s.id; sec.innerHTML = s.html || '';
+      if (s.pos !== HOME) { sec.style.left = (s.pos[0] - 960) + 'px'; sec.style.top = (s.pos[1] - 540) + 'px'; }
       world.appendChild(sec); s.el = sec;
     });
     shots.forEach((s, i) => {
       const next = shots[i + 1];
-      s.end = s.start + s.dur + (next && next.enter !== 'cut' ? XFADE : 0);
+      s.end = s.start + s.dur + (!next || next.enter === 'cut' ? 0 : next.enter === 'fly' ? next.flyDur : XFADE);
     });
     chapters.forEach((c, i) => {
       c.index = i + 1;
@@ -158,6 +224,7 @@
     const capPill = $('cap-pill');
 
     shots.forEach((s) => s.init && s.init(s.el));
+    for (const o of [backLayer, worldLayer]) if (o && o.init) o.init(o.el);
 
     const scenes = shots.map((s) => [s.id, s.start, s.end]);
     const render = {};
@@ -166,18 +233,29 @@
       render[s.id] = (tt) => {
         const u = tt - s.start;
         s.render && s.render(s.el, u, s.dur, tt);
-        /* transition: dissolve in over XFADE (unless cut / first), dissolve out in the tail */
+        /* transition in: dissolve over XFADE, or fade up during the first half of a camera fly; cut / first: none.
+           transition out (tail): dissolve, or fade during the second half of the next shot's fly. */
         let o = 1, sc = 1;
-        if (s.enter !== 'cut' && i > 0) { const p = cubic(prog(u, 0, XFADE)); o = p; sc = lerp(.985, 1, p); }
-        if (next && next.enter !== 'cut') { const q = cubic(prog(u, s.dur, s.dur + XFADE)); o = Math.min(o, 1 - q); sc *= lerp(1, 1.03, q); }
+        if (i > 0 && s.enter === 'dissolve') { const p = cubic(prog(u, 0, XFADE)); o = p; sc = lerp(.985, 1, p); }
+        if (i > 0 && s.enter === 'fly') o = cubic(prog(u, 0, s.flyDur * .5));
+        if (next && next.enter === 'dissolve') { const q = cubic(prog(u, s.dur, s.dur + XFADE)); o = Math.min(o, 1 - q); sc *= lerp(1, 1.03, q); }
+        if (next && next.enter === 'fly') o = Math.min(o, 1 - cubic(prog(u, s.dur + next.flyDur * .45, s.dur + next.flyDur)));
         s.el.style.opacity = o;
-        s.el.style.transform = sc === 1 ? '' : `scale(${sc})`;
+        const k = s.pos[2] * sc;
+        s.el.style.transform = k === 1 ? '' : `scale(${k})`;
       };
     });
 
     let lastCapKey = '';
+    const camera = (tt) => {
+      const pose = camAt(tt);
+      world.style.transform = pose === HOME || (pose[0] === 960 && pose[1] === 540 && pose[2] === 1 && !pose[3]) ? ''
+        : `translate(960px,540px) rotate(${-(pose[3] || 0)}deg) scale(${1 / pose[2]}) translate(${-pose[0]}px,${-pose[1]}px)`;
+    };
     function after(tt) {
       background(tt);
+      camera(tt);
+      for (const o of [backLayer, worldLayer]) if (o && o.render) o.render(o.el, tt);
       let cur = shots[0];
       for (const s of shots) if (s.start <= tt) cur = s;
       curShot = cur;
@@ -220,7 +298,7 @@
       const key = cur.id + '|' + cap;
       if (key !== lastCapKey) { capPill.innerHTML = capHTML(cap, cur.color); lastCapKey = key; }
       const p = expoOut(prog(u, capT, capT + .45));
-      const tail = cur.end > cur.start + cur.dur ? 1 - cubic(prog(u, cur.dur, cur.dur + XFADE)) : 1;
+      const tail = cur.end > cur.start + cur.dur ? 1 - cubic(prog(u, cur.dur, cur.dur + .4)) : 1;
       capPill.style.visibility = '';
       capPill.style.opacity = Math.min(p, tail);
       capPill.style.transform = `translate(-50%, ${(1 - p) * 14}px)`;
@@ -231,6 +309,7 @@
     shots.forEach((s, i) => {
       const prev = shots[i - 1];
       if (i > 0 && s.chapter && (!prev || prev.chapter !== s.chapter)) cues.push({ t: +s.start.toFixed(3), sfx: 'whoosh', gain: .45 });
+      else if (i > 0 && s.enter === 'fly') cues.push({ t: +s.start.toFixed(3), sfx: 'whoosh', gain: .3 });
       else if (i > 0 && s.enter !== 'cut') cues.push({ t: +s.start.toFixed(3), sfx: 'tick', gain: .25 });
       s.sfx.forEach(([a, name, g]) => cues.push({ t: +(s.start + a).toFixed(3), sfx: name, gain: g ?? .5 }));
     });
@@ -247,7 +326,7 @@
   function audit(duration) {
     const out = [];
     if (duration < 80 || duration > 160) out.push(`DURATION ${duration.toFixed(1)}s (target 90–150s; lint range 80–160s)`);
-    if (chapters.length < 5) out.push(`CHAPTERS only ${chapters.length} (target 6–10)`);
+    if (chapters.length < 6) out.push(`CHAPTERS only ${chapters.length} (target 6–10)`);
     let lastM = -Infinity;
     shots.forEach((s) => {
       if (s.dur > 12) out.push(`LONG ${s.id} ${s.dur}s — over 12s: split it or it will sit still`);
@@ -310,9 +389,12 @@
       const scale = el.offsetHeight ? r.height / k / el.offsetHeight : 1;
       const fs = parseFloat(getComputedStyle(el).fontSize) * scale;
       const inChrome = !!el.closest('#hud, #cap');
+      /* EX.world labels are places the camera films: out of view is normal, half in view is the camera passing by */
+      const inWorld = !!el.closest('#world-layer');
+      if (inWorld && (box.x > 1920 || box.y > 1080 || box.x + box.w < 0 || box.y + box.h < 0)) return;
       texts.push({ el, box, inChrome, cap: !!el.closest('#cap'), o });
-      if (box.x < -2 || box.y < -2 || box.x + box.w > 1922 || box.y + box.h > 1082) issues.push(`OFFSCREEN ${name(el)} at ${box.x | 0},${box.y | 0} ${box.w | 0}×${box.h | 0}`);
-      if (!inChrome && fs < 22 - .5 && o > .6) issues.push(`SMALL ${name(el)} font ${fs.toFixed(1)}px (min 22; body text 24)`);
+      if (!inWorld && (box.x < -2 || box.y < -2 || box.x + box.w > 1922 || box.y + box.h > 1082)) issues.push(`OFFSCREEN ${name(el)} at ${box.x | 0},${box.y | 0} ${box.w | 0}×${box.h | 0}`);
+      if (!inChrome && fs < 22 - .05 && o > .6) issues.push(`SMALL ${name(el)} font ${fs.toFixed(1)}px (min 22; body text 24)`);
       if (el.scrollWidth > el.clientWidth + 2 && ['hidden', 'clip'].includes(getComputedStyle(el).overflowX)) issues.push(`CLIPPED ${name(el)} text wider than its box`);
       const cs = getComputedStyle(el);
       if (!inChrome && cs.color === 'rgba(0, 0, 0, 0)' && !(cs.webkitBackgroundClip === 'text' || cs.backgroundClip === 'text')) issues.push(`INVISIBLE ${name(el)} text is transparent (a .grad-text child lost its gradient clip?)`);
@@ -337,18 +419,17 @@
       const ov = inter(a.box, b.box);
       if (ov > .25 * Math.min(a.box.w * a.box.h, b.box.w * b.box.h)) issues.push(`OVERLAP ${name(a.el)} × ${name(b.el)}`);
     }
-    /* composition: the union of everything painted in the current shot must fill and centre the safe area.
-       Skipped for hud:false shots (hook, title, ending), which may be deliberately minimal. */
+    /* shapes under the caption / HUD (judged on the mid-shot still). Composition itself (EMPTY / SPARSE / OFF-CENTER /
+       THIN) is measured on pixels by render.mjs, so canvas, WebGL and DOM count the same. */
     if (curShot && composition) {
-      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
       curShot.el.querySelectorAll('*').forEach((el) => {
         if (el.tagName.toLowerCase() === 'svg' || vis(el) < .35) return;
         const r = el.getBoundingClientRect();
         if (r.width < 4 && r.height < 4) return;
         if (r.width / k > 1700 && r.height / k > 850) return;          /* full-frame layers are backgrounds */
         const cs = getComputedStyle(el);
-        const painted = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) || el instanceof SVGGraphicsElement
-          || el.tagName === 'IMG' || el.tagName === 'CANVAS' || cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.backgroundImage !== 'none' || parseFloat(cs.borderTopWidth) > 0;
+        const painted = el instanceof SVGGraphicsElement || el.tagName === 'IMG' || el.tagName === 'CANVAS'
+          || cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.backgroundImage !== 'none' || parseFloat(cs.borderTopWidth) > 0;
         if (!painted) return;
         /* clip to the frame and to every overflow-hidden ancestor (scrolling strips, masks) */
         let L = r.left, T = r.top, R = r.right, B = r.bottom;
@@ -362,23 +443,11 @@
         const ownsText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());   /* text is checked by the text rule */
         const scenery = ownsText || pb.w > 1400 || (pb.w < 24 && pb.h < 24) || ['g', 'defs', 'lineargradient', 'radialgradient', 'clippath', 'mask'].includes(el.tagName.toLowerCase());
         if (!scenery) for (const c of chromeBoxes) if (inter(pb, c.b) > 60) issues.push(`UNDER-${c.e.id.toUpperCase()} ${name(el)} is drawn under the ${c.e.id === 'cap-pill' ? 'caption' : 'HUD'}: keep shapes inside the safe area (y 180–900)`);
-        x0 = Math.min(x0, (L - S.left) / k); y0 = Math.min(y0, (T - S.top) / k); x1 = Math.max(x1, (R - S.left) / k); y1 = Math.max(y1, (B - S.top) / k);
       });
-      const SW = 1760, SH = 720, SCX = 960, SCY = 540;                   /* safe area x 80–1840, y 180–900 */
-      if (x1 < x0) issues.push('EMPTY nothing painted in this shot');
-      else {
-        const w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-        /* hook / title / ending (hud:false) may be minimal, but a title still has to read as a poster */
-        const sparse = curShot.hud ? (w * h < .3 * SW * SH || (w < .55 * SW && h < .55 * SH)) : (w * h < .1 * SW * SH && w < .45 * SW);
-        if (sparse)
-          issues.push(`SPARSE content spans ${w | 0}×${h | 0}px (${(100 * w / SW) | 0}% × ${(100 * h / SH) | 0}% of the safe area): scale the main visual up or add the missing parts — target ≥ 60% of the width or height` + (curShot.hud ? '' : ' (titles: ≥ 120 px type plus one strong shape)'));
-        if (curShot.hud && (Math.abs(cx - SCX) > .14 * SW || Math.abs(cy - SCY) > .16 * SH))
-          issues.push(`OFF-CENTER content centre at ${cx | 0},${cy | 0}, safe-area centre is ${SCX},${SCY}: move the composition`);
-      }
     }
     return [...new Set(issues)];
   }
 
-  window.EX = { C, TOKEN_COLORS, chapter, shot, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, meterAt,
+  window.EX = { C, TOKEN_COLORS, chapter, shot, world, backdrop, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, meterAt, cam: camAt,
     planAudit: () => audit(timeline()) };   /* pacing audit without a browser (tests, quick checks) */
 })();

@@ -26,10 +26,10 @@ function plan(build) {
 const has = (issues, kind) => issues.some((i) => i.startsWith(kind));
 
 /* a valid 8-chapter, ~100 s film; each test breaks one rule */
-function film(EX, patch = {}) {
-  for (let c = 0; c < 8; c++) EX.chapter('c' + c, { name: '第' + c + '章' });
+function film(EX, patch = {}, n = 8) {
+  for (let c = 0; c < n; c++) EX.chapter('c' + c, { name: '第' + c + '章' });
   EX.shot({ id: 'hook', chapter: null, dur: 7, hud: false, caps: [[0.5, '你按下了一个按钮。']] });
-  for (let c = 0; c < 8; c++) {
+  for (let c = 0; c < n; c++) {
     const id = 's' + c;
     EX.shot(Object.assign({ id, chapter: 'c' + c, dur: 11, meter: [c, c + 1], caps: [[0.3, '这一步叫「术语' + c + '」。'], [5, '它让下一步成为可能。']] }, patch[id] || {}));
   }
@@ -57,16 +57,37 @@ test('total length outside 80–160 s is DURATION (SKILL.md: 90–150 s)', () =>
   assert.ok(has(plan((EX) => film(EX, Object.fromEntries([...Array(8)].map((_, c) => ['s' + c, { dur: 5, caps: [[0, '「术语」来了。']] }])))), 'DURATION'));
   assert.ok(has(plan((EX) => film(EX, Object.fromEntries([...Array(8)].map((_, c) => ['s' + c, { dur: 20 }])))), 'DURATION'));
 });
+test('6 chapters pass, 5 are CHAPTERS (SKILL.md: 6–10 章)', () => {
+  assert.ok(!has(plan((EX) => film(EX, {}, 6)), 'CHAPTERS'));
+  assert.ok(has(plan((EX) => film(EX, {}, 5)), 'CHAPTERS'));
+});
 test('a chapter that never names its term is NO-TERM; a meter that goes back is METER-BACKWARDS', () => {
   assert.ok(has(plan((EX) => film(EX, { s4: { caps: [[0, '这一步没有术语。'], [5, '它让下一步成为可能。']] } })), 'NO-TERM'));
   assert.ok(has(plan((EX) => film(EX, { s5: { meter: [0, 1] } })), 'METER-BACKWARDS'));
 });
 test('the shipped examples obey every pacing rule except film-level length', () => {
-  for (const f of ['shots.example.js', 'gallery.example.js']) {
-    const ctx = load();
+  for (const f of ['shots.example.js', 'gallery.example.js', 'world.example.js']) {   /* three.example.js imports three: checked by rendering */
+    const ctx = load('engine.js');                          /* examples may call rng() etc. at load time */
     ctx.EX.run = () => {};
     vm.runInContext(readFileSync(join(ASSETS, f), 'utf8'), ctx, { filename: f });
     const rest = ctx.EX.planAudit().filter((i) => !i.startsWith('DURATION') && !i.startsWith('CHAPTERS'));
     assert.equal(rest.length, 0, f + ': ' + rest.join('\n'));
   }
+});
+test('camera: shots at different `at` fly; a zoom keeps one world point fixed on screen and lands on the target pose', () => {
+  const ctx = load('engine.js');
+  const { EX } = ctx;
+  EX.chapter('a', { name: '甲' });
+  EX.shot({ id: 'big', chapter: 'a', dur: 5, caps: [[0, '「整体」先看全貌。']] });
+  EX.shot({ id: 'small', chapter: 'a', dur: 5, at: [1356, 674, .1], caps: [[0, '再推进去。']] });
+  EX.shot({ id: 'same', chapter: 'a', dur: 5, at: [1356, 674, .1], caps: [[0, '原地叠化。']] });
+  EX.planAudit();                                             /* resolves the timeline */
+  assert.equal(EX.cam(2)[2], 1, 'a shot without `at` keeps the plain screen');
+  const a = EX.cam(5), b = EX.cam(5 + 1.2);
+  assert.ok(Math.abs(a[0] - 960) < 1e-9 && Math.abs(a[2] - 1) < 1e-9, 'the fly starts where the previous camera stood');
+  assert.ok(Math.abs(b[0] - 1356) < 1e-6 && Math.abs(b[2] - .1) < 1e-3, 'the fly ends on the new shot');
+  /* the fixed point w satisfies (w - c0)/s0 = (w - c1)/s1; every in-between pose must map it to the same screen spot */
+  const w = (a[0] / a[2] - b[0] / b[2]) / (1 / a[2] - 1 / b[2]);
+  const screen = (p) => (w - p[0]) / p[2];
+  for (const t of [5.3, 5.6, 5.9]) assert.ok(Math.abs(screen(EX.cam(t)) - screen(a)) < 1e-6, 'zoom drifts at t=' + t);
 });

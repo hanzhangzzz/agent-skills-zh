@@ -11,14 +11,29 @@
   Write the video in shots.js (see shots.example.js). Background, HUD, captions, timeline,
   transitions, sound cues and layout lint come from explainer.js.
   Safe content area: x 80–1840, y 180–900 (above: HUD, below: caption).
+  Another visual world: EX.run({ theme: 'dark' }), or restyle #stage / #bg / the HUD variables in the "add your own"
+  block (sepia paper, blueprint, night sky…). three.js: `npm i three`, then `import * as THREE from 'three'` at the
+  top of shots.js (it is loaded as a module).
 -->
+<script type="importmap">
+{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+</script>
 <style>
   :root{
     --ink:#1E2240; --ink2:#5D6385; --ink3:#9095B0; --line:#E2E5F2; --card:rgba(255,255,255,.88);
     --blue:#3B6CF6; --purple:#7C4DFF; --pink:#E6458B; --green:#14B27A; --orange:#F59E0B; --cyan:#0EA5C6; --red:#EF4444; --indigo:#4F46E5;
     --sans:'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --mono:'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    --hud-bg:rgba(255,255,255,.92); --hud-ink:var(--ink); --hud-ink2:var(--ink2); --hud-shadow:0 10px 30px rgba(60,70,150,.10);
   }
+  /* dark world: night sky, space, inside a machine. Cards and text kit flip with the variables. */
+  #stage.theme-dark{--ink:#EEF1FF; --ink2:#A9B0D6; --ink3:#6D7499; --line:#2A3058; --card:rgba(24,28,58,.82);
+    --hud-bg:rgba(20,24,52,.78); --hud-ink:#EEF1FF; --hud-ink2:#A9B0D6; --hud-shadow:0 10px 30px rgba(0,0,0,.35);
+    background:radial-gradient(120% 90% at 50% 40%,#1A1F48 0%,#0D1030 55%,#070818 100%)}
+  #stage.theme-dark #bg .blob{opacity:.22}
+  #stage.theme-dark #bg .grid{background-image:radial-gradient(rgba(170,180,255,.10) 1.6px,transparent 1.8px)}
+  #stage.theme-dark .card{border-color:rgba(255,255,255,.10);box-shadow:0 24px 70px rgba(0,0,0,.45)}
+  #stage.theme-dark .node .ic,#stage.theme-dark .tag,#stage.theme-dark .tok{background:color-mix(in srgb,var(--c,var(--blue)) 18%,#141834)}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{width:100%;height:100%;background:#000;overflow:hidden}
   #stage{position:absolute;width:1920px;height:1080px;overflow:hidden;transform-origin:0 0;font-family:var(--sans);color:var(--ink);
@@ -26,8 +41,9 @@
   #bg{position:absolute;inset:0;overflow:hidden}
   #bg .blob{position:absolute;width:1300px;height:1300px;border-radius:50%;opacity:.55;background:radial-gradient(circle,var(--b) 0%,transparent 68%)}
   #bg .grid{position:absolute;inset:0;background-image:radial-gradient(rgba(70,80,140,.14) 1.6px,transparent 1.8px);background-size:34px 34px}
-  #world{position:absolute;inset:0}
-  .shot{position:absolute;inset:0;transform-origin:50% 50%}
+  #world{position:absolute;inset:0;transform-origin:0 0}
+  .layer{position:absolute;inset:0}
+  .shot{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:50% 50%}
   .abs{position:absolute}
   .mono{font-family:var(--mono)}
   .center{display:flex;align-items:center;justify-content:center}
@@ -36,7 +52,7 @@
   .card{background:var(--card);border:2px solid rgba(255,255,255,.95);border-radius:28px;
     box-shadow:0 24px 70px rgba(60,70,150,.13),0 2px 6px rgba(60,70,150,.06)}
   .card.ring{box-shadow:0 0 0 3px var(--c,var(--blue)),0 24px 70px rgba(60,70,150,.16)}
-  .pill{background:rgba(255,255,255,.92);border-radius:999px;box-shadow:0 10px 30px rgba(60,70,150,.10)}
+  .pill{background:var(--hud-bg);border-radius:999px;box-shadow:var(--hud-shadow)}
   .tag{display:inline-flex;align-items:center;padding:8px 24px;border-radius:999px;font-weight:700;font-size:26px;
     color:var(--c,var(--blue));background:color-mix(in srgb,var(--c,var(--blue)) 12%,white)}
   .tok{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 18px;border:3px solid var(--c,var(--blue));
@@ -63,22 +79,22 @@
 
   /* ---------- HUD + caption (owned by explainer.js) ---------- */
   #hud{position:absolute;inset:0;z-index:40;pointer-events:none}
-  #hud-chip{position:absolute;left:52px;top:34px;height:68px;padding:0 32px 0 12px;display:flex;align-items:center;gap:16px;font-weight:700;font-size:30px}
+  #hud-chip{position:absolute;left:52px;top:34px;height:68px;padding:0 32px 0 12px;display:flex;align-items:center;gap:16px;font-weight:700;font-size:30px;color:var(--hud-ink)}
   #hud-num{width:46px;height:46px;border-radius:50%;color:#fff;font:700 20px var(--mono);display:grid;place-items:center}
   #hud-meter{position:absolute;left:50%;top:24px;transform:translateX(-50%);width:600px;display:flex;flex-direction:column;align-items:center}
   #hud-clock{height:82px;padding:0 42px;display:flex;align-items:center;gap:20px}
-  #hud-clock .lbl,#hud-rate .lbl{font-size:24px;color:var(--ink2)}
-  #hud-val{font-weight:600;font-size:52px;min-width:190px;text-align:right;color:var(--ink)}
-  #hud-clock .unit{font-size:26px;color:var(--ink2)}
+  #hud-clock .lbl,#hud-rate .lbl{font-size:24px;color:var(--hud-ink2)}
+  #hud-val{font-weight:600;font-size:52px;min-width:190px;text-align:right;color:var(--hud-ink)}
+  #hud-clock .unit{font-size:26px;color:var(--hud-ink2)}
   #hud-scrub{position:relative;width:560px;height:30px;margin-top:20px}
-  #hud-track{position:absolute;left:0;right:0;top:0;height:6px;border-radius:3px;background:rgba(80,90,140,.14)}
+  #hud-track{position:absolute;left:0;right:0;top:0;height:6px;border-radius:3px;background:color-mix(in srgb,var(--hud-ink2) 25%,transparent)}
   .seg{position:absolute;top:0;height:6px;border-radius:3px}
   #hud-knob{position:absolute;top:-7px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:#fff;border:4px solid var(--blue)}
-  .tick{position:absolute;top:14px;transform:translateX(-50%);font-size:16px;color:var(--ink3)}
+  .tick{position:absolute;top:14px;transform:translateX(-50%);font-size:16px;color:var(--ink3);white-space:nowrap}
   #hud-rate{position:absolute;right:52px;top:34px;height:68px;padding:0 32px;display:flex;align-items:center;gap:14px}
   #hud-rate b{font-size:36px;font-weight:900}
   #cap{position:absolute;left:0;right:0;bottom:0;z-index:45;pointer-events:none}
-  #cap-pill{position:absolute;left:50%;bottom:50px;transform:translateX(-50%);padding:20px 50px;font-weight:700;font-size:40px;white-space:nowrap;color:var(--ink)}
+  #cap-pill{position:absolute;left:50%;bottom:50px;transform:translateX(-50%);padding:20px 50px;font-weight:700;font-size:40px;white-space:nowrap;color:var(--hud-ink)}
   #cap-pill em{font-style:normal;margin:0 .12em}
 </style>
 </head>
@@ -98,6 +114,6 @@
 <script src="engine.js"></script>
 <script src="explainer.js"></script>
 <script src="icons.js"></script>
-<script src="shots.js"></script>
+<script type="module" src="shots.js"></script>
 </body>
 </html>
