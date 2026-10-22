@@ -13,6 +13,8 @@ license: MIT
 
 `<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/exemplar.md`（范例拆解）和 `references/visuals.md`（概念 → 画面配方）。
 
+省上下文的读法：`explainer.js` 和 `engine.js` 只读文件头注释（API 都在那里，各约 40 行），不要通读。`gallery.example.js` 有 57 KB，先 `grep -n "^/\* [0-9]" gallery.example.js` 看七个镜头的起始行，再用 `sed -n '<起>,<止>p'` 只读要用的那一段。
+
 ## 0. 初始化（任一失败即停止并告知用户）
 
 ```bash
