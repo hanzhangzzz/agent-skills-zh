@@ -19,7 +19,7 @@ license: MIT
 bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复制模板，安装 playwright
 ```
 
-工作目录未指定时用当前目录下的 `explainer-<英文短名>/`。已有 Chromium 时先 `export CHROMIUM_PATH=<浏览器路径>` 再运行，免下载。
+工作目录未指定时用当前目录下的 `explainer-<英文短名>/`。已有 Chromium 时先 `export CHROMIUM_PATH=<浏览器路径>` 再运行，免下载；之后所有渲染命令都在同一个环境变量下跑，在工作目录里执行。
 
 ## 1. 把题目变成一条旅程
 
@@ -66,27 +66,39 @@ EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0,
 ```
 
 - 章节颜色依次取 `EX.C.blue / purple / pink / cyan / green / orange / red / indigo`，相邻章节不同色。
-- 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`（见 `icons.js`）。
-- 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse splitChars riseChars`。
+- 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`（见 `icons.js`），不用 emoji。
+- 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse dashFlow splitChars riseChars`。
+- 音效名只有这 12 个：`click tick pop chime snap whoosh reveal type thud blip glitch drop`。
+- 坐标有两套，别混：`class="abs"` + `style="left;top"` 是**左上角**；`EX.place(el, x, y)` 是**中心点**，并会覆盖 `transform`。同一个元素只用一种。
 - 版面：内容只放在安全区 x 80–1840、y 180–900；上面是 HUD，下面是字幕。正文字号 ≥ 24 px，标签 ≥ 22 px。
+- **尺寸给足**：一个镜头里所有内容合起来，至少占安全区宽度或高度的 60%，并且大致居中。常用尺寸：主卡片 1000–1300 × 420–560 px；节点图标 132 px，节点间距 ≥ 500 px；token 块字号 46–64 px；代码 34–40 px。宁大勿小，`--lint` 的 `SPARSE` / `OFF-CENTER` 会拦住太小和偏的画面。
+- **骨架先立**：主视觉的骨架（全部节点、卡片外框、坐标轴、格子）在镜头开始 1 秒内全部出现；之后的时间用来让主角移动、状态变化、标注弹出。不要把骨架拆成整段镜头里逐个出现，否则镜头中段画面是半空的。
 - `render` 必须是 `u` 的纯函数：不用 `Math.random`、`Date.now`、定时器、CSS animation/transition；随机用 `rng(seed)`，并在 `init` 里生成好。
+- 示例 `shots.example.js` 的四个镜头就是合格标准：钩子（大输入框）、片名（环形计时器 + 粒子）、乱码扫描、骨架先立的路径。写自己的镜头时对照它们的尺寸和动法。
 
 **分批写，分批查**。每写完 2–3 章就跑一次第 5 步，修干净再写下一批。不要一次写完全片才第一次渲染。
 
 ## 5. 检查（每批都跑）
 
 ```bash
+node --check shots.js                                                  # 先查语法，比渲染快
 bash <skill>/scripts/fonts.sh <work>                                   # 文案变了就重跑
-node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每个镜头中点和结尾各一张静帧
+node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每个镜头中点和结尾各一张静帧（会先清掉旧静帧）
 ffmpeg -v error -y -pattern_type glob -i 'out/stills/t*.png' -vf "scale=640:-1,tile=4x6" -frames:v 1 out/sheet.jpg
 ```
 
 `--lint` 打印两类问题，必须清零（退出码 0）才能进入下一步：
 
-- `LINT`（版面）：`OFFSCREEN` 出画、`SMALL` 字太小、`OVERLAP` 文字互相压住、`UNDER-CAP-PILL` / `UNDER-HUD-*` 内容被字幕或 HUD 挡住、`CLIPPED` 文字被裁。
+- `LINT`（版面）：`SPARSE` 画面太空或主视觉太小、`OFF-CENTER` 构图偏、`EMPTY` 什么都没画、`OFFSCREEN` 出画、`SMALL` 字太小、`OVERLAP` 文字互相压住、`UNDER-CAP-PILL` / `UNDER-HUD-*` 被字幕或 HUD 挡住、`CLIPPED` 文字被裁。`SPARSE` 的修法是把主视觉放大、补上缺的部分，或把骨架提前到镜头开头，不是加装饰。
 - `AUDIT`（节奏）：`CAPTION-LONG` / `CAPTION-FAST` 字幕太长或太快、`LONG` / `SHORT` 镜头时长不合理、`NO-TERM` 章节没命名术语、`METER-BACKWARDS` 仪表倒退、`DURATION` / `CHAPTERS` 总体规模不对。
 
-页面报错（`PAGE ERRORS`）也必须修。能看图时用 Read 打开 `out/sheet.jpg` 逐格看：每格有没有主视觉、主角在不在、是不是一屏只剩一行字；对着 `references/visuals.md` 的密度清单补。
+页面报错（`PAGE ERRORS`）必须修。查某一帧里某个元素的状态，用渲染器直接求值，不要自己写浏览器脚本：
+
+```bash
+node <skill>/scripts/render.mjs --html index.html --at 37.2 --eval "document.querySelector('#pk-code').textContent"
+```
+
+能看图时用 Read 打开 `out/sheet.jpg`，逐格回答三个问题，有一个“否”就改：主视觉是否一眼能看出在讲什么？主角在不在？离开字幕，这一格画面本身是否有信息？lint 通过只说明没有硬伤，不说明好看；不要写“目检通过”就跳过。
 
 ## 6. 渲染与混音
 
@@ -97,7 +109,7 @@ python3 <skill>/scripts/motion_check.py --video out/silent.mp4 --cues cues.json
 python3 <skill>/scripts/mix.py --video out/silent.mp4 --cues cues.json --out out/<name>.mp4
 ```
 
-`motion_check.py` 列出 ≥ 2 s 的静止段（`STILL`），逐个补持续运动（扫描线、光点流动、呼吸光晕、缓慢漂移），重渲后 `STILL` 为 0。`POP` 出现在打字、计数、乱码替换处是正常的，其它位置的 `POP` 抽帧确认。2 分钟片子渲染约 3 分钟。
+`motion_check.py` 列出 ≥ 2 s 的静止段（`STILL`），逐个补持续运动（扫描线、光点流动 `dashFlow`、呼吸光晕 `pulse`、缓慢漂移），重渲后 `STILL` 为 0。2 分钟片子渲染约 3 分钟。
 
 ## 7. 验证与交付
 

@@ -29,6 +29,7 @@
   const TOKEN_COLORS = [C.blue, C.purple, C.pink, C.cyan, C.green, C.orange, C.red, C.indigo];
   const chapters = [], shots = [];
   const XFADE = 0.5;
+  let curShot = null;   /* shot on top at the last rendered frame; lint() reads it */
 
   function chapter(id, o) { chapters.push({ id, name: o.name, color: o.color || TOKEN_COLORS[chapters.length % 8] }); }
   function shot(o) { shots.push(Object.assign({ enter: 'dissolve', hud: true, caps: [], sfx: [] }, o)); }
@@ -147,6 +148,7 @@
       background(tt);
       let cur = shots[0];
       for (const s of shots) if (s.start <= tt) cur = s;
+      curShot = cur;
       const u = tt - cur.start;
       /* HUD */
       const hudOn = cur.hud;
@@ -287,6 +289,39 @@
       if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
       const ov = inter(a.box, b.box);
       if (ov > .25 * Math.min(a.box.w * a.box.h, b.box.w * b.box.h)) issues.push(`OVERLAP ${name(a.el)} × ${name(b.el)}`);
+    }
+    /* composition: the union of everything painted in the current shot must fill and centre the safe area.
+       Skipped for hud:false shots (hook, title, ending), which may be deliberately minimal. */
+    if (curShot && curShot.hud) {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      curShot.el.querySelectorAll('*').forEach((el) => {
+        if (el.tagName.toLowerCase() === 'svg' || vis(el) < .35) return;
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 && r.height < 4) return;
+        if (r.width / k > 1700 && r.height / k > 850) return;          /* full-frame layers are backgrounds */
+        const cs = getComputedStyle(el);
+        const painted = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) || el instanceof SVGGraphicsElement
+          || el.tagName === 'IMG' || el.tagName === 'CANVAS' || cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.backgroundImage !== 'none' || parseFloat(cs.borderTopWidth) > 0;
+        if (!painted) return;
+        /* clip to the frame and to every overflow-hidden ancestor (scrolling strips, masks) */
+        let L = r.left, T = r.top, R = r.right, B = r.bottom;
+        for (let e = el.parentElement; e && e !== curShot.el.parentElement; e = e.parentElement) {
+          const o = getComputedStyle(e).overflow;
+          if (o.includes('hidden') || o.includes('clip')) { const q = e.getBoundingClientRect(); L = Math.max(L, q.left); T = Math.max(T, q.top); R = Math.min(R, q.right); B = Math.min(B, q.bottom); }
+        }
+        L = Math.max(L, S.left); T = Math.max(T, S.top); R = Math.min(R, S.right); B = Math.min(B, S.bottom);
+        if (R - L < 2 || B - T < 2) return;
+        x0 = Math.min(x0, (L - S.left) / k); y0 = Math.min(y0, (T - S.top) / k); x1 = Math.max(x1, (R - S.left) / k); y1 = Math.max(y1, (B - S.top) / k);
+      });
+      const SW = 1760, SH = 720, SCX = 960, SCY = 540;                   /* safe area x 80–1840, y 180–900 */
+      if (x1 < x0) issues.push('EMPTY nothing painted in this shot');
+      else {
+        const w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        if (w * h < .3 * SW * SH || (w < .55 * SW && h < .55 * SH))
+          issues.push(`SPARSE content spans ${w | 0}×${h | 0}px (${(100 * w / SW) | 0}% × ${(100 * h / SH) | 0}% of the safe area): scale the main visual up or add the missing parts — target ≥ 60% of the width or height`);
+        if (Math.abs(cx - SCX) > .14 * SW || Math.abs(cy - SCY) > .16 * SH)
+          issues.push(`OFF-CENTER content centre at ${cx | 0},${cy | 0}, safe-area centre is ${SCX},${SCY}: move the composition`);
+      }
     }
     return [...new Set(issues)];
   }

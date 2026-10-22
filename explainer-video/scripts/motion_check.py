@@ -82,6 +82,7 @@ def main():
     ap.add_argument("--scenes", default="", help="comma-separated scene start times to inspect the cuts")
     ap.add_argument("--cues", help="cues.json from render.mjs --cues-out; its `scenes` become --scenes")
     ap.add_argument("--table", action="store_true", help="print per-second motion bars")
+    ap.add_argument("--pops", action="store_true", help="also report single-frame pops (noisy where text types or counts)")
     ap.add_argument("--pop", type=float, default=3.0, help="flag single frames whose change is this many × both neighbours")
     args = ap.parse_args()
 
@@ -117,6 +118,8 @@ def main():
     else:
         print(f"no still run ≥ {args.still}s")
 
+    if not args.pops:
+        sys.exit(1 if runs else 0)
     stray = []
     for t, d, nb in pops(diffs, args.pop):
         on_cut = any(abs(t - c) <= 2 / FPS for c in cuts)

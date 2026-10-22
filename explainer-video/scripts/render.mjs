@@ -16,10 +16,12 @@
 //   --stills shots   one still at the middle and one just before the end of every shot (needs window.__shots)
 //   --lint           with --stills: print the page's window.__lint() findings for each still; exit 1 if any
 //   --cues-out FILE  write window.__cues (auto sound cues) as cues.json, then exit
+//   --at 37.2 --eval "document.querySelector('#x').textContent"   seek, evaluate, print the JSON result, exit
+//                    (debug one frame without writing your own browser script)
 // Env: CHROMIUM_PATH=<browser binary> to reuse an existing Chromium instead of Playwright's download.
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -47,7 +49,7 @@ const out = resolve(args.out ?? join(outDir, 'silent.mp4'));
 
 let chromium;
 try {
-  ({ chromium } = createRequire(join(process.cwd(), 'noop.js'))('playwright'));
+  ({ chromium } = createRequire(join(dirname(html), 'noop.js'))('playwright'));   // the work dir's own install
 } catch {
   console.error('playwright is not installed here. Run: npm i -D playwright && npx playwright install chromium');
   process.exit(2);
@@ -85,10 +87,12 @@ async function stop(code, msg) {
 }
 await page.addInitScript(() => { window.__recording = true; });
 await page.goto(`http://127.0.0.1:${server.address().port}/${encodeURIComponent(basename(html))}`);
-try {
-  await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
-} catch {
-  await stop(2, 'page never set window.__ready within 60s');
+// wait for __ready, but stop at the first page error instead of sitting out the timeout
+for (let waited = 0; ; waited += 200) {
+  if (await page.evaluate(() => window.__ready === true)) break;
+  if (errors.length) await stop(2, 'page failed while loading (fix the first error below; `node --check shots.js` catches syntax errors)');
+  if (waited > 60000) await stop(2, 'page never set window.__ready within 60s');
+  await new Promise((ok) => setTimeout(ok, 200));
 }
 const duration = await page.evaluate(() => window.__duration);
 if (!(duration > 0)) await stop(2, 'page must set window.__duration > 0');
@@ -109,7 +113,12 @@ async function shot(t, path) {
 
 let failed = false;
 try {
-  if (args['cues-out']) {
+  if (args.eval) {
+    const tt = Math.min(Number(args.at ?? 0), duration - 0.001);
+    await page.evaluate((x) => window.__seek(x), tt);
+    const v = await page.evaluate((src) => { try { return JSON.stringify((0, eval)(src)); } catch (e) { return 'ERROR ' + e; } }, String(args.eval));
+    console.log(`t=${tt}: ${v}`);
+  } else if (args['cues-out']) {
     const cues = await page.evaluate(() => ({ ...window.__cues, scenes: (window.__shots || []).map((s) => s.start) }));
     if (!cues) throw new Error('page has no window.__cues');
     const { writeFileSync } = await import('node:fs');
@@ -118,6 +127,8 @@ try {
   } else if (args.stills) {
     const dir = args.out ? resolve(args.out) : join(outDir, 'stills');
     mkdirSync(dir, { recursive: true });
+    // drop stills from earlier runs so a contact sheet never mixes old and new frames
+    for (const f of readdirSync(dir)) if (/^t[\d.]+\.png$/.test(f)) rmSync(join(dir, f));
     let times = String(args.stills).split(',');
     if (args.stills === 'shots') {
       const list = await page.evaluate(() => window.__shots);
