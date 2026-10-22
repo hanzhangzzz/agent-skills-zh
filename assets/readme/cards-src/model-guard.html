@@ -1,0 +1,36 @@
+<!doctype html><meta charset="utf-8"><style>
+*{box-sizing:border-box} body{margin:0;background:#F5F0E6;font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;color:#2B2622}
+.card{width:1200px;height:675px;padding:44px 52px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.top{display:flex;align-items:baseline;gap:18px;margin-bottom:8px}
+.name{font:700 40px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#5D4037}
+.tag{font-size:16px;color:#fff;background:#5D4037;border-radius:999px;padding:5px 14px}
+.one{font-size:22px;color:#6B5E52;margin:4px 0 22px}
+.grid{display:grid;grid-template-columns:5fr 7fr;gap:22px;flex:1;min-height:0}
+.pane{background:#fff;border:2px solid #5D4037;border-radius:18px;padding:18px 22px;box-shadow:0 6px 0 rgba(93,64,55,.12);display:flex;flex-direction:column;min-height:0}
+.pane h4{margin:0 0 10px;font-size:15px;letter-spacing:.12em;color:#8C7B6E;text-transform:uppercase}
+pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#2B2622;overflow:hidden}
+.pane.in pre{font-size:20px;line-height:1.6}
+.hl{color:#2F6FB3;font-weight:700}
+.ok{color:#2E7D32}.warn{color:#C62828}
+.foot{position:absolute;right:52px;bottom:26px;font-size:15px;color:#9A8B7E}
+.arrow{position:absolute;left:calc(5fr);}
+.src{font-size:13px;color:#9A8B7E;margin-top:auto;padding-top:8px}
+</style>
+<div class="card">
+  <div class="top"><span class="name">model-guard</span><span class="tag">预算闸 · 强制分工</span></div>
+  <div class="one">贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>Fable session 执行：
+
+Bash  npm test
+
+（5h 已用 75%，距重置 4 小时）</pre></div>
+    <div class="pane"><h4>hook 返回格式</h4><pre>exit 2，原因回灌给模型：
+[model-guard] 5h 余量 25% &lt; 保留线 40%×剩余时间 = 32%
+已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，
+禁止 fork）、/model opus 或 /compact。
+
+用量数据缺失或过期时放行</pre><div class="src">拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>

@@ -161,6 +161,16 @@
     "out_label": "输出格式示例"
   },
   {
+    "name": "model-guard",
+    "tag": "预算闸 · 强制分工",
+    "one": "贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent",
+    "input": "Fable session 执行：\n\nBash  npm test\n\n（5h 已用 75%，距重置 4 小时）",
+    "output": "exit 2，原因回灌给模型：\n[model-guard] 5h 余量 25% < 保留线 40%×剩余时间 = 32%\n已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，\n禁止 fork）、/model opus 或 /compact。\n\n用量数据缺失或过期时放行",
+    "src": "拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图",
+    "tagline": "贵模型越线后强制派活给便宜 subagent",
+    "out_label": "hook 返回格式"
+  },
+  {
     "name": "scanned-book-ocr",
     "tag": "扫描 PDF → 文字",
     "one": "本地批量 OCR，保留页码；并发输出一致性检查 + 完整性校验 + 视觉抽检",

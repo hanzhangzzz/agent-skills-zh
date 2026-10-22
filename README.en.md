@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-18-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-19-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -21,7 +21,7 @@ Install only what you need. Each skill has its own runtime requirements; choose 
 | Keep online content locally | [WeChat](./wechat-article-md-local/SKILL.md) · [Xiaohongshu video](./xiaohongshu/SKILL.md) · [X content](./x-article-download/SKILL.md) |
 | Get an open-source project seen and tried | [Open-source README writing](./readme-craft/SKILL.md) · [Launch video](./launch-video/SKILL.md) |
 | Turn content into something readable or publishable | [Split reading view](./md2view/SKILL.md) · [WeChat layout](./hkr-render/SKILL.md) · [Image prompt](./gpt-image2-prompt-director/SKILL.md) |
-| Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [CI review](./ci-review/SKILL.md) |
+| Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [CI review](./ci-review/SKILL.md) · [Expensive-model budget guard](./model-guard/SKILL.md) |
 
 Not sure where to start? The text-only example below uses your existing agent without image-generation access or a platform account.
 
@@ -159,6 +159,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [harness](./harness/SKILL.md) | Inspect, implement, and review through a TODO board | Scripts use `claude -p`, requiring Claude Code CLI; scheduled mode needs a scheduler |
 | [ci-review](./ci-review/SKILL.md) | Execution review for PRs/MRs, plus value review for bot branches | GitHub/GitLab CI, credentials, model service; auto-merge is opt-in; behavioral Markdown is reviewed too |
 | [hook-test-kit](./hook-test-kit/SKILL.md) | Behavior-test scaffolding for Claude Code hooks | Bash and a hook to test; run the generated tests and mutation checks |
+| [model-guard](./model-guard/SKILL.md) | Expensive models think and review; a hook enforces delegation once plan quota crosses the reserve | Claude Code 2.1.301+ plan users, Python 3; run install.sh to register the hook and status-line tap; Codex 0.163+ is guarded too after you trust the hook once |
 | [git-push-guard](./git-push-guard/README.md) | Ask before an agent pushes directly to main/master | Claude Code hook-only plugin; not server-side protection or a guard for every terminal command |
 
 ## Feedback and contributing

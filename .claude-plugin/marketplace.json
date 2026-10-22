@@ -188,6 +188,16 @@
       ]
     },
     {
+      "name": "model-guard",
+      "source": "./",
+      "strict": false,
+      "description": "Budget guard for expensive top-tier models (Fable/astra) in Claude Code and Codex: soft rule to delegate heavy work to cheap subagents, hard PreToolUse enforcement once plan quota crosses a time-decaying reserve. Hooks need install.sh. 贵模型预算闸：越过套餐保留线后强制分工",
+      "version": "1.0.0",
+      "skills": [
+        "./model-guard"
+      ]
+    },
+    {
       "name": "scanned-book-ocr",
       "source": "./",
       "strict": false,

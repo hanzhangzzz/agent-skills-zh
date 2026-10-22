@@ -174,6 +174,22 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 }
 ```
 
+### model-guard
+
+```json
+{
+  "name": "model-guard",
+  "version": "1.0.0",
+  "description": "Budget guard for expensive top-tier models (Fable/astra) in Claude Code and Codex: soft rule to delegate heavy work to cheap subagents, hard PreToolUse enforcement once plan quota crosses a time-decaying reserve. Hooks need install.sh. 贵模型预算闸：越过套餐保留线后强制分工",
+  "trigger": "/model-guard",
+  "keywords": ["model guard", "fable", "astra", "rate limit", "quota", "budget", "subagent", "PreToolUse", "statusline", "贵模型", "配额", "预算闸"],
+  "compatibility": "Claude Code 2.1.301+ (plan users), Codex CLI 0.163+ (trust the hook once)",
+  "install_path": "model-guard/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### repo-map
 
 ```json
