@@ -20,7 +20,9 @@
      render(el, u, d, t) {}                     pure: u = local time (can exceed d during the dissolve tail),
                                                 d = dur, t = global time. Never read the previous frame.
    })
-   EX.run({ meter: { label, unit, decimals, max, ticks }, rate: { label } | null, mood, bgm_gain })
+   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain })
+     unit s / ms / min / h / 天 / 年 (or seconds: real seconds per unit) lets the rate pill show 慢放 ×N or 快进 ×N itself;
+     meters that are not time (km, 层, 10ⁿ m) get no rate pill.
 
    Shot helpers (pure functions of u): EX.pop EX.fadeUp EX.fadeOut EX.place EX.drawPath EX.num EX.type EX.stagger
    Page contract for render.mjs: __duration __seek __ready (from engine.js) + __shots __cues __lint. */
@@ -85,7 +87,11 @@
 
   function run(cfg = {}) {
     const meterCfg = Object.assign({ label: '', unit: '', decimals: 0, max: 1, ticks: [] }, cfg.meter || {});
-    const rateCfg = cfg.rate === undefined ? { label: '慢放' } : cfg.rate;
+    /* rate pill: how much real time one second of film covers. The meter unit is converted to seconds
+       (meter.seconds overrides), and the label switches itself: 慢放 when film time > real time, 快进 otherwise. */
+    const UNIT_S = { s: 1, '秒': 1, ms: .001, '毫秒': .001, min: 60, '分钟': 60, h: 3600, '小时': 3600, '天': 86400, '日': 86400, '年': 31557600 };
+    const unitSec = meterCfg.seconds ?? UNIT_S[meterCfg.unit.trim()];
+    const rateCfg = cfg.rate === null || unitSec == null ? null : {};
     const stage = $('stage');
     const world = $('world');
 
@@ -121,7 +127,7 @@
         <div id="hud-scrub"><div id="hud-track"></div>${chapters.map((c) => `<div class="seg" id="seg-${c.id}" style="background:${c.color}"></div>`).join('')}<div id="hud-knob"></div>
           ${meterCfg.ticks.map((v) => `<span class="tick mono" style="left:${(v / meterCfg.max) * 100}%">${v}${meterCfg.unit}</span>`).join('')}</div>
       </div>
-      <div id="hud-rate" class="pill"><span class="lbl">${rateCfg ? rateCfg.label : ''}</span><b id="hud-rate-v"></b></div>`;
+      <div id="hud-rate" class="pill"><span class="lbl" id="hud-rate-l"></span><b id="hud-rate-v"></b></div>`;
     $('cap').innerHTML = '<div id="cap-pill" class="pill"></div>';
     const capPill = $('cap-pill');
 
@@ -174,7 +180,12 @@
       });
       const rateOn = rateCfg && cur.meter && cur.m1 > cur.m0;
       $('hud-rate').style.opacity = rateOn ? 1 : 0;
-      if (rateOn) $('hud-rate-v').textContent = fmtRate(cur.dur / (cur.m1 - cur.m0));
+      if (rateOn) {
+        const real = (cur.m1 - cur.m0) * unitSec;                         /* real seconds covered by this shot */
+        const slow = cur.dur >= real;
+        $('hud-rate-l').textContent = slow ? '慢放' : '快进';
+        $('hud-rate-v').textContent = fmtRate(slow ? cur.dur / real : real / cur.dur);
+      }
       $('hud-rate-v').style.color = cur.color;
       /* caption */
       let cap = null, capT = 0;

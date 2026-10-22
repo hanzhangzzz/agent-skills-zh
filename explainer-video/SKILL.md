@@ -62,11 +62,12 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 EX.chapter('pack', { name: '打包 · 加密', color: EX.C.blue });      // 按顺序声明章节
 EX.shot({ id, chapter, dur, meter: [起, 止], caps: [[秒, '字幕']], sfx: [[秒, 'pop', 音量]],
           enter: 'dissolve' | 'cut', hud: true, html: `…`, init(el) {…}, render(el, u, d) {…} });
-EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0, 1, 2, 3] }, rate: { label: '慢放' }, mood: 'calm' });
+EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0, 1, 2, 3] }, mood: 'calm' });
 ```
 
+- 仪表单位写 `s / ms / min / h / 天 / 年` 时，右上角自动显示“慢放 ×N”或“快进 ×N”；距离、层数这类非时间仪表不显示倍数。不想要倍数写 `rate: null`。
 - 章节颜色依次取 `EX.C.blue / purple / pink / cyan / green / orange / red / indigo`，相邻章节不同色。
-- 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`（见 `icons.js`），不用 emoji。
+- 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`，不用 emoji。现有：`phone laptop server database cloud tower wifi router globe lock unlock key shield user users chip cpu doc chat search gear bolt clock check x arrow card qr bank store sun leaf drop heart eye brain layers box truck bell code sprout tree cup fire thermo ship plane factory pin mountain cart scale star atom dna cell battery money camera calendar`；缺的照 `icons.js` 的格式自己画（24×24、描边 2、1–4 条路径）。
 - 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse dashFlow splitChars riseChars`。
 - 音效名只有这 12 个：`click tick pop chime snap whoosh reveal type thud blip glitch drop`。
 - 坐标有两套，别混：`class="abs"` + `style="left;top"` 是**左上角**；`EX.place(el, x, y)` 是**中心点**，并会覆盖 `transform`。同一个元素只用一种。

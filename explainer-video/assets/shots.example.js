@@ -143,6 +143,5 @@ EX.shot({
 
 EX.run({
   meter: { label: '发送后', unit: 's', decimals: 3, max: 0.3, ticks: [0, 0.1, 0.2, 0.3] },
-  rate: { label: '慢放' },
   mood: 'calm',
 });
