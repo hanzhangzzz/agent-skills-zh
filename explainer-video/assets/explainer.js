@@ -25,6 +25,7 @@
      meters that are not time (km, 层, 10ⁿ m) get no rate pill.
 
    Shot helpers (pure functions of u): EX.pop EX.fadeUp EX.fadeOut EX.place EX.drawPath EX.num EX.type EX.stagger
+   EX.meterAt(t) — the HUD meter's value at global time t; any on-screen copy of the meter must read it
    Page contract for render.mjs: __duration __seek __ready (from engine.js) + __shots __cues __lint. */
 (function () {
   const C = { blue: '#3B6CF6', purple: '#7C4DFF', pink: '#E6458B', green: '#14B27A', orange: '#F59E0B', cyan: '#0EA5C6', red: '#EF4444', indigo: '#4F46E5' };
@@ -74,6 +75,15 @@
   function type(el, str, u, a, cps = 14) { el.textContent = str.slice(0, Math.max(0, Math.floor((u - a) * cps))); return clamp((u - a) * cps / str.length); }
   /* call fn(el, localStart) for each element with a staggered start */
   function stagger(els, u, a, step, fn) { [...els].forEach((el, i) => fn(el, u, a + i * step, i)); }
+
+  /* journey-meter value at global time t (same value the HUD shows). Use it for any on-screen number that means
+     the same thing as the meter (a big “第 N 天”, a clock), so the two never disagree: EX.meterAt(t) inside render(el, u, d, t). */
+  function meterAt(t) {
+    let cur = null;
+    for (const s of shots) if (s.start <= t) cur = s;
+    if (!cur || cur.m0 == null) return 0;
+    return lerp(cur.m0, cur.m1, clamp((t - cur.start) / cur.dur));
+  }
 
   /* ---------- build ---------- */
   function capHTML(text, color) {
@@ -332,6 +342,9 @@
         }
         L = Math.max(L, S.left); T = Math.max(T, S.top); R = Math.min(R, S.right); B = Math.min(B, S.bottom);
         if (R - L < 2 || B - T < 2) return;
+        const pb = { x: (L - S.left) / k, y: (T - S.top) / k, w: (R - L) / k, h: (B - T) / k };
+        const scenery = pb.w > 1400 || (pb.w < 24 && pb.h < 24) || ['g', 'defs', 'lineargradient', 'radialgradient', 'clippath', 'mask'].includes(el.tagName.toLowerCase());
+        if (!scenery) for (const c of chromeBoxes) if (inter(pb, c.b) > 60) issues.push(`UNDER-${c.e.id.toUpperCase()} ${name(el)} is drawn under the ${c.e.id === 'cap-pill' ? 'caption' : 'HUD'}: keep shapes inside the safe area (y 180–900)`);
         x0 = Math.min(x0, (L - S.left) / k); y0 = Math.min(y0, (T - S.top) / k); x1 = Math.max(x1, (R - S.left) / k); y1 = Math.max(y1, (B - S.top) / k);
       });
       const SW = 1760, SH = 720, SCX = 960, SCY = 540;                   /* safe area x 80–1840, y 180–900 */
@@ -349,5 +362,5 @@
     return [...new Set(issues)];
   }
 
-  window.EX = { C, TOKEN_COLORS, chapter, shot, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger };
+  window.EX = { C, TOKEN_COLORS, chapter, shot, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, meterAt };
 })();
