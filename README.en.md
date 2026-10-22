@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-19-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-20-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -147,6 +147,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [md2view](./md2view/SKILL.md) | Markdown → source and reorganized view in one HTML | Python 3, a model, and browser checks; anchors aid verification, not proof of semantic completeness |
 | [readme-craft](./readme-craft/SKILL.md) | Project evidence → progressively disclosed open-source README | Project source and runnable example; 3s/30s/1m are information-design goals, not measured promises |
 | [launch-video](./launch-video/SKILL.md) | Project evidence → 30-second launch video (MP4); proposes 3 style candidates with rendered probes first | Node.js, Playwright/Chromium, ffmpeg, Python 3; 30 styles (flat, isometric, clay 3D, HUD, pixel, ink wash…), visuals come from real material, music and SFX are synthesized per style; no invented numbers when evidence is missing |
+| [explainer-video](./explainer-video/SKILL.md) | One-line topic → 1.5–2.5 minute Chinese explainer animation (MP4): a protagonist travels 6–10 stations, a journey meter tracks progress, the ending calls back to the question | Node.js, Playwright/Chromium, ffmpeg, Python 3; layout, HUD, captions, transitions and SFX come from the template, you only write shots; layout and pacing lint replaces eyeballing, so models that are weak at reading images can still self-check; numbers are verified facts or orders of magnitude |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | One WeChat article → local Markdown and images | Node.js, Python dependencies, Chrome; wrapper can install local npm dependencies; article must be accessible |
 | [xiaohongshu](./xiaohongshu/SKILL.md) | Xiaohongshu multi-account management, search, batch archival from your own collections, local recall and platform drafts | Python standard library, Chrome; one isolated session and browser directory per account, at most two accounts at a time; optional yt-dlp/ffmpeg/Whisper; collections are prefiltered by title only, the agent picks; drafts stay local to the dedicated browser and are never published; stops on risk control; no proxy or fingerprint spoofing |
 | [x-article-download](./x-article-download/SKILL.md) | Tweets/articles/account content → local Markdown | Browser; batch path needs xreach, video needs yt-dlp/Whisper; some content requires login |
