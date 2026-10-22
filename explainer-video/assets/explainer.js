@@ -23,6 +23,8 @@
      cam(u, d) { return [x, y, s, rot] },       optional camera pose in world coordinates during the shot (pan, push,
                                                 orbit-like drift). s = how much world the screen shows (0.5 = 2× zoom).
      fly: 1.2,                                  seconds of the camera move into this shot (enter 'fly')
+     flyEase: EX.ramp,                          easing of that move: cubic (default, smooth) or EX.ramp (speed ramp:
+                                                creeps, rushes, then settles — the "accelerate between scenes" move)
      hud: true,                                 false hides HUD for hook / ending shots
      html: `<div class="card abs" id="tls-card">…</div>`,   built once
      init(el) {},                               optional, once after html is in the DOM (split chars, cache)
@@ -35,11 +37,17 @@
                                                 world: sky, starfield, particles (scenery: the composition lint ignores it), or
                                                 a three.js scene that holds the main subject (subject: true, so it counts).
                                                 Read EX.cam(t) to follow the camera.
-   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, theme: 'dark' })
+   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain,
+            theme: 'dark', chrome: 'cinema', post: { vignette: .4, grain: 6 } })
+     chrome 'pill' (default, glass pills) | 'cinema' (no boxes: a thin top timeline, small chapter label,
+            unboxed caption — for art-directed films); post.vignette 0–1 darkens the corners;
+            post.grain (ffmpeg noise strength, 4–10) is added when the video is encoded, not in stills
+   const B = EX.tempo(96)                       beat grid: B(n) = seconds of beat n at 96 bpm; the music is synthesized at
+                                                this tempo, so durations, cuts and landings on B(n) hit the beat
      unit s / ms / min / h / 天 / 年 (or seconds: real seconds per unit) lets the rate pill show 慢放 ×N or 快进 ×N itself;
      meters that are not time (km, 层, 10ⁿ m) get no rate pill.
 
-   Shot helpers (pure functions of u): EX.pop EX.fadeUp EX.fadeOut EX.place EX.drawPath EX.num EX.type EX.stagger
+   Shot helpers (pure functions of u): EX.pop EX.fadeUp EX.fadeOut EX.place EX.drawPath EX.num EX.type EX.stagger EX.sweep
    EX.meterAt(t) — the HUD meter's value at global time t; any on-screen copy of the meter must read it
    EX.cam(t) — camera pose [x, y, s, rot] at global time t
    Page contract for render.mjs: __duration __seek __ready (from engine.js) + __shots __cues __lint. */
@@ -55,6 +63,10 @@
   function chapter(id, o) { chapters.push({ id, name: o.name, color: o.color || TOKEN_COLORS[chapters.length % 8] }); }
   function shot(o) { shots.push(Object.assign({ hud: true, caps: [], sfx: [] }, o)); }
   function world(o) { worldLayer = o; }
+  let bpm = null;
+  function tempo(b) { bpm = b; return (n) => (n * 60) / b; }
+  /* speed ramp: slow start, a rush through the middle, a long settle (expo in-out) */
+  const ramp = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x < .5 ? Math.pow(2, 20 * x - 10) / 2 : (2 - Math.pow(2, -20 * x + 10)) / 2);
   function backdrop(o) { backLayer = o; }
 
   /* ---------- helpers for shot authors (all pure in u) ---------- */
@@ -102,6 +114,12 @@
   }
   /* typewriter: el.textContent = first N chars of str, cps chars per second from a; caret blinks if el has .caret child */
   function type(el, str, u, a, cps = 14) { el.textContent = str.slice(0, Math.max(0, Math.floor((u - a) * cps))); return clamp((u - a) * cps / str.length); }
+  /* kinetic type: the colour sweeps through el's characters from a to b (karaoke / "the word lights up").
+     Call splitChars(el) once in init. base = colour before the sweep, hot = colour after. */
+  function sweep(el, u, a, b, hot, base = '') {
+    const chars = splitChars(el), k = (chars.length + 1) * clamp((u - a) / (b - a));
+    chars.forEach((c, i) => { const on = clamp(k - i); c.style.color = on >= 1 ? hot : on <= 0 ? base : `color-mix(in srgb, ${hot} ${on * 100 | 0}%, ${base || 'currentColor'})`; });
+  }
   /* call fn(el, localStart) for each element with a staggered start */
   function stagger(els, u, a, step, fn) { [...els].forEach((el, i) => fn(el, u, a + i * step, i)); }
 
@@ -129,7 +147,7 @@
     if (s.enter !== 'fly' || i === 0 || u >= s.flyDur) return poseOf(s, u);
     /* fly between two fixed poses (where the previous camera stopped, where this one is when the fly ends) */
     const prev = shots[i - 1];
-    return flyPose(poseOf(prev, prev.dur), poseOf(s, s.flyDur), cubic(u / s.flyDur));
+    return flyPose(poseOf(prev, prev.dur), poseOf(s, s.flyDur), (s.flyEase || cubic)(u / s.flyDur));
   }
   /* zoom between two poses so one world point stays put on screen (the natural "push into a detail" move);
      at equal scale it is a pan that pulls back a little in the middle so both ends are briefly in view */
@@ -167,7 +185,7 @@
       s.flyDur = s.fly ?? FLY;
       s.start = t; t += s.dur;
       s.ch = chapters.find((c) => c.id === s.chapter) || null;
-      s.color = s.ch ? s.ch.color : C.blue;
+      s.color = s.ch ? s.ch.color : (chapters[0] ? chapters[0].color : C.blue);   /* hook / ending: the first chapter's colour */
       s.m0 = s.meter ? s.meter[0] : lastMeter; s.m1 = s.meter ? s.meter[1] : lastMeter;
       lastMeter = s.m1;
     });
@@ -187,6 +205,15 @@
     /* timeline */
     const duration = timeline();
     if (cfg.theme) stage.classList.add('theme-' + cfg.theme);
+    if (cfg.chrome) stage.classList.add('chrome-' + cfg.chrome);
+    const post = cfg.post || {};
+    if (post.vignette) {
+      const v = document.createElement('div');
+      v.id = 'vignette';
+      v.style.cssText = `position:absolute;inset:0;z-index:39;pointer-events:none;background:radial-gradient(120% 100% at 50% 50%,transparent 55%,rgba(0,0,0,${post.vignette}) 100%)`;
+      stage.insertBefore(v, $('hud'));
+    }
+    window.__post = { grain: post.grain || 0 };
     const layer = (o, id, parent, before) => {
       const el = document.createElement('div');
       el.id = id; el.className = 'layer'; el.innerHTML = o.html || '';
@@ -314,7 +341,7 @@
       s.sfx.forEach(([a, name, g]) => cues.push({ t: +(s.start + a).toFixed(3), sfx: name, gain: g ?? .5 }));
     });
     cues.sort((a, b) => a.t - b.t);
-    window.__cues = { mood: cfg.mood || 'calm', bgm_gain: cfg.bgm_gain ?? .5, cues };
+    window.__cues = { mood: cfg.mood || 'calm', bgm_gain: cfg.bgm_gain ?? .5, cues, ...(bpm ? { bpm } : {}) };
     window.__shots = shots.map((s) => ({ id: s.id, chapter: s.chapter, hud: s.hud, start: +s.start.toFixed(3), dur: s.dur, caps: s.caps.map((c) => c[1]) }));
     window.__lint = lint;
     window.__audit = () => audit(duration);
@@ -385,8 +412,19 @@
       if (o < .35) return;
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return;
-      const box = { x: (r.left - S.left) / k, y: (r.top - S.top) / k, w: r.width / k, h: r.height / k };
-      const scale = el.offsetHeight ? r.height / k / el.offsetHeight : 1;
+      /* judge only the part a mask lets through: clip to overflow-hidden ancestors below #stage (riseChars masks,
+         odometer digits), so a glyph rolling in or out of its mask is neither OFFSCREEN nor overlapping its neighbours */
+      let L = r.left, T = r.top, R = r.right, Bm = r.bottom;
+      for (let e = el.parentElement; e && e.id !== 'stage'; e = e.parentElement) {
+        const ov = getComputedStyle(e).overflow;
+        if (ov.includes('hidden') || ov.includes('clip')) { const q = e.getBoundingClientRect(); L = Math.max(L, q.left); T = Math.max(T, q.top); R = Math.min(R, q.right); Bm = Math.min(Bm, q.bottom); }
+      }
+      if (R - L < 1 || Bm - T < 1) return;
+      const box = { x: (L - S.left) / k, y: (T - S.top) / k, w: (R - L) / k, h: (Bm - T) / k };
+      /* transform scale = rendered height / layout height; offsetHeight is rounded to whole px (27.5 → 28 reads a
+         22 px label as 21.6 px), so take the fractional computed height when there is one (inline boxes: 'auto') */
+      const lh = parseFloat(getComputedStyle(el).height) || el.offsetHeight;
+      const scale = lh ? r.height / k / lh : 1;
       const fs = parseFloat(getComputedStyle(el).fontSize) * scale;
       const inChrome = !!el.closest('#hud, #cap');
       /* EX.world labels are places the camera films: out of view is normal, half in view is the camera passing by */
@@ -448,6 +486,6 @@
     return [...new Set(issues)];
   }
 
-  window.EX = { C, TOKEN_COLORS, chapter, shot, world, backdrop, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, meterAt, cam: camAt,
+  window.EX = { C, TOKEN_COLORS, chapter, shot, world, backdrop, run, tempo, ramp, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, sweep, meterAt, cam: camAt,
     planAudit: () => audit(timeline()) };   /* pacing audit without a browser (tests, quick checks) */
 })();

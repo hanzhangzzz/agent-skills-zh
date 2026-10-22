@@ -71,7 +71,10 @@ const server = createServer((req, res) => {
 });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 
-const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+// headless Chromium on macOS defaults to SwiftShader (software WebGL: a three.js scene with post-processing renders at
+// ~1.5 s per frame on the CPU); ANGLE's Metal backend uses the real GPU and produces the same frames
+const launchArgs = process.platform === 'darwin' ? ['--use-angle=metal'] : [];
+const browser = await chromium.launch({ args: launchArgs, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -118,7 +121,7 @@ async function shot(t, path) {
 async function inkStats() {
   const layers = (ids, v) => page.evaluate(([ids, v]) => {
     /* '*' = everything that is not background: #bg and a scenery backdrop (EX.backdrop without subject: true) stay */
-    const bg = (el) => el.id === 'bg' || (el.id === 'back' && !('subject' in el.dataset));
+    const bg = (el) => el.id === 'bg' || el.id === 'vignette' || (el.id === 'back' && !('subject' in el.dataset));
     for (const el of document.getElementById('stage').children) if (ids === '*' ? !bg(el) : ids.includes(el.id)) el.style.visibility = v;
   }, [ids, v]);
   await layers(['hud', 'cap'], 'hidden');
@@ -246,10 +249,14 @@ try {
     // with sub-frames: read at fps×sub, average each run of `sub` frames (tmix), then keep one frame per output frame.
     // tmix at index n averages n-sub+1..n, so keep n = sub-1, 2sub-1, …: each kept frame blends exactly its own
     // sub-frames and never the previous output frame's (a hard cut on a frame boundary stays clean).
-    const blur = sub > 1 ? ['-vf', `tmix=frames=${sub},select='eq(mod(n+1\\,${sub})\\,0)',setpts=N/${fps}/TB`] : [];
+    // film grain from EX.run({ post: { grain } }) is added here, after any motion blur, so stills stay clean
+    const grain = Number((await page.evaluate(() => window.__post?.grain)) || 0);
+    const vf = [...(sub > 1 ? [`tmix=frames=${sub}`, `select='eq(mod(n+1\\,${sub})\\,0)'`, `setpts=N/${fps}/TB`] : []),
+      ...(grain > 0 ? [`noise=alls=${Math.min(20, grain)}:allf=t`] : [])];
+    const blur = vf.length ? ['-vf', vf.join(',')] : [];
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps * sub), '-i', join(frames, '%06d.jpg'),
       ...blur, '-r', String(fps),
-      '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow',
+      '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-crf', '16', '-maxrate', '20M', '-bufsize', '40M', '-preset', 'slow',   // the cap keeps film grain from bloating the file
       '-movflags', '+faststart', out], { stdio: 'inherit' });
     rmSync(frames, { recursive: true, force: true });
     if (r.status !== 0) throw new Error('ffmpeg encode failed');

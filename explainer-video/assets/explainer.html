@@ -96,6 +96,25 @@
   #cap{position:absolute;left:0;right:0;bottom:0;z-index:45;pointer-events:none}
   #cap-pill{position:absolute;left:50%;bottom:50px;transform:translateX(-50%);padding:20px 50px;font-weight:700;font-size:40px;white-space:nowrap;color:var(--hud-ink)}
   #cap-pill em{font-style:normal;margin:0 .12em}
+  /* chrome 'cinema': no boxes. Small chapter label, a hairline timeline, an unboxed caption — the HUD recedes and the
+     film's own art direction carries the frame. Colours follow --hud-ink / --hud-ink2 (set them for custom themes). */
+  #stage.chrome-cinema{--cap-shadow:0 1px 2px rgba(255,255,255,.7),0 0 18px rgba(255,255,255,.75)}
+  #stage.chrome-cinema.theme-dark{--cap-shadow:0 1px 3px rgba(0,0,0,.8),0 0 22px rgba(0,0,0,.7)}
+  #stage.chrome-cinema #hud .pill,#stage.chrome-cinema #cap-pill{background:none;box-shadow:none}
+  #stage.chrome-cinema #hud-chip{left:72px;top:44px;height:auto;padding:0;gap:14px;font:500 22px var(--sans);letter-spacing:.12em;text-shadow:var(--cap-shadow)}
+  #stage.chrome-cinema #hud-num{width:auto;height:auto;border-radius:0;background:none!important;color:var(--hud-ink2);font:500 22px var(--mono)}
+  #stage.chrome-cinema #hud-meter{top:34px}
+  #stage.chrome-cinema #hud-clock{height:auto;padding:0;gap:14px;text-shadow:var(--cap-shadow)}
+  #stage.chrome-cinema #hud-clock .lbl,#stage.chrome-cinema #hud-rate .lbl{font-size:18px;letter-spacing:.14em}
+  #stage.chrome-cinema #hud-val{font:300 40px var(--mono);min-width:0}
+  #stage.chrome-cinema #hud-clock .unit{font-size:20px}
+  #stage.chrome-cinema #hud-scrub{margin-top:12px}
+  #stage.chrome-cinema #hud-track,#stage.chrome-cinema .seg{height:2px}
+  #stage.chrome-cinema #hud-knob{top:-5px;width:12px;height:12px;margin-left:-6px;border-width:3px}
+  #stage.chrome-cinema .tick{top:10px;font-size:14px}
+  #stage.chrome-cinema #hud-rate{right:72px;top:44px;height:auto;padding:0;text-shadow:var(--cap-shadow)}
+  #stage.chrome-cinema #hud-rate b{font:500 26px var(--mono)}
+  #stage.chrome-cinema #cap-pill{bottom:64px;padding:0;font-weight:500;font-size:38px;letter-spacing:.04em;text-shadow:var(--cap-shadow)}
 </style>
 </head>
 <body>
