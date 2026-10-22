@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report where a render stands still and how much each second moves.
 
-Counts changed pixels per frame (same measure as check_sync.py), then prints one row per second
+Counts changed pixels per frame (ffmpeg tblend difference at 960×540), then prints one row per second
 with a motion bar, and flags every run of at least --still seconds whose motion never exceeds the
 noise floor. A STILL run is a suspect, not a verdict: a title left on screen for reading is fine,
 a screenshot sitting in a frame for 10 s is the slideshow problem.

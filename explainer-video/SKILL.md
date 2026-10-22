@@ -49,8 +49,8 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 规则：
 
-- 结构固定：钩子 6–8 s（无 HUD）→ 承诺 5–6 s（片名 + 仪表归零，无 HUD）→ 6–10 章，每章 1–3 个镜头 → 回扣 6–8 s → 片尾 4 s。总长 90–150 s。
-- 每个讲解镜头 5–10 s，一个镜头最多两句字幕。
+- 结构固定：钩子 6–8 s（无 HUD）→ 承诺 5–6 s（片名 + 仪表归零，无 HUD）→ 6–10 章，每章 1–3 个镜头 → 回扣 6–8 s → 片尾 4 s。总长 90–150 s（`--lint` 在 80 s 以下或 160 s 以上报 `DURATION`）。
+- 每个讲解镜头 5–10 s（`--lint`：短于 4 s 报 `SHORT`，长于 12 s 报 `LONG`），一个镜头最多两句字幕。
 - 字幕一句 ≤ 24 字，停留 ≥ 字数 / 6 + 1 秒。它说“此刻发生了什么”，像对朋友讲。每章第一次出现的术语用 `「术语」` 包起来，模板会用章节色高亮。
 - 仪表按真实值走，不必匀速：片子的时间按概念重要性分配，慢放倍数会自动算出来显示在右上角。
 - 每个镜头按 `references/visuals.md` 的密度清单设计：主视觉 + 主角 + 1–3 个标注 + 一个持续运动。
@@ -74,7 +74,7 @@ EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0,
 - 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse dashFlow splitChars riseChars`。
 - 音效名只有这 12 个：`click tick pop chime snap whoosh reveal type thud blip glitch drop`。
 - 坐标有两套，别混：`class="abs"` + `style="left;top"` 是**左上角**；`EX.place(el, x, y)` 是**中心点**，并会覆盖 `transform`。同一个元素只用一种。
-- 版面：内容只放在安全区 x 80–1840、y 180–900；上面是 HUD，下面是字幕。正文字号 ≥ 24 px，标签 ≥ 22 px。
+- 版面：内容只放在安全区 x 80–1840、y 180–900；上面是 HUD，下面是字幕。正文字号 ≥ 24 px，标签 ≥ 22 px（`--lint` 拦 22 px 以下）。
 - **尺寸给足**：一个镜头里所有内容合起来，至少占安全区宽度或高度的 60%，并且大致居中。常用尺寸：主卡片 1000–1300 × 420–560 px；节点图标 132 px，节点间距 ≥ 500 px；token 块字号 46–64 px；代码 34–40 px。宁大勿小，`--lint` 的 `SPARSE` / `OFF-CENTER` 会拦住太小和偏的画面。
 - **骨架先立**：主视觉的骨架（全部节点、卡片外框、坐标轴、格子）在镜头开始 1 秒内全部出现；之后的时间用来让主角移动、状态变化、标注弹出。不要把骨架拆成整段镜头里逐个出现，否则镜头中段画面是半空的。
 - `render` 必须是 `u` 的纯函数：不用 `Math.random`、`Date.now`、定时器、CSS animation/transition；随机用 `rng(seed)`，并在 `init` 里生成好。
@@ -89,8 +89,7 @@ EX.run({ meter: { label: '回车后', unit: 's', decimals: 3, max: 3, ticks: [0,
 ```bash
 node --check shots.js                                                  # 先查语法，比渲染快
 bash <skill>/scripts/fonts.sh <work>                                   # 文案变了就重跑
-node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每个镜头中点和结尾各一张静帧（会先清掉旧静帧）
-ffmpeg -v error -y -pattern_type glob -i 'out/stills/t*.png' -vf "scale=640:-1,tile=4x6" -frames:v 1 out/sheet.jpg
+node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每个镜头中点和结尾各一张静帧 + 联系表 out/sheet-01.jpg …（每页 24 张，先清掉旧的）
 ```
 
 `--lint` 打印两类问题，必须清零（退出码 0）才能进入下一步：
@@ -104,7 +103,7 @@ ffmpeg -v error -y -pattern_type glob -i 'out/stills/t*.png' -vf "scale=640:-1,t
 node <skill>/scripts/render.mjs --html index.html --at 37.2 --eval "document.querySelector('#pk-code').textContent"
 ```
 
-能看图时用 Read 打开 `out/sheet.jpg`，逐格回答三个问题，有一个“否”就改：主视觉是否一眼能看出在讲什么？主角在不在？离开字幕，这一格画面本身是否有信息？lint 通过只说明没有硬伤，不说明好看；不要写“目检通过”就跳过。
+能看图时用 Read 打开每一页 `out/sheet-NN.jpg`（全部页都看，不只第一页），逐格回答三个问题，有一个“否”就改：主视觉是否一眼能看出在讲什么？主角在不在？离开字幕，这一格画面本身是否有信息？lint 通过只说明没有硬伤，不说明好看；不要写“目检通过”就跳过。
 
 ## 6. 渲染与混音
 
@@ -121,7 +120,7 @@ python3 <skill>/scripts/mix.py --video out/silent.mp4 --cues cues.json --out out
 
 ```bash
 ffprobe -v error -show_entries stream=codec_type,width,height:format=duration -of compact out/<name>.mp4
-ffmpeg -v error -y -i out/<name>.mp4 -vf "fps=1/3,scale=480:-1,tile=6x8" -frames:v 1 out/contact.jpg
+ffmpeg -v error -y -i out/<name>.mp4 -vf "fps=1/3,scale=480:-1,tile=6x9" -frames:v 1 out/contact.jpg   # 6×9 格 × 3 s = 162 s，装得下 lint 允许的最长片
 ```
 
 确认有视频流和音频流、1920×1080、时长与分镜一致、`--lint` 为 0。交付：

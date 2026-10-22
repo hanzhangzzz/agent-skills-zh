@@ -172,6 +172,15 @@ try {
         lintCount += issues.length;
       }
     }
+    if (args.stills === 'shots') {
+      // contact sheets of every still, 24 per page (out/sheet-01.jpg, sheet-02.jpg, …) — never a silent cut-off
+      const sheetDir = dirname(dir);
+      for (const f of readdirSync(sheetDir)) if (/^sheet-\d+\.jpg$/.test(f)) rmSync(join(sheetDir, f));
+      const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-pattern_type', 'glob', '-i', join(dir, 't*.png'),
+        '-vf', 'scale=640:-1,tile=4x6', join(sheetDir, 'sheet-%02d.jpg')], { stdio: 'inherit' });
+      const pages = r.status === 0 ? readdirSync(sheetDir).filter((f) => /^sheet-\d+\.jpg$/.test(f)).length : 0;
+      console.log(pages ? `✓ ${pages} contact sheet page(s) → ${join(sheetDir, 'sheet-01.jpg')}${pages > 1 ? ' …' : ''}` : 'contact sheet failed (is ffmpeg on PATH?)');
+    }
     if (args.lint) {
       const audit = await page.evaluate(() => (window.__audit ? window.__audit() : []));
       for (const i of audit) console.log(`AUDIT ${i}`);

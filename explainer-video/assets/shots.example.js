@@ -35,7 +35,7 @@ EX.shot({
    Title shots are the poster of the film: big type (≥ 120 px), one strong shape, never a lone line of text. */
 EX.shot({
   id: 'title', chapter: null, dur: 6, hud: false,
-  caps: [[0.6, '从按下到朋友收到，只要 0.3 秒。我们把它放慢。']],
+  caps: [[0.6, '从按下到收到，只要 0.3 秒。我们把它放慢。']],
   sfx: [[0.2, 'reveal', .6]],
   html: `
     <div class="abs t-h2" id="ti-a" style="left:0;right:0;top:170px;text-align:center">发送之后的</div>

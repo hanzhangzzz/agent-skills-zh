@@ -104,6 +104,19 @@
     return '×' + (Math.round(r / p) * p).toLocaleString('en-US');
   }
 
+  /* start times and meter values of every shot (no DOM, so it can be checked offline: EX.planAudit()) */
+  function timeline() {
+    let t = 0, lastMeter = null;
+    shots.forEach((s) => {
+      s.start = t; t += s.dur;
+      s.ch = chapters.find((c) => c.id === s.chapter) || null;
+      s.color = s.ch ? s.ch.color : C.blue;
+      s.m0 = s.meter ? s.meter[0] : lastMeter; s.m1 = s.meter ? s.meter[1] : lastMeter;
+      lastMeter = s.m1;
+    });
+    return t;
+  }
+
   function run(cfg = {}) {
     const meterCfg = Object.assign({ label: '', unit: '', decimals: 0, max: 1, ticks: [] }, cfg.meter || {});
     /* rate pill: how much real time one second of film covers. The meter unit is converted to seconds
@@ -115,18 +128,12 @@
     const world = $('world');
 
     /* timeline */
-    let t = 0, lastMeter = null;
-    shots.forEach((s, i) => {
-      s.start = t; t += s.dur;
-      s.ch = chapters.find((c) => c.id === s.chapter) || null;
-      s.color = s.ch ? s.ch.color : C.blue;
-      s.m0 = s.meter ? s.meter[0] : lastMeter; s.m1 = s.meter ? s.meter[1] : lastMeter;
-      lastMeter = s.m1;
+    const duration = timeline();
+    shots.forEach((s) => {
       const sec = document.createElement('section');
       sec.className = 'shot'; sec.id = s.id; sec.innerHTML = s.html || '';
       world.appendChild(sec); s.el = sec;
     });
-    const duration = t;
     shots.forEach((s, i) => {
       const next = shots[i + 1];
       s.end = s.start + s.dur + (next && next.enter !== 'cut' ? XFADE : 0);
@@ -239,12 +246,12 @@
   /* timeline audit: pacing rules a model can check without seeing the video */
   function audit(duration) {
     const out = [];
-    if (duration < 60 || duration > 180) out.push(`DURATION ${duration.toFixed(1)}s (target 80–150s)`);
+    if (duration < 80 || duration > 160) out.push(`DURATION ${duration.toFixed(1)}s (target 90–150s; lint range 80–160s)`);
     if (chapters.length < 5) out.push(`CHAPTERS only ${chapters.length} (target 6–10)`);
     let lastM = -Infinity;
     shots.forEach((s) => {
-      if (s.dur > 14) out.push(`LONG ${s.id} ${s.dur}s — split it or it will sit still`);
-      if (s.chapter && s.dur < 3.5) out.push(`SHORT ${s.id} ${s.dur}s — an explained shot needs ≥ 4s`);
+      if (s.dur > 12) out.push(`LONG ${s.id} ${s.dur}s — over 12s: split it or it will sit still`);
+      if (s.chapter && s.dur < 4) out.push(`SHORT ${s.id} ${s.dur}s — an explained shot needs ≥ 4s`);
       if (s.hud && s.chapter && !s.caps.length) out.push(`NO-CAPTION ${s.id}`);
       if (s.meter && s.m0 < lastM - 1e-9) out.push(`METER-BACKWARDS ${s.id} starts at ${s.m0} after ${lastM}`);
       if (s.meter) lastM = s.m1;
@@ -252,7 +259,7 @@
         const plain = text.replace(/[「」]/g, '');
         const until = i + 1 < s.caps.length ? s.caps[i + 1][0] : s.dur;
         const need = plain.length / 6 + 1;
-        if (plain.length > 26) out.push(`CAPTION-LONG ${s.id} "${plain}" ${plain.length} chars (max 26, split it)`);
+        if (plain.length > 24) out.push(`CAPTION-LONG ${s.id} "${plain}" ${plain.length} chars (max 24, split it)`);
         if (until - a < need - .05) out.push(`CAPTION-FAST ${s.id} "${plain.slice(0, 10)}…" on screen ${(until - a).toFixed(1)}s, needs ${need.toFixed(1)}s`);
       });
     });
@@ -305,7 +312,7 @@
       const inChrome = !!el.closest('#hud, #cap');
       texts.push({ el, box, inChrome, cap: !!el.closest('#cap'), o });
       if (box.x < -2 || box.y < -2 || box.x + box.w > 1922 || box.y + box.h > 1082) issues.push(`OFFSCREEN ${name(el)} at ${box.x | 0},${box.y | 0} ${box.w | 0}×${box.h | 0}`);
-      if (!inChrome && fs < 20 && o > .6) issues.push(`SMALL ${name(el)} font ${fs.toFixed(1)}px (min 20)`);
+      if (!inChrome && fs < 22 - .5 && o > .6) issues.push(`SMALL ${name(el)} font ${fs.toFixed(1)}px (min 22; body text 24)`);
       if (el.scrollWidth > el.clientWidth + 2 && ['hidden', 'clip'].includes(getComputedStyle(el).overflowX)) issues.push(`CLIPPED ${name(el)} text wider than its box`);
       const cs = getComputedStyle(el);
       if (!inChrome && cs.color === 'rgba(0, 0, 0, 0)' && !(cs.webkitBackgroundClip === 'text' || cs.backgroundClip === 'text')) issues.push(`INVISIBLE ${name(el)} text is transparent (a .grad-text child lost its gradient clip?)`);
@@ -372,5 +379,6 @@
     return [...new Set(issues)];
   }
 
-  window.EX = { C, TOKEN_COLORS, chapter, shot, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, meterAt };
+  window.EX = { C, TOKEN_COLORS, chapter, shot, run, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, meterAt,
+    planAudit: () => audit(timeline()) };   /* pacing audit without a browser (tests, quick checks) */
 })();
