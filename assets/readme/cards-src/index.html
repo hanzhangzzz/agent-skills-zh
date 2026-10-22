@@ -317,6 +317,24 @@ bash worker-reviewer.sh --loop</pre></div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
+  <div class="top"><span class="name">model-guard</span><span class="tag">预算闸 · 强制分工</span></div>
+  <div class="one">贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>Fable session 执行：
+
+Bash  npm test
+
+（5h 已用 75%，距重置 4 小时）</pre></div>
+    <div class="pane"><h4>hook 返回格式</h4><pre>exit 2，原因回灌给模型：
+[model-guard] 5h 余量 25% &lt; 保留线 40%×剩余时间 = 32%
+已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，
+禁止 fork）、/model opus 或 /compact。
+
+用量数据缺失或过期时放行</pre><div class="src">拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
   <div class="top"><span class="name">scanned-book-ocr</span><span class="tag">扫描 PDF → 文字</span></div>
   <div class="one">本地批量 OCR，保留页码；并发输出一致性检查 + 完整性校验 + 视觉抽检</div>
   <div class="grid">
