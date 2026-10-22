@@ -108,7 +108,25 @@ async function shot(t, path) {
   await page.evaluate(() => Promise.all([...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))));
   // video frames as high-quality JPEG: ~5× faster than PNG and invisible after x264; stills stay PNG
   if (path.endsWith('.jpg')) await page.screenshot({ path, type: 'jpeg', quality: 95 });
-  else await page.screenshot({ path, type: 'png' });
+  else return page.screenshot({ path, type: 'png' });
+}
+
+// ink: share of safe-area pixels (x 80–1840, y 180–900) that differ from the bare background (content layers
+// hidden). White cards count; a thin outline on an empty frame does not. Explainer-only: needs #world #hud #cap.
+async function inkCoverage(full) {
+  await page.evaluate(() => { for (const id of ['world', 'hud', 'cap']) document.getElementById(id).style.visibility = 'hidden'; });
+  const bare = await page.screenshot({ type: 'png' });
+  await page.evaluate(() => { for (const id of ['world', 'hud', 'cap']) document.getElementById(id).style.visibility = ''; });
+  return page.evaluate(async ([a, b]) => {
+    const load = (d) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = 'data:image/png;base64,' + d; });
+    const [ia, ib] = await Promise.all([load(a), load(b)]);
+    const cv = document.createElement('canvas'); cv.width = 1760; cv.height = 720; const g = cv.getContext('2d');
+    g.drawImage(ia, -80, -180); const A = g.getImageData(0, 0, 1760, 720).data;
+    g.drawImage(ib, -80, -180); const B = g.getImageData(0, 0, 1760, 720).data;
+    let n = 0;
+    for (let i = 0; i < A.length; i += 4) if (Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) > 12) n++;
+    return n / (1760 * 720);
+  }, [full.toString('base64'), bare.toString('base64')]);
 }
 
 let failed = false;
@@ -141,10 +159,15 @@ try {
     let lintCount = 0;
     for (const s of times) {
       const tt = Math.min(Number(s), duration - 0.001);
-      await shot(tt, join(dir, `t${String(s).padStart(7, '0')}.png`));
+      const png = await shot(tt, join(dir, `t${String(s).padStart(7, '0')}.png`));
       if (args.lint) {
         const issues = await page.evaluate((c) => (window.__lint ? window.__lint({ composition: c }) : ['page has no __lint']), midShot.has(s));
         const cur = await page.evaluate((x) => (window.__shots || []).filter((r) => r.start <= x).pop()?.id ?? '', tt);
+        const curRow = await page.evaluate((x) => (window.__shots || []).filter((r) => r.start <= x).pop() ?? null, tt);
+        if (midShot.has(s) && curRow?.hud && (await page.evaluate(() => !!document.getElementById('world')))) {
+          const ink = await inkCoverage(png);
+          if (ink < 0.05) issues.push(`THIN only ${(ink * 100).toFixed(1)}% of the safe area is drawn (min 5%): fill shapes (gradient body, not outline only), enlarge them, or add the missing parts`);
+        }
         for (const i of issues) console.log(`LINT t=${s} [${cur}] ${i}`);
         lintCount += issues.length;
       }

@@ -229,7 +229,7 @@
     });
     cues.sort((a, b) => a.t - b.t);
     window.__cues = { mood: cfg.mood || 'calm', bgm_gain: cfg.bgm_gain ?? .5, cues };
-    window.__shots = shots.map((s) => ({ id: s.id, chapter: s.chapter, start: +s.start.toFixed(3), dur: s.dur, caps: s.caps.map((c) => c[1]) }));
+    window.__shots = shots.map((s) => ({ id: s.id, chapter: s.chapter, hud: s.hud, start: +s.start.toFixed(3), dur: s.dur, caps: s.caps.map((c) => c[1]) }));
     window.__lint = lint;
     window.__audit = () => audit(duration);
 
@@ -352,7 +352,8 @@
         L = Math.max(L, S.left); T = Math.max(T, S.top); R = Math.min(R, S.right); B = Math.min(B, S.bottom);
         if (R - L < 2 || B - T < 2) return;
         const pb = { x: (L - S.left) / k, y: (T - S.top) / k, w: (R - L) / k, h: (B - T) / k };
-        const scenery = pb.w > 1400 || (pb.w < 24 && pb.h < 24) || ['g', 'defs', 'lineargradient', 'radialgradient', 'clippath', 'mask'].includes(el.tagName.toLowerCase());
+        const ownsText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());   /* text is checked by the text rule */
+        const scenery = ownsText || pb.w > 1400 || (pb.w < 24 && pb.h < 24) || ['g', 'defs', 'lineargradient', 'radialgradient', 'clippath', 'mask'].includes(el.tagName.toLowerCase());
         if (!scenery) for (const c of chromeBoxes) if (inter(pb, c.b) > 60) issues.push(`UNDER-${c.e.id.toUpperCase()} ${name(el)} is drawn under the ${c.e.id === 'cap-pill' ? 'caption' : 'HUD'}: keep shapes inside the safe area (y 180–900)`);
         x0 = Math.min(x0, (L - S.left) / k); y0 = Math.min(y0, (T - S.top) / k); x1 = Math.max(x1, (R - S.left) / k); y1 = Math.max(y1, (B - S.top) / k);
       });
