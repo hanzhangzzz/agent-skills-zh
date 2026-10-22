@@ -154,7 +154,7 @@ try {
       for (const i of audit) console.log(`AUDIT ${i}`);
       lintCount += audit.length;
     }
-    console.log(`✓ ${times.length} stills → ${dir}` + (args.lint ? ` · ${lintCount} lint/audit issue(s)` : ''));
+    console.log(`✓ ${times.length} stills → ${dir}` + (args.lint ? (lintCount ? ` · ${lintCount} issue(s) to fix` : ' · clean') : ''));
     if (lintCount) failed = true;
   } else {
     const frames = mkdtempSync(join(tmpdir(), 'explainer-video-frames-'));

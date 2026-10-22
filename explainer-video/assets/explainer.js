@@ -41,6 +41,7 @@
   /* spring pop-in at local time a: scale from s0 to 1 with overshoot, opacity in 0.15 s. Returns progress 0..1 */
   function pop(el, u, a, { s0 = .6, w = 16, z = .55, x = 0, y = 0 } = {}) {
     const k = spring(u - a, w, z);
+    if (el instanceof SVGElement) { el.style.transformBox = 'fill-box'; el.style.transformOrigin = '50% 50%'; }  /* scale SVG around its own centre */
     const o = clamp((u - a) / .15);
     el.style.opacity = o; el.style.visibility = o <= 0 ? 'hidden' : '';
     el.style.transform = `translate(${x}px,${y}px) scale(${lerp(s0, 1, k)})`;
@@ -56,9 +57,16 @@
   }
   function fadeOut(el, u, a, dur = .4) { const o = 1 - cubic(prog(u, a, a + dur)); el.style.opacity = o; el.style.visibility = o <= 0 ? 'hidden' : ''; }
   /* absolute placement by centre point; el must have class "abs" (or position:absolute) */
+  /* HTML: centre of el at (x, y). SVG: draw the shape around (0, 0) and place() moves its origin to (x, y).
+     pop() and place() both write transform: on one element use one of them (place's s takes a spring value). */
   function place(el, x, y, s = 1, o = 1, rot = 0) {
-    el.style.left = x + 'px'; el.style.top = y + 'px';
-    el.style.transform = `translate(-50%,-50%) scale(${s}) rotate(${rot}deg)`;
+    if (el instanceof SVGElement) {
+      el.style.transformBox = 'view-box'; el.style.transformOrigin = '0 0';
+      el.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${s})`;
+    } else {
+      el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.style.transform = `translate(-50%,-50%) scale(${s}) rotate(${rot}deg)`;
+    }
     el.style.opacity = o; el.style.visibility = o <= 0 ? 'hidden' : '';
   }
   /* reveal an SVG path's stroke from 0 to p (0..1) */
@@ -66,8 +74,9 @@
     const L = path.__len || (path.__len = path.getTotalLength());
     path.style.strokeDasharray = `${L} ${L}`;
     path.style.strokeDashoffset = (L * (1 - clamp(p))).toFixed(2);
+    path.style.visibility = p <= 0 ? 'hidden' : '';                 /* a round cap would otherwise show a dot at p = 0 */
   }
-  /* number with thousands separators counting up as p goes 0 → 1 */
+  /* number with thousands separators counting up as p goes 0 → 1 (p is clamped: no overshoot) */
   function num(el, value, p, decimals = 0, prefix = '', suffix = '') {
     el.textContent = prefix + (value * clamp(p)).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + suffix;
   }

@@ -57,7 +57,8 @@
   /* splitChars/riseChars wrap each glyph in an inline-block span, which escapes the parent's text clip: give each glyph the clip itself */
   .grad-text .ch{background:inherit;-webkit-background-clip:text;background-clip:text;color:transparent}
   svg.wire{position:absolute;inset:0;width:1920px;height:1080px;overflow:visible;pointer-events:none}
-  svg.wire path{fill:none;stroke-width:4;stroke-linecap:round}
+  /* defaults only where the path did not set its own attribute (a CSS rule would override fill=/stroke-width=) */
+  svg.wire path:not([fill]){fill:none} svg.wire path:not([stroke-width]){stroke-width:4} svg.wire path:not([stroke-linecap]){stroke-linecap:round}
   /* ---------- add your own component CSS below ---------- */
 
   /* ---------- HUD + caption (owned by explainer.js) ---------- */
