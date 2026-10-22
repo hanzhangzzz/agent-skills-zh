@@ -7,6 +7,8 @@
        it overrides a hidden parent and leaks elements into other scenes.
    Motion vocabulary (all pure functions of t):
      easings   expoOut cubic backOut elasticOut inExpo inBack spring squash
+     springs   spring(u, w, z) for one landing; springTrack(t, [[t0,v0],[t1,v1],...]) for a value with several targets
+               (cursor, width, radius) — one spring per change, summed, so it stays a pure function of t
      timing    beats(bpm) → n => seconds of beat n;  pulse(t, period)
      text      splitChars(el) once at init, then riseChars(...) / typeText(...)
      numbers   counter(el, value, p, decimals)
@@ -32,6 +34,14 @@
     if (u <= 0) return 0;
     const wd = w * Math.sqrt(1 - z * z);
     return 1 - Math.exp(-z * w * u) * (Math.cos(wd * u) + (z * w / wd) * Math.sin(wd * u));
+  }
+  /* a value that changes target several times (cursor x, a container's width, a morphing radius):
+     keys = [[t0, v0], [t1, v1], ...]. Each change adds its own spring from its own start time, so the
+     motion stays continuous and frame 812 renders without simulating 0..811. Before t0 the value is v0. */
+  function springTrack(t, keys, w = 14, z = .5) {
+    let v = keys[0][1];
+    for (let i = 1; i < keys.length; i++) v += (keys[i][1] - keys[i - 1][1]) * spring(t - keys[i][0], w, z);
+    return v;
   }
   /* squash & stretch for a landing at time a: returns [scaleX, scaleY], 1,1 at rest */
   function squash(t, a, dur = .45, amount = .22) {
@@ -229,7 +239,7 @@
     });
   }
 
-  Object.assign(window, { $, clamp, prog, lerp, expoOut, cubic, backOut, elasticOut, inExpo, inBack, spring, squash, beats, pulse, rng,
+  Object.assign(window, { $, clamp, prog, lerp, expoOut, cubic, backOut, elasticOut, inExpo, inBack, spring, springTrack, squash, beats, pulse, rng,
     show, rise, typeText, counter, splitChars, riseChars, pathPoint, travel, dashFlow, reel, morphRect, setFrame, preloadFrames });
   window.LV = { start };
 })();
