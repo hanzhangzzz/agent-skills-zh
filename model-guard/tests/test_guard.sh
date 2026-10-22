@@ -115,7 +115,26 @@ expect 0 "缺 resets_at 放行"                        "$FABLE" Bash '{"command"
 
 python3 -c 'import json,sys,time;n=int(time.time());json.dump({"five_hour":{"utilization":0.8,"resets_at":n+14000},"saved_at":n},open(sys.argv[1],"w"))' \
   "$CLAUDE_HOME/model-guard/rate-limits.json"
-expect 2 "utilization=0.8 按比例解析为 80% 并拦截"     "$FABLE" Bash '{"command":"ls"}'
+expect 0 "只有 utilization 字段（非实测字段）视为无数据放行"  "$FABLE" Bash '{"command":"ls"}'
+
+limits 1 $H5 1 $D6
+expect 0 "used_percentage=1 是 1%，不被当成 100%"      "$FABLE" Bash '{"command":"ls"}'
+
+python3 -c 'import json,sys,time;n=time.time();json.dump({"five_hour":{"used_percentage":95,"resets_at":int((n+600)*1000)},"saved_at":int(n)},open(sys.argv[1],"w"))' \
+  "$CLAUDE_HOME/model-guard/rate-limits.json"
+expect 0 "resets_at 为毫秒时按秒换算（窗口尾端 u=95% 放行）" "$FABLE" Bash '{"command":"ls"}'
+
+limits 75 $H5 10 $D6
+expect 0 "越线 TaskStop 放行（止损工具）"               "$FABLE" TaskStop '{"task_id":"x"}'
+expect 2 "越线 Read 带 pages 即使 limit=1 也拒"          "$FABLE" Read '{"file_path":"/a.pdf","pages":"1-20","limit":1}'
+grep -q "pages" "$SCRATCH/stderr" && { echo "✓ pages 拒绝原因点名 pages"; PASS=$((PASS+1)); } || { echo "✗ pages 原因"; FAIL=$((FAIL+1)); }
+expect 0 "越线 Read offset 分页（offset=400 limit=200）放行" "$FABLE" Read '{"file_path":"/a","offset":400,"limit":200}'
+
+# 畸形 transcript：最后几行是 message 非 dict、整行数组、坏 JSON，须继续往前找到 fable
+BAD="$SCRATCH/bad.jsonl"
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-fable-5-1"}}' '{"type":"assistant","message":"oops"}' \
+  '["assistant"]' '{"type":"assistant","message":{"model":42}}' '{"type":"assistant", broken' > "$BAD"
+expect 2 "transcript 畸形行跳过后仍判定为贵模型并拦截"   "$BAD" Bash '{"command":"ls"}'
 
 # ── Codex 模式：stdin 带 model，用量取 rollout 里最后一条 token_count ──
 cat > "$SCRATCH/rollout.py" <<'EOF'

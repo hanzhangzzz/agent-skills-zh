@@ -123,6 +123,33 @@ check "安装后 --status 退出码 0 且提示 Codex 未信任" "[ $rc = 0 ] &&
 OUT=$(bash "$INSTALL" --selftest 2>&1); rc=$?
 check "--selftest 通过" "[ $rc = 0 ] && echo \"\$OUT\" | grep -q '全部通过'" || echo "$OUT"
 
+# 13. 已包过状态栏但配置丢失/损坏：重装拒绝、卸载不动状态栏，绝不用 null 覆盖原命令
+setup lostcfg
+bash "$INSTALL" >/dev/null
+cp "$(S)" "$SCRATCH/lost-before.json"
+rm "$CLAUDE_HOME/model-guard.json"
+bash "$INSTALL" >"$SCRATCH/lost.out" 2>&1; rc=$?
+check "配置丢失时重装拒绝且 settings.json 不变" "[ $rc -ne 0 ] && cmp -s '$(S)' '$SCRATCH/lost-before.json' && grep -q '.bak' '$SCRATCH/lost.out'"
+printf '{broken' > "$CLAUDE_HOME/model-guard.json"
+bash "$INSTALL" >/dev/null 2>&1; rc=$?
+check "配置损坏时重装同样拒绝" "[ $rc -ne 0 ] && cmp -s '$(S)' '$SCRATCH/lost-before.json'"
+OUT=$(bash "$INSTALL" --uninstall 2>&1)
+check "配置丢失时卸载保留状态栏并提示手工恢复、hook 照常移除" \
+  "py 'import json,sys;d=json.load(open(sys.argv[1]));assert d[\"statusLine\"][\"command\"].endswith(\"statusline-tap.sh\");assert not any(\"guard.sh\" in h[\"command\"] for e in d[\"hooks\"][\"PreToolUse\"] for h in e[\"hooks\"])' '$(S)' && echo \"\$OUT\" | grep -q '未还原状态栏'"
+
+# 14. 原本无状态栏（original 合法为 null）时重装不被误拒
+setup nullorig
+printf '{}' > "$(S)"
+bash "$INSTALL" >/dev/null; bash "$INSTALL" >/dev/null 2>&1; rc=$?
+check "original 为 null 的正常安装可重装" "[ $rc = 0 ]"
+
+# 15. settings.json 是软链：原子写落到目标、软链保留、无临时文件残留
+setup linked
+mv "$(S)" "$H/real-settings.json"; ln -s "$H/real-settings.json" "$(S)"
+bash "$INSTALL" >/dev/null
+check "settings.json 软链保留且目标已写入" "[ -L '$(S)' ] && grep -q statusline-tap '$H/real-settings.json'"
+check "原子写无 .tmp 残留" "! ls '$H'/*.tmp '$CLAUDE_HOME'/*.tmp '$CODEX_HOME'/*.tmp >/dev/null 2>&1"
+
 # 12. Codex hooks.json：注册、幂等、保留别人的 hook、信任检测、卸载还原
 CODEX_ORIG='{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"/my/codex-any.sh"}]}],"Stop":[{"hooks":[{"type":"command","command":"/my/notify.sh"}]}]}}'
 setup codexhook

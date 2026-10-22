@@ -22,6 +22,8 @@ license: MIT
 
 触发线随时间走：对 5h、7d 窗口各算 `remaining = clamp(距重置秒数 / 窗口秒数, 0, 1)`，余量 `100 - 已用%` 小于 `保留额 × remaining` 即越线，任一窗口越线就进入强制分工。
 
+Claude Code 越线后 `Read` 只放行带 limit≤200 且不带 pages 的读取；用 offset 分段连续读仍可读完整文件，这是有意保留的小口子，大段阅读应派 subagent。模型判定取 transcript 最后一条 assistant 消息（实测首个工具调用时本条消息已写入）；`/model` 切换后的第一次调用可能仍按上一条消息的模型判定。
+
 宿主按 hook 输入自动识别：带 `model` 字段的是 Codex，模型直接取该字段，用量取本 session rollout 里最后一条 `token_count` 的 `rate_limits`（`window_minutes`≤360 按 5h 口径，否则按 7d）；否则是 Claude Code，模型取 transcript 末尾 assistant 消息，用量取状态栏落盘文件。Codex 没有状态栏命令，不需要旁路。
 
 用量数据缺失、超过 6 小时未更新、或非套餐用户（`rate_limits` 为 null）时一律放行。subagent 内的工具调用按 subagent 自己的模型判定，便宜 subagent 不受影响。

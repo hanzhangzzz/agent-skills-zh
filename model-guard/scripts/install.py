@@ -70,16 +70,41 @@ def write_settings(data, path=None):
         backup = f"{path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
         shutil.copy2(path, backup)
         print(f"  备份 {os.path.basename(path)} → {backup}")
+    atomic_write_json(path, data)
+
+
+def atomic_write_json(path, data):
+    """先写同目录临时文件再 os.replace：中途失败不会留下半截 JSON。"""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        if os.path.exists(path):
+            shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def write_config(cfg):
-    with open(mg.config_path(), "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+    atomic_write_json(mg.config_path(), cfg)
+
+
+def original_known():
+    """配置文件存在、可解析且记录了 statusline_original（null 也算记录过）。"""
+    try:
+        with open(mg.config_path(), encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return isinstance(raw, dict) and "statusline_original" in raw
+
+
+ORIGINAL_LOST = ("状态栏已被 model-guard 包过，但 {cfg} 丢失或损坏，原 statusLine 无从得知。"
+                 "请从 settings.json 的 .bak-* 备份里找回原 statusLine 手工写回 settings.json 后重跑")
 
 
 def hint_targets():
@@ -271,6 +296,8 @@ def install(args):
         settings = load_settings()
     except ValueError as e:
         sys.exit(f"❌ {settings_path()} 无法解析（{e}），不敢改，请先手工修复")
+    if tapped(settings) and not original_known():
+        sys.exit("❌ " + ORIGINAL_LOST.format(cfg=mg.config_path()))
     before = json.dumps(settings, sort_keys=True)
     add_hook(settings)
     wrap_statusline(settings, cfg)
@@ -308,7 +335,10 @@ def uninstall(_args):
         sys.exit(f"❌ {settings_path()} 无法解析（{e}），不敢改，请先手工修复")
     before = json.dumps(settings, sort_keys=True)
     remove_hook(settings)
-    unwrap_statusline(settings, cfg)
+    if tapped(settings) and not original_known():
+        print("  ! 未还原状态栏：" + ORIGINAL_LOST.format(cfg=mg.config_path()))
+    else:
+        unwrap_statusline(settings, cfg)
     if json.dumps(settings, sort_keys=True) != before:
         write_settings(settings)
         print("  ✓ 已移除 hook 并还原状态栏")

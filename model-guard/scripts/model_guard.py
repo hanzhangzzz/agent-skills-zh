@@ -40,7 +40,7 @@ READ_LIMIT_MAX = 200
 ALLOWED_TOOLS = {
     "AskUserQuestion", "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
     "EnterPlanMode", "ExitPlanMode", "EnterWorktree", "ExitWorktree", "ScheduleWakeup",
-    "SendMessage", "ListAgents", "ToolSearch",
+    "SendMessage", "ListAgents", "ToolSearch", "TaskStop",
 }
 AGENT_TOOLS = {"Agent", "Task"}  # Task 是 Agent 工具的旧名
 
@@ -110,10 +110,12 @@ def tail_entries(path, needle):
 def last_model(path):
     """Claude Code transcript 最后一条 assistant 的 message.model。"""
     for entry in tail_entries(path, b'"assistant"'):
-        if entry.get("type") == "assistant":
-            model = (entry.get("message") or {}).get("model")
-            if model and model != "<synthetic>":
-                return model
+        message = entry.get("message")
+        if entry.get("type") != "assistant" or not isinstance(message, dict):
+            continue  # 畸形行跳过，继续往前找
+        model = message.get("model")
+        if isinstance(model, str) and model and model != "<synthetic>":
+            return model
     return None
 
 
@@ -130,7 +132,8 @@ def current_model(event):
             return model
         try:
             with open(sub + ".meta.json", encoding="utf-8") as f:
-                return json.load(f).get("model")
+                meta = json.load(f)
+            return meta.get("model") if isinstance(meta, dict) else None
         except (OSError, ValueError, AttributeError):
             return None
     return last_model(transcript) if transcript else None
@@ -138,8 +141,9 @@ def current_model(event):
 
 # ── 利用率与触发线 ────────────────────────────────────────────────
 def to_epoch(value):
-    if isinstance(value, (int, float)):
-        return float(value)
+    """epoch 秒（实测 Claude 与 Codex 的 resets_at 都是秒）；>1e11 视为毫秒。"""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value / 1000.0 if value > 1e11 else float(value)
     if isinstance(value, str):
         try:
             return float(value)
@@ -154,14 +158,11 @@ def to_epoch(value):
 
 
 def used_percent(window):
-    """实测 statusLine 给的是 used_percentage（0-100）；兼容 used_percent / utilization。
-    utilization 量纲未确认：≤1 按比例，>1 按百分比。"""
+    """0-100 的百分比。实测 Claude 状态栏字段为 used_percentage，Codex token_count 为 used_percent。"""
     for key in ("used_percentage", "used_percent"):
-        if isinstance(window.get(key), (int, float)):
-            return float(window[key])
-    u = window.get("utilization")
-    if isinstance(u, (int, float)):
-        return float(u) * 100 if u <= 1 else float(u)
+        value = window.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
     return None
 
 
@@ -188,8 +189,8 @@ def claude_windows(rate_limits):
 def codex_windows(path, now):
     """倒序找 rollout 里最后一条带 rate_limits 的 token_count；按 window_minutes 归入 5h/7d 口径。"""
     for entry in tail_entries(path, b'"token_count"'):
-        payload = entry.get("payload") or {}
-        if entry.get("type") != "event_msg" or payload.get("type") != "token_count":
+        payload = entry.get("payload")
+        if entry.get("type") != "event_msg" or not isinstance(payload, dict) or payload.get("type") != "token_count":
             continue
         rate_limits = payload.get("rate_limits")
         if not isinstance(rate_limits, dict):
@@ -279,6 +280,8 @@ def tool_verdict(tool, tool_input, cfg, codex=False):
             return f"派 subagent 必须显式传 model={'/'.join(cheap)}（当前 model={tool_input.get('model')!r}）。"
         return None
     if tool == "Read":
+        if tool_input.get("pages") not in (None, ""):
+            return "Read 带 pages（PDF/文档分页）不受 limit 约束，一律拒绝，请派 subagent 阅读。"
         limit = tool_input.get("limit")
         if isinstance(limit, (int, float)) and not isinstance(limit, bool) and 0 < limit <= READ_LIMIT_MAX:
             return None
