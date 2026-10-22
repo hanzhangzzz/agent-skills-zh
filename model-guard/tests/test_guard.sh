@@ -117,6 +117,65 @@ python3 -c 'import json,sys,time;n=int(time.time());json.dump({"five_hour":{"uti
   "$CLAUDE_HOME/model-guard/rate-limits.json"
 expect 2 "utilization=0.8 按比例解析为 80% 并拦截"     "$FABLE" Bash '{"command":"ls"}'
 
+# ── Codex 模式：stdin 带 model，用量取 rollout 里最后一条 token_count ──
+cat > "$SCRATCH/rollout.py" <<'EOF'
+import json, sys, time
+path, primary, secondary = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
+age = int(sys.argv[4]) if len(sys.argv) > 4 else 0
+ts = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() - age))
+with open(path, "w") as f:
+    f.write(json.dumps({"timestamp": ts, "type": "turn_context", "payload": {"model": "gpt-6-astra"}}) + "\n")
+    # 更早一条越线数据，验证只取最后一条 token_count
+    f.write(json.dumps({"timestamp": ts, "type": "event_msg", "payload": {"type": "token_count", "rate_limits": {
+        "primary": {"used_percent": 99, "window_minutes": 10080, "resets_at": int(time.time()) + 500000}}}}) + "\n")
+    f.write(json.dumps({"timestamp": ts, "type": "event_msg", "payload": {"type": "token_count", "info": {},
+        "rate_limits": {"limit_id": "codex", "primary": primary, "secondary": secondary, "plan_type": "pro"}}}) + "\n")
+    f.write(json.dumps({"timestamp": ts, "type": "response_item", "payload": {"type": "message", "content": "z" * 90000}}) + "\n")
+EOF
+rollout() { python3 "$SCRATCH/rollout.py" "$@"; }  # rollout <文件> <primary|null> <secondary|null> [时间戳偏移秒]
+crun() {  # crun <期望> <名称> <rollout|null> <model> <tool> <tool_input>
+  local want="$1" name="$2"
+  python3 -c '
+import json,sys
+t=None if sys.argv[1]=="null" else sys.argv[1]
+print(json.dumps({"cwd":"/tmp","hook_event_name":"PreToolUse","model":sys.argv[2],"permission_mode":"bypassPermissions",
+  "session_id":"s","tool_input":json.loads(sys.argv[4]),"tool_name":sys.argv[3],"tool_use_id":"u","transcript_path":t,"turn_id":"t"}))' \
+    "$3" "$4" "$5" "$6" | "$GUARD" 2>"$SCRATCH/stderr"
+  local rc=$?
+  if [ "$rc" = "$want" ]; then echo "✓ ${name}"; PASS=$((PASS+1))
+  else echo "✗ ${name}：期望 $want 实际 $rc"; sed 's/^/    /' "$SCRATCH/stderr"; FAIL=$((FAIL+1)); fi
+}
+R="$SCRATCH/rollout.jsonl"
+W7='{"used_percent":75,"window_minutes":10080,"resets_at":'$((NOW+6*86400))'}'
+W7LOW='{"used_percent":10,"window_minutes":10080,"resets_at":'$((NOW+6*86400))'}'
+W5='{"used_percent":75,"window_minutes":300,"resets_at":'$((NOW+4*3600))'}'
+W5LOW='{"used_percent":10,"window_minutes":300,"resets_at":'$((NOW+4*3600))'}'
+
+rollout "$R" "$W7" null
+crun 2 "Codex：primary 为 7d 且越线 → 拦 Bash"                "$R" gpt-6-astra Bash '{"command":"ls"}'
+grep -q "spawn_agent" "$SCRATCH/stderr" && { echo "✓ Codex 拒绝原因指向 spawn_agent"; PASS=$((PASS+1)); } || { echo "✗ Codex 拒绝原因"; cat "$SCRATCH/stderr"; FAIL=$((FAIL+1)); }
+crun 0 "Codex：非贵模型（gpt-6.1-sol）越线也放行"              "$R" gpt-6.1-sol Bash '{"command":"ls"}'
+crun 2 "Codex：越线拦 apply_patch"                            "$R" gpt-6-astra apply_patch '{"command":"*** Begin Patch"}'
+crun 2 "Codex：越线拦 MCP 工具"                               "$R" gpt-6-astra mcp__serena__find_symbol '{}'
+crun 0 "Codex：越线 spawn_agent(model=gpt-6-luna) 放行"        "$R" gpt-6-astra collaborationspawn_agent '{"message":"x","model":"gpt-6-luna"}'
+crun 2 "Codex：越线 spawn_agent 不传 model 拒"                "$R" gpt-6-astra collaborationspawn_agent '{"message":"x"}'
+crun 2 "Codex：越线 spawn_agent(model=gpt-6-astra) 拒"        "$R" gpt-6-astra collaborationspawn_agent '{"message":"x","model":"gpt-6-astra"}'
+crun 0 "Codex：越线 wait_agent 放行"                          "$R" gpt-6-astra collaborationwait_agent '{"timeout_ms":1000}'
+crun 0 "Codex：越线 request_user_input 放行"                  "$R" gpt-6-astra request_user_input '{}'
+crun 2 "Codex：Claude 的 Read 例外不适用于 Codex"              "$R" gpt-6-astra Read '{"file_path":"/a","limit":10}'
+
+rollout "$R" "$W7LOW" "$W5"
+crun 2 "Codex：secondary 为 5h 且越线 → 拦"                   "$R" gpt-6-astra Bash '{"command":"ls"}'
+rollout "$R" "$W5LOW" "$W7LOW"
+crun 0 "Codex：两窗口都在线下放行"                             "$R" gpt-6-astra Bash '{"command":"ls"}'
+rollout "$R" null null
+crun 0 "Codex：primary/secondary 都为 null 放行（不回退旧数据）" "$R" gpt-6-astra Bash '{"command":"ls"}'
+rollout "$R" "$W7" null $((7*3600))
+crun 0 "Codex：token_count 已过期（7 小时前）放行"              "$R" gpt-6-astra Bash '{"command":"ls"}'
+crun 0 "Codex：transcript_path 为 null 放行"                   null gpt-6-astra Bash '{"command":"ls"}'
+printf '%s\n' '{"type":"turn_context","payload":{"model":"gpt-6-astra"}}' > "$R"
+crun 0 "Codex：session 还没跑完一轮（无 token_count）放行"      "$R" gpt-6-astra Bash '{"command":"ls"}'
+
 echo "not json" | "$GUARD" 2>/dev/null; rc=$?
 [ $rc = 0 ] && { echo "✓ 非法 stdin 放行"; PASS=$((PASS+1)); } || { echo "✗ 非法 stdin rc=$rc"; FAIL=$((FAIL+1)); }
 

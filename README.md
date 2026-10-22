@@ -158,7 +158,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [harness](./harness/SKILL.md) | 巡检、修复、复审共用 TODO 看板 | 脚本通过 `claude -p` 运行，需 Claude Code CLI；定时模式需相应调度能力 |
 | [ci-review](./ci-review/SKILL.md) | PR/MR 执行审查，机器人分支额外审价值 | GitHub/GitLab CI、凭据与模型服务；自动合并需显式开启；会改变行为的 Markdown 同样审查 |
 | [hook-test-kit](./hook-test-kit/SKILL.md) | Claude Code hook 的行为测试骨架 | Bash 与待测 hook；生成后需运行测试及变异检查 |
-| [model-guard](./model-guard/SKILL.md) | 贵模型只做思考与审阅，套餐余量越过保留线后由 hook 强制分工 | Claude Code 2.1.301+ 套餐用户、Python 3；需运行 install.sh 注册 hook 与状态栏旁路；Codex 只有软提示 |
+| [model-guard](./model-guard/SKILL.md) | 贵模型只做思考与审阅，套餐余量越过保留线后由 hook 强制分工 | Claude Code 2.1.301+ 套餐用户、Python 3；需运行 install.sh 注册 hook 与状态栏旁路；Codex 0.163+ 同样拦截，需在 Codex 内信任一次 hook |
 | [git-push-guard](./git-push-guard/README.md) | 对 Agent 直推 main/master 请求确认 | Claude Code 纯 hook 插件；不是 Git 服务端保护，也不拦截所有终端操作 |
 
 ## 反馈与贡献

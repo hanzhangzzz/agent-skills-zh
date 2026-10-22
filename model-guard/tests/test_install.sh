@@ -119,9 +119,40 @@ bash "$INSTALL" --status >/dev/null 2>&1; rc=$?
 check "未安装时 --status 退出码 1" "[ $rc = 1 ]"
 bash "$INSTALL" >/dev/null
 OUT=$(bash "$INSTALL" --status 2>&1); rc=$?
-check "安装后 --status 退出码 0 且显示 Codex 仅软提示" "[ $rc = 0 ] && echo \"\$OUT\" | grep -q '仅软提示'"
+check "安装后 --status 退出码 0 且提示 Codex 未信任" "[ $rc = 0 ] && echo \"\$OUT\" | grep -q '已注册，✗ 未信任'"
 OUT=$(bash "$INSTALL" --selftest 2>&1); rc=$?
 check "--selftest 通过" "[ $rc = 0 ] && echo \"\$OUT\" | grep -q '全部通过'" || echo "$OUT"
+
+# 12. Codex hooks.json：注册、幂等、保留别人的 hook、信任检测、卸载还原
+CODEX_ORIG='{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"/my/codex-any.sh"}]}],"Stop":[{"hooks":[{"type":"command","command":"/my/notify.sh"}]}]}}'
+setup codexhook
+printf '%s' "$CODEX_ORIG" > "$CODEX_HOME/hooks.json"
+bash "$INSTALL" >/dev/null; cp "$CODEX_HOME/hooks.json" "$SCRATCH/codex-first.json"; bash "$INSTALL" >/dev/null
+check "Codex hooks.json 装两次一致" "cmp -s '$CODEX_HOME/hooks.json' '$SCRATCH/codex-first.json'"
+check "Codex guard.sh 只注册一次、别人的 hook 保留" \
+  "py 'import json,sys;d=json.load(open(sys.argv[1]));c=[h[\"command\"] for v in d[\"hooks\"].values() for e in v for h in e[\"hooks\"]];assert sum(\"model-guard/scripts/guard.sh\" in x for x in c)==1 and \"/my/codex-any.sh\" in c and \"/my/notify.sh\" in c,c' '$CODEX_HOME/hooks.json'"
+check "Codex hooks.json 改前有备份" "ls '$CODEX_HOME'/hooks.json.bak-* >/dev/null 2>&1"
+# 按 Codex 信任登记规则写 config.toml（规则已用 codex exec 实测：登记后 hook 才执行）
+cat > "$SCRATCH/trust.py" <<'EOF'
+import json, hashlib, sys
+path = sys.argv[1]; d = json.load(open(path))
+for gi, e in enumerate(d["hooks"]["PreToolUse"]):
+    for hi, h in enumerate(e["hooks"]):
+        if "model-guard" in h["command"]:
+            ident = {"event_name": "pre_tool_use", "matcher": e["matcher"], "hooks": [
+                {"type": "command", "command": h["command"], "timeout": h.get("timeout", 600), "async": False}]}
+            dig = "sha256:" + hashlib.sha256(json.dumps(ident, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            open(sys.argv[2], "w").write('[hooks.state."%s:pre_tool_use:%d:%d"]\ntrusted_hash = "%s"\n' % (path, gi, hi, dig))
+EOF
+python3 "$SCRATCH/trust.py" "$CODEX_HOME/hooks.json" "$CODEX_HOME/config.toml"
+check "信任登记后 --status 显示已信任" "bash '$INSTALL' --status 2>&1 | grep -q '已注册，已信任'"
+sed -i.orig 's/sha256:./sha256:0/' "$CODEX_HOME/config.toml"
+check "hash 不符时显示未信任" "bash '$INSTALL' --status 2>&1 | grep -q '已注册，✗ 未信任'"
+OUT=$(bash "$INSTALL" --selftest 2>&1); rc=$?
+check "--selftest 含 Codex 用例并通过" "[ $rc = 0 ] && echo \"\$OUT\" | grep -q 'Codex 贵模型 + 7d 过线'" || echo "$OUT"
+bash "$INSTALL" --uninstall >/dev/null
+check "卸载后 Codex hooks.json 与安装前等价" \
+  "py 'import json,sys;assert json.load(open(sys.argv[1]))==json.loads(sys.argv[2])' '$CODEX_HOME/hooks.json' '$CODEX_ORIG'"
 
 echo; echo "通过 ${PASS}，失败 ${FAIL}"
 [ "$FAIL" = 0 ]

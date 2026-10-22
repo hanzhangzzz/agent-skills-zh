@@ -2,6 +2,8 @@
 """model-guard 运行时：PreToolUse 判定（guard）与状态栏旁路落盘（tap）。
 
     python3 model_guard.py guard   读 hook stdin，放行 exit 0，拦截 exit 2 + stderr 原因
+                                   stdin 带 model 字段 → Codex（模型取 stdin，用量取 rollout 的 token_count）
+                                   否则 → Claude Code（模型取 transcript 末尾，用量取状态栏落盘）
     python3 model_guard.py tap     读 statusLine stdin，落盘 rate_limits，再转交原 statusLine 命令
 
 只用标准库。任何意外都放行（fail open）：闸坏了不能把所有 session 一起锁死。
@@ -18,10 +20,19 @@ DEFAULTS = {
     "cheap_models": ["opus", "sonnet", "haiku"],
     "reserve_5h": 40,
     "reserve_7d": 50,
+    # Codex 的模型名与工具名（实测 codex-cli 0.163.0 hook 里的 tool_name，命名空间直接拼接）
+    "codex_cheap_models": ["sol", "luna", "terra", "reserve"],
+    "codex_allowed_tools": [
+        "request_user_input", "request_user_input_async", "update_plan",
+        "collaborationwait_agent", "collaborationlist_agents", "collaborationsend_message",
+        "collaborationfollowup_task", "collaborationinterrupt_agent", "collaborationclose_agent",
+    ],
+    "codex_agent_tools": ["collaborationspawn_agent", "spawn_agent"],
     "statusline_original": None,
     "version": 1,
 }
 WINDOWS = (("five_hour", "5h", 18000, "reserve_5h"), ("seven_day", "7d", 604800, "reserve_7d"))
+SHORT_WINDOW_MINUTES = 360  # Codex 窗口不固定是 primary 还是 secondary，≤6 小时按 5h 口径
 STALE_SECONDS = 6 * 3600
 READ_LIMIT_MAX = 200
 # 强制分工期间仍放行的工具：问人、任务管理、计划、worktree、协作通信。
@@ -64,33 +75,45 @@ def matches(model, names):
 
 
 # ── 当前模型 ──────────────────────────────────────────────────────
-def last_model(path):
-    """只读 transcript 末尾，找最后一条 assistant 的 message.model。窗口逐级放大，避免整文件加载。"""
+def tail_entries(path, needle):
+    """倒序产出 JSONL 末尾含 needle 的行（已解析）。窗口逐级放大，避免整文件加载。"""
+    if not path:
+        return
     try:
         size = os.path.getsize(path)
-        with open(path, "rb") as f:
-            for window in (64 << 10, 1 << 20, 8 << 20):
-                offset = max(0, size - window)
-                f.seek(offset)
-                lines = f.read().split(b"\n")
-                if offset:
-                    lines = lines[1:]  # 第一行可能被截断
-                for raw in reversed(lines):
-                    if b'"assistant"' not in raw:
-                        continue
-                    try:
-                        entry = json.loads(raw)
-                    except ValueError:
-                        continue
-                    if entry.get("type") != "assistant":
-                        continue
-                    model = (entry.get("message") or {}).get("model")
-                    if model and model != "<synthetic>":
-                        return model
-                if not offset:
-                    break
+        f = open(path, "rb")
     except OSError:
-        pass
+        return
+    with f:
+        end = size  # [end, size) 已扫过
+        for window in (64 << 10, 1 << 20, 8 << 20):
+            offset = max(0, size - window)
+            if offset >= end:
+                continue
+            f.seek(offset)
+            lines = f.read(end - offset).split(b"\n")
+            # 非文件开头时第一段可能是被截断的行，留给下一轮更大的窗口
+            end = offset + len(lines.pop(0)) if offset else 0
+            for raw in reversed(lines):
+                if needle not in raw:
+                    continue
+                try:
+                    entry = json.loads(raw)
+                except ValueError:
+                    continue
+                if isinstance(entry, dict):
+                    yield entry
+            if not offset:
+                return
+
+
+def last_model(path):
+    """Claude Code transcript 最后一条 assistant 的 message.model。"""
+    for entry in tail_entries(path, b'"assistant"'):
+        if entry.get("type") == "assistant":
+            model = (entry.get("message") or {}).get("model")
+            if model and model != "<synthetic>":
+                return model
     return None
 
 
@@ -156,13 +179,40 @@ def load_rate_limits(now):
     return data
 
 
-def evaluate(rate_limits, cfg, now):
+def claude_windows(rate_limits):
+    """状态栏落盘数据 → [(label, 窗口秒数, 保留额键, 窗口 dict)]"""
+    return [(label, span, reserve_key, rate_limits[key]) for key, label, span, reserve_key in WINDOWS
+            if isinstance(rate_limits.get(key), dict)]
+
+
+def codex_windows(path, now):
+    """倒序找 rollout 里最后一条带 rate_limits 的 token_count；按 window_minutes 归入 5h/7d 口径。"""
+    for entry in tail_entries(path, b'"token_count"'):
+        payload = entry.get("payload") or {}
+        if entry.get("type") != "event_msg" or payload.get("type") != "token_count":
+            continue
+        rate_limits = payload.get("rate_limits")
+        if not isinstance(rate_limits, dict):
+            continue
+        stamp = to_epoch(entry.get("timestamp"))
+        if stamp is not None and now - stamp > STALE_SECONDS:
+            return []
+        out = []
+        for key in ("primary", "secondary"):
+            window = rate_limits.get(key)
+            minutes = window.get("window_minutes") if isinstance(window, dict) else None
+            if not isinstance(minutes, (int, float)) or minutes <= 0:
+                continue
+            short = minutes <= SHORT_WINDOW_MINUTES
+            out.append(("5h" if short else "7d", minutes * 60, "reserve_5h" if short else "reserve_7d", window))
+        return out
+    return []
+
+
+def evaluate(windows, cfg, now):
     """返回每个窗口的评估：(label, u, 剩余秒, 保留线%, 当前线%, 是否越线)。缺数据的窗口跳过。"""
     results = []
-    for key, label, span, reserve_key in WINDOWS:
-        window = rate_limits.get(key)
-        if not isinstance(window, dict):
-            continue
+    for label, span, reserve_key, window in windows:
         u = used_percent(window)
         resets = to_epoch(window.get("resets_at"))
         if u is None or resets is None:
@@ -197,10 +247,29 @@ def describe(results):
 
 
 # ── 工具判定 ──────────────────────────────────────────────────────
-def tool_verdict(tool, tool_input, cfg):
+def is_codex(event):
+    """Codex 的 hook stdin 必带 model（实测 0.163.0）；Claude Code 没有该字段。"""
+    return "model" in event
+
+
+def cheap_models(cfg, codex):
+    key = "codex_cheap_models" if codex else "cheap_models"
+    return cfg.get(key) or DEFAULTS[key]
+
+
+def tool_verdict(tool, tool_input, cfg, codex=False):
     """强制分工期间：放行返回 None，拦截返回针对该工具的一句说明。"""
     tool_input = tool_input if isinstance(tool_input, dict) else {}
-    cheap = cfg.get("cheap_models") or DEFAULTS["cheap_models"]
+    cheap = cheap_models(cfg, codex)
+    if codex:
+        if tool in (cfg.get("codex_allowed_tools") or DEFAULTS["codex_allowed_tools"]):
+            return None
+        if tool in (cfg.get("codex_agent_tools") or DEFAULTS["codex_agent_tools"]):
+            # 不传 model 时子 agent 继承当前贵模型，所以必须显式指定
+            if matches(str(tool_input.get("model") or ""), cheap):
+                return None
+            return f"派子 agent 必须显式传 model 为 {'/'.join(cheap)} 之一（当前 model={tool_input.get('model')!r}）。"
+        return f"{tool} 属于执行类工具，贵模型不直接调用。"
     if tool in ALLOWED_TOOLS:
         return None
     if tool in AGENT_TOOLS:
@@ -225,25 +294,33 @@ def guard(stdin):
     if not isinstance(event, dict):
         return 0
     cfg = load_config()
-    model = current_model(event)
-    if not model or not matches(model, cfg.get("expensive_models")):
+    codex = is_codex(event)
+    model = event.get("model") if codex else current_model(event)
+    if not isinstance(model, str) or not matches(model, cfg.get("expensive_models")):
         return 0
     now = time.time()
-    rate_limits = load_rate_limits(now)
-    if rate_limits is None:
-        return 0
-    results = evaluate(rate_limits, cfg, now)
+    if codex:
+        windows = codex_windows(event.get("transcript_path"), now)
+    else:
+        rate_limits = load_rate_limits(now)
+        windows = claude_windows(rate_limits) if rate_limits else []
+    results = evaluate(windows, cfg, now)
     if not any(r[-1] for r in results):
-        return 0
+        return 0  # 含无数据、过期、缺 resets_at：一律放行
     tool = event.get("tool_name") or ""
-    why = tool_verdict(tool, event.get("tool_input"), cfg)
+    why = tool_verdict(tool, event.get("tool_input"), cfg, codex)
     if why is None:
         return 0
-    cheap = "/".join(cfg.get("cheap_models") or DEFAULTS["cheap_models"])
+    cheap = "/".join(cheap_models(cfg, codex))
+    if codex:
+        todo = (f"派子 agent（spawn_agent 显式传 model 为 {cheap} 之一）干重活；"
+                f"或 /model 切到便宜模型；或 /compact 减小上下文。")
+    else:
+        todo = (f"派 subagent（Agent 工具显式传 model={cheap}，禁止 fork）干重活；"
+                f"或 /model opus 切到便宜模型；或 /compact 减小上下文。")
     sys.stderr.write(
         f"[model-guard] 当前模型 {model} 是贵模型，套餐余量已越过保留线，进入强制分工：{describe(results)}。\n"
-        f"已拦下 {tool}：{why}请改为：派 subagent（Agent 工具显式传 model={cheap}，禁止 fork）干重活；"
-        f"或 /model opus 切到便宜模型；或 /compact 减小上下文。\n")
+        f"已拦下 {tool}：{why}请改为：{todo}\n")
     return 2
 
 

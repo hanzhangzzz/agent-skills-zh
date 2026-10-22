@@ -159,7 +159,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [harness](./harness/SKILL.md) | Inspect, implement, and review through a TODO board | Scripts use `claude -p`, requiring Claude Code CLI; scheduled mode needs a scheduler |
 | [ci-review](./ci-review/SKILL.md) | Execution review for PRs/MRs, plus value review for bot branches | GitHub/GitLab CI, credentials, model service; auto-merge is opt-in; behavioral Markdown is reviewed too |
 | [hook-test-kit](./hook-test-kit/SKILL.md) | Behavior-test scaffolding for Claude Code hooks | Bash and a hook to test; run the generated tests and mutation checks |
-| [model-guard](./model-guard/SKILL.md) | Expensive models think and review; a hook enforces delegation once plan quota crosses the reserve | Claude Code 2.1.301+ plan users, Python 3; run install.sh to register the hook and status-line tap; Codex gets the soft rule only |
+| [model-guard](./model-guard/SKILL.md) | Expensive models think and review; a hook enforces delegation once plan quota crosses the reserve | Claude Code 2.1.301+ plan users, Python 3; run install.sh to register the hook and status-line tap; Codex 0.163+ is guarded too after you trust the hook once |
 | [git-push-guard](./git-push-guard/README.md) | Ask before an agent pushes directly to main/master | Claude Code hook-only plugin; not server-side protection or a guard for every terminal command |
 
 ## Feedback and contributing
