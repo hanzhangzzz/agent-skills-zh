@@ -9,7 +9,7 @@
 本文件帮你在写分镜前定下这三件事。
 
 可运行的示例：
-- `assets/cinema.example.js`：暗场电影感 3D，加后期、动态排版和变速运镜，讲一块芯片里有什么，效果见 `assets/cinema.jpg`。**质感的标准看它。**
+- `assets/cinema.example.js`：暗场电影感 3D，加后期、动态排版和变速运镜，讲一块芯片里有什么，效果见 `assets/cinema.jpg`。它示范 three.js、后期和动态排版的写法，不是默认风格；风格从风格库挑（`scripts/styles.sh list`）。
 - `assets/world.example.js`：2D 世界、相机和深色主题，讲阳光到你眼里的 8 分 20 秒。
 - `assets/three.example.js`：three.js 3D，标签贴在 3D 点上，讲为什么会有四季。效果见 `assets/worlds.jpg`。
 
@@ -79,8 +79,18 @@
 
 每种世界写了：适合什么题材、它的招牌镜头、框架里怎么搭、关键技法、最容易出的错。
 
-### 暗场电影感 3D（质感上限，强模型首选）
-- **适合**：芯片、发动机、宇宙、人体、AI、能源，任何能做成一个“物件”或“场所”的题目。
+### 3D 分三档（选 3D 之前先读）
+
+three.js 的模型基本是方块、球体、圆柱拼出来的。拿它拼写实的有机物（植物、果实、动物、液体），一定显得原始。三档：
+
+1. **题材本身是几何体**：芯片、建筑、城市白模、机器、包装盒。用 three.js 写实打光，例子是 `cinema.example.js`。
+2. **题材是有机物，但可以风格化**：选一种把几何简单变成美学的 3D 风格。风格库里有 `brick-toy`（积木）、`paper-popup`（纸雕立体书）、`tilt-shift`（移轴微缩）、`lowpoly-island`（低多边形）、`glass-product`（玻璃产品）、`white-model`（白模投影），以及粘土风。后期照风格库的 `core/three/post.js`：GTAO 环境光遮蔽、物理景深、辉光、调色，内部 2 倍超采样。光照用面光源，加一张低强度的 Poly Haven HDRI（CC0，如 `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr`，`RGBELoader` 读入，放进工作目录），比亮的环境光更像真的。
+3. **必须写实的有机物**：用 Blender 渲染成帧序列，再放进页面（见“Blender 镜头”）。代价最高，一个 10 秒镜头要几十分钟。
+
+三档都不合适，就选 2D 绘画风格：水彩、钢笔淡彩、铜版画、木刻、Risograph。这些是代码最擅长的。
+
+### 暗场电影感 3D（几何题材）
+- **适合**：芯片、发动机、建筑、城市、宇宙、能源设施，本身是几何体的物件或场所。植物、果实、动物、食物不要用它（见“3D 分三档”）。
 - **招牌**：变速推进穿过物体表面进入下一层；巨型数字压满画面，强调色逐字点亮；镜头低机位慢推，背景景深虚化。
 - **搭法**：`EX.backdrop({ subject: true })` 放 three.js，用 EffectComposer 串起 RenderPass → UnrealBloomPass → BokehPass → OutputPass；`EX.run({ theme: 'dark', chrome: 'cinema', post: { vignette: .45, grain: 6 }, mood: 'pulse' })`，加 `EX.tempo(96)`。照 `cinema.example.js` 写。
 - **技法**：
