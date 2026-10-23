@@ -26,12 +26,13 @@ function plan(build) {
 const has = (issues, kind) => issues.some((i) => i.startsWith(kind));
 
 /* a valid 8-chapter, ~100 s film; each test breaks one rule */
-function film(EX, patch = {}, n = 8) {
+function film(EX, patch = {}, n = 8, sound = true) {
   for (let c = 0; c < n; c++) EX.chapter('c' + c, { name: '第' + c + '章' });
   EX.shot({ id: 'hook', chapter: null, dur: 7, hud: false, caps: [[0.5, '你按下了一个按钮。']] });
   for (let c = 0; c < n; c++) {
     const id = 's' + c;
-    EX.shot(Object.assign({ id, chapter: 'c' + c, dur: 11, meter: [c, c + 1], caps: [[0.3, '这一步叫「术语' + c + '」。'], [5, '它让下一步成为可能。']] }, patch[id] || {}));
+    EX.shot(Object.assign({ id, chapter: 'c' + c, dur: 11, meter: [c, c + 1], caps: [[0.3, '这一步叫「术语' + c + '」。'], [5, '它让下一步成为可能。']],
+      ...(sound ? { amb: 'room', hush: c === 5 ? [[9, 10.5]] : undefined } : {}) }, patch[id] || {}));
   }
   EX.shot({ id: 'end', chapter: null, dur: 6, hud: false, caps: [[0.5, '这就是全部过程。']] });
 }
@@ -61,6 +62,11 @@ test('6 chapters pass, 5 are CHAPTERS (SKILL.md: 6–10 章)', () => {
   assert.ok(!has(plan((EX) => film(EX, {}, 6)), 'CHAPTERS'));
   assert.ok(has(plan((EX) => film(EX, {}, 5)), 'CHAPTERS'));
 });
+test('sound design: no hush or too few ambience beds is SOUND', () => {
+  assert.ok(!has(plan((EX) => film(EX)), 'SOUND'));
+  assert.ok(has(plan((EX) => film(EX, {}, 8, false)), 'SOUND'));
+  assert.ok(has(plan((EX) => film(EX, { s5: { hush: undefined } })), 'SOUND no hush'));
+});
 test('a chapter that never names its term is NO-TERM; a meter that goes back is METER-BACKWARDS', () => {
   assert.ok(has(plan((EX) => film(EX, { s4: { caps: [[0, '这一步没有术语。'], [5, '它让下一步成为可能。']] } })), 'NO-TERM'));
   assert.ok(has(plan((EX) => film(EX, { s5: { meter: [0, 1] } })), 'METER-BACKWARDS'));
@@ -70,7 +76,7 @@ test('the shipped examples obey every pacing rule except film-level length', () 
     const ctx = load('engine.js');                          /* examples may call rng() etc. at load time */
     ctx.EX.run = () => {};
     vm.runInContext(readFileSync(join(ASSETS, f), 'utf8'), ctx, { filename: f });
-    const rest = ctx.EX.planAudit().filter((i) => !i.startsWith('DURATION') && !i.startsWith('CHAPTERS'));
+    const rest = ctx.EX.planAudit().filter((i) => !/^(DURATION|CHAPTERS|SOUND)/.test(i));   /* film-level rules */
     assert.equal(rest.length, 0, f + ': ' + rest.join('\n'));
   }
 });

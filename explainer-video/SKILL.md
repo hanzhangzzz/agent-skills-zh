@@ -11,7 +11,7 @@ license: MIT
 
 输入一句话题目，产出一支能直接发的讲解动画。质量来自五样东西：**结构**（主角 + 旅程 + 仪表 + 回扣）、**美术指导与质感**（一种视觉语言、真实光影、后期、文字即画面）、**世界与镜头**（造一个世界，用变速运镜拍它）、**每个镜头的画面密度**、**渲染前后的自动检查**。模板已经负责 HUD、字幕、相机、转场、音效和版面检查，你只写世界和镜头。
 
-`<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/exemplar.md`（范例拆解：结构）、`references/worlds.md`（美术指导、视觉世界与运镜：先读第 0 节“什么会让片子像复古 Flash”）和 `references/visuals.md`（概念 → 画面配方）。
+`<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/directing.md`（导演方法：简报、treatment、两个方向的关键帧、声音、评审打分、15 秒样片）、`references/exemplar.md`（范例拆解：结构）、`references/worlds.md`（美术指导、视觉世界与运镜：先读第 0 节“什么会让片子像复古 Flash”）和 `references/visuals.md`（概念 → 画面配方）。
 
 省上下文的读法：`explainer.js` 和 `engine.js` 只读文件头注释（API 都在那里，各约 50 行），不要通读。`gallery.example.js` 有 57 KB，先 `grep -n "^/\* [0-9]" gallery.example.js` 看七个镜头的起始行，再用 `sed -n '<起>,<止>p'` 只读要用的那一段。
 
@@ -23,9 +23,11 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 工作目录未指定时用当前目录下的 `explainer-<英文短名>/`。已有 Chromium 时先 `export CHROMIUM_PATH=<浏览器路径>` 再运行，免下载；之后所有渲染命令都在同一个环境变量下跑，在工作目录里执行。
 
-## 1. 把题目变成一条旅程
+## 1. 简报与 treatment
 
-在工作目录写 `PLAN.md`，先回答这五行，再往下做：
+能和用户对话时，按 `directing.md` 第 1 节用一条消息问完再开工；一句话、无人值守时不问，用默认值，并在 `PLAN.md` 写明替用户做了哪些决定。
+
+在工作目录写 `PLAN.md`。先按 `directing.md` 第 2 节写 treatment：三个候选结构和选择、一句话梗概与转折、1–2 部对标作品（学什么 / 不学什么）、一个只有这种媒介能做的动作。**这些写在打开任何示例代码之前**，否则会不自觉地照抄示例。然后回答下面几行：
 
 ```
 主角：观众一路跟着的那个具体东西（例：那句问题"天空为什么是蓝色的？"）
@@ -42,6 +44,10 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 范例的粉彩信息图是保底，不是默认答案：题目有实体、有路线、跨尺度、讲历史或讲数据时，选更贴题材的世界（`worlds.md` 第 2 节写了每种世界的搭法、技法和坑）。质感的标准是 `assets/cinema.jpg`，不是粉彩模板。所有世界共用同一套 HUD、字幕、仪表和检查；非粉彩世界用 `chrome: 'cinema'`（无框 HUD 和字幕）。
 
+## 1b. 证明画风
+
+按 `directing.md` 第 3 节，用真的绘图代码做两个方向，美术指导要真的不同，每个方向一张关键帧，最好就是招牌镜头。能对话就让用户选；无人值守就按第 6 节的评分表给两张打分，选高的，把分数写进 `PLAN.md`。选定后再往下做。
+
 ## 2. 事实表
 
 在 `PLAN.md` 里为每站列 1–3 条事实和数字，写明来源或依据。拿不准的数字写量级（“几十到上百层”），示意值在画面上标“示意”。每站至少一个具体数字或具体名词，这是讲解片和空洞动画的区别。
@@ -52,7 +58,9 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 在 `PLAN.md` 写镜头表，每行一个镜头：
 
-| 镜头 id | 章节 | 时长 | 仪表起止 | 世界位置 `at` 与镜头运动 | 主视觉（含主角形态） | 动作（按字幕时刻） | 字幕 |
+| 镜头 id | 章节 | 时长（拍） | 仪表起止 | 景别 · 角度 · 镜头运动 · 为什么 | 世界位置 `at` | 主视觉（含主角形态） | 动作（按字幕时刻） | 字幕 | 声音（环境 / 拟音 / 音乐状态） |
+
+再写一张节拍表（bpm、每个镜头几拍、哪些动作和切点落在哪一拍）和一张声音设计表（`directing.md` 第 4 节：环境声、拟音、两次安静、两次声音转场）。
 
 规则：
 
@@ -64,6 +72,7 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 - 每章至少一次主角跨镜头的 continuity cut（下一个镜头 `enter: 'cut'`）或相机连续运动（`fly` / `cam`）。
 - 全片至少 2 个镜头以动态排版为主视觉（巨型字或数字就是画面）。
 - 用 `const B = EX.tempo(96)` 定拍子，镜头时长、动作落点和音效取整拍；场景之间的飞行用 `flyEase: EX.ramp` 变速。
+- 至少四种不同的镜头运动，景别真的在变；快慢交替，至少一次明显的加速或减速，一次喘息（`directing.md` 第 5 节）。
 - 镜头运动从 `worlds.md` 第 3 节选。至少一半讲解镜头的相机在动，全片至少一次尺度穿越或长距离跟拍；招牌镜头排在章节高潮处。先在纸上排世界地图：每个镜头在世界里的 `at`（站点相距 ≥ 1.5 屏，嵌套细节 s 取 0.05–0.15）。
 
 ## 4. 写 shots.js
@@ -103,7 +112,11 @@ const B = EX.tempo(96)                          // B(n) = 第 n 拍的秒数；�
 - 只用美术指导卡里的颜色、字体和材质。下面的粉彩组件只属于粉彩信息图世界，其他世界不要用白卡和胶囊；数据标注写成大号数字 + 细线 + 等宽小标签。
 - 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`，不用 emoji。现有：`phone laptop server database cloud tower wifi router globe lock unlock key shield user users chip cpu doc chat search gear bolt clock check x arrow card qr bank store sun leaf drop heart eye brain layers box truck bell code sprout tree cup fire thermo ship plane factory pin mountain cart scale star atom dna cell battery money camera calendar`；缺的照 `icons.js` 的格式自己画（24×24、描边 2、1–4 条路径）。
 - 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse dashFlow splitChars riseChars`。
-- 音效名只有这 12 个：`click tick pop chime snap whoosh reveal type thud blip glitch drop`。
+- 声音三层（`directing.md` 第 4 节）：
+  - 拟音 `sfx: [[秒, 名, 音量]]`，共 21 个名字：`click tick pop chime snap whoosh reveal type thud blip glitch drop pour paper glass metal wood crackle impact riser swoosh-soft`。`riser` 写的时间是它的结束点（升到顶的那一刻），和 `impact` 写同一时间。
+  - 环境声 `amb: 'wind'`：每个镜头一层，可选 `wind room hum water fire city space`。相邻镜头同名就连续播放，换名在切点处交叉淡化。总音量用 `EX.run({ amb_gain })` 调。
+  - 安静 `hush: [[u0, u1]]`：音乐和环境声在这段降到 −24 dB，拟音不受影响。用在转折前，之后的第一个声音要是全片最重要的声音之一。
+  - 混音自动在 `impact / riser / chime` 下压低音乐，并把成片响度统一到 −14 LUFS。
 - 坐标有两套，别混：`class="abs"` + `style="left;top"` 是**左上角**；`EX.place(el, x, y)` 是**中心点**，并会覆盖 `transform`。同一个元素只用一种。
 - 版面：内容只放在安全区 x 80–1840、y 180–900；上面是 HUD，下面是字幕。正文字号 ≥ 24 px，标签 ≥ 22 px（`--lint` 拦 22 px 以下）。
 - **尺寸给足**：一个镜头里所有内容合起来，至少占安全区宽度或高度的 60%，并且大致居中。常用尺寸：主卡片 1000–1300 × 420–560 px；节点图标 132 px，节点间距 ≥ 500 px；token 块字号 46–64 px；代码 34–40 px。宁大勿小，`--lint` 的 `SPARSE` / `OFF-CENTER` 会拦住太小和偏的画面。
@@ -126,7 +139,7 @@ node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每�
 `--lint` 打印两类问题，必须清零（退出码 0）才能进入下一步：
 
 - `LINT`（版面）：`SPARSE` 画面太空或主视觉太小、`THIN` 画得太淡太细（安全区里真正上色的像素不足 5%，常见于只画描边的线稿）、`OFF-CENTER` 构图偏、`EMPTY` 什么都没画、`OFFSCREEN` 出画、`SMALL` 字太小、`WRAP` 短标签折成多行、`INVISIBLE` 文字透明（看不见）、`OVERLAP` 文字互相压住、`UNDER-CAP-PILL` / `UNDER-HUD-*` 被字幕或 HUD 挡住、`CLIPPED` 文字被裁。`SPARSE` 的修法是把主视觉放大、补上缺的部分，或把骨架提前到镜头开头，不是加装饰。构图只按每个镜头的中点帧判，镜头末尾变形缩小去接下一个镜头不算违规。构图按像素算（去掉 HUD 和字幕的画面对比只有背景的画面），DOM、SVG、canvas、WebGL 一视同仁；满幅背景层只算背景，主体仍要够大够居中。
-- `AUDIT`（节奏）：`CAPTION-LONG` / `CAPTION-FAST` 字幕太长或太快、`LONG` / `SHORT` 镜头时长不合理、`NO-TERM` 章节没命名术语、`METER-BACKWARDS` 仪表倒退、`DURATION` / `CHAPTERS` 总体规模不对。
+- `AUDIT`（节奏）：`CAPTION-LONG` / `CAPTION-FAST` 字幕太长或太快、`LONG` / `SHORT` 镜头时长不合理、`NO-TERM` 章节没命名术语、`METER-BACKWARDS` 仪表倒退、`DURATION` / `CHAPTERS` 总体规模不对、`SOUND` 全片没有安静段或多数镜头没有环境声。
 
 页面报错（`PAGE ERRORS`）必须修。查某一帧里某个元素的状态，用渲染器直接求值，不要自己写浏览器脚本：
 
@@ -134,11 +147,25 @@ node <skill>/scripts/render.mjs --html index.html --stills shots --lint  # 每�
 node <skill>/scripts/render.mjs --html index.html --at 37.2 --eval "document.querySelector('#pk-code').textContent"
 ```
 
-能看图时用 Read 打开每一页 `out/sheet-NN.jpg`（全部页都看，不只第一页），逐格回答四个问题，有一个“否”就改：主视觉是否一眼能看出在讲什么？主角在不在？离开字幕，这一格画面本身是否有信息？把它和 `<skill>/assets/cinema.jpg` 摆在一起，它是否守住了自己的美术指导，没有平涂卡通、白卡或杂色？lint 通过只说明没有硬伤，不说明好看；不要写“目检通过”就跳过。
+lint 通过只说明没有硬伤，不说明好看。接着做导演评审（`directing.md` 第 6 节）：
 
-## 6. 渲染与混音
+```bash
+node <skill>/scripts/render.mjs --html index.html --sheet auto           # 9 个关键时刻拼成 out/keyframes.jpg
+```
 
-渲染命令在前台跑，等它结束再继续（不要放后台然后结束会话，进程会被一起杀掉）。交付渲染加 `--subframes 3`（3D 用 2）得到运动模糊，片子才不像矢量预览；`post.grain` 的颗粒在这一步加上。
+用 Read 打开 `out/keyframes.jpg` 和每一页 `out/sheet-NN.jpg`（全部页都看），按 6 项打 1–10 分：开头抓人、一眼看懂、美术统一、镜头与转场、节奏、讲清楚。分数写进 `REVIEW.md`。有一项低于 8 分就改，最多三轮；打 9 分要说得出它比 8 分好在哪。不要写“目检通过”就跳过。
+
+## 6. 15 秒样片，然后渲染与混音
+
+先出开头约 15 秒的样片，配上声音检查一遍（`directing.md` 第 7 节），能对话就发给用户确认，没问题再渲全片：
+
+```bash
+node <skill>/scripts/render.mjs --html index.html --range 0:15 --subframes 2          # → out/sample.mp4
+```
+
+交付渲染加 `--subframes 3`（3D 用 2）得到运动模糊，片子才不像矢量预览；`post.grain` 的颗粒在这一步加上。渲染会自动多进程并行。
+
+**长渲染不能丢**：单条命令可能超过工具的前台时限（约 10 分钟）。超过时，用 `nohup … > out/render.log 2>&1 &` 在后台启动，然后在前台反复执行 `sleep 240; tail -2 out/render.log`，直到看到 `✓`。渲染没结束之前，不要结束回答：会话一结束，后台进程会被一起杀掉。
 
 ```bash
 node <skill>/scripts/render.mjs --html index.html --subframes 3 --out out/silent.mp4
@@ -147,7 +174,7 @@ python3 <skill>/scripts/motion_check.py --video out/silent.mp4 --cues cues.json
 python3 <skill>/scripts/mix.py --video out/silent.mp4 --cues cues.json --out out/<name>.mp4
 ```
 
-`motion_check.py` 列出 ≥ 2 s 的静止段（`STILL`），逐个补持续运动（扫描线、光点流动 `dashFlow`、呼吸光晕 `pulse`、缓慢漂移），重渲后 `STILL` 为 0。2 分钟片子渲染约 3 分钟（`--subframes 3` 约 9 分钟，3D 更久）。
+`motion_check.py` 列出 ≥ 2 s 的静止段（`STILL`），逐个补持续运动（扫描线、光点流动 `dashFlow`、呼吸光晕 `pulse`、缓慢漂移），重渲后 `STILL` 为 0。渲染自动多进程：2 分钟的 2D 片约 2 分钟（`--subframes 3` 约 5 分钟），140 秒的 3D 片 `--subframes 2` 约 6 分钟（Apple 芯片实测）。
 
 ## 7. 验证与交付
 

@@ -11,7 +11,15 @@
      meter: [0.001, 0.004],                     journey-meter value at shot start and end (omit = hold)
      caps: [[0, '再经「TLS 加密」：内容只剩乱码。'], [3.5, '…']],   bottom captions, u = local seconds;
                                                 「关键词」 is highlighted in the chapter colour
-     sfx: [[1.2, 'pop'], [3, 'chime', .5]],     extra cues at local seconds (name, gain)
+     sfx: [[1.2, 'pop'], [3, 'chime', .5]],     extra cues at local seconds (name, gain). Names:
+                                                UI   click tick pop chime snap whoosh reveal type thud blip glitch drop
+                                                foley pour paper glass metal wood crackle impact riser swoosh-soft
+                                                riser is a 2.4 s swell whose cue time is where it ENDS (put the impact
+                                                on the same time); music ducks 5 dB under impact / riser / chime
+     amb: 'wind',                               ambience bed under this shot: wind room hum water fire city space;
+                                                the same bed on consecutive shots continues, a new one crossfades 0.6 s
+     hush: [[2.5, 4]],                          near-silence: music and ambience dip to -24 dB between these local times
+                                                (fades down in the 0.3 s before; sfx are not hushed) — before the turn
      enter: 'dissolve' | 'cut' | 'fly',         'cut' when this shot starts with the previous shot's last frame
                                                 (same protagonist, same place) — the seamless continuity cut;
                                                 'fly' moves the camera from the previous shot to this one (default
@@ -37,7 +45,7 @@
                                                 world: sky, starfield, particles (scenery: the composition lint ignores it), or
                                                 a three.js scene that holds the main subject (subject: true, so it counts).
                                                 Read EX.cam(t) to follow the camera.
-   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain,
+   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, amb_gain,
             theme: 'dark', chrome: 'cinema', post: { vignette: .4, grain: 6 } })
      chrome 'pill' (default, glass pills) | 'cinema' (no boxes: a thin top timeline, small chapter label,
             unboxed caption — for art-directed films); post.vignette 0–1 darkens the corners;
@@ -341,7 +349,17 @@
       s.sfx.forEach(([a, name, g]) => cues.push({ t: +(s.start + a).toFixed(3), sfx: name, gain: g ?? .5 }));
     });
     cues.sort((a, b) => a.t - b.t);
-    window.__cues = { mood: cfg.mood || 'calm', bgm_gain: cfg.bgm_gain ?? .5, cues, ...(bpm ? { bpm } : {}) };
+    /* ambience runs (a bed shared by consecutive shots is one run, so it never restarts) and hush windows */
+    const amb = [], hush = [];
+    shots.forEach((s) => {
+      const t1 = s.start + s.dur, last = amb[amb.length - 1];
+      if (s.amb && last && last.name === s.amb && Math.abs(last.t1 - s.start) < 1e-6) last.t1 = t1;
+      else if (s.amb) amb.push({ t0: s.start, t1, name: s.amb });
+      (s.hush || []).forEach(([a, b]) => hush.push([+(s.start + a).toFixed(3), +(s.start + b).toFixed(3)]));
+    });
+    amb.forEach((r) => { r.t0 = +r.t0.toFixed(3); r.t1 = +r.t1.toFixed(3); });
+    window.__cues = { mood: cfg.mood || 'calm', bgm_gain: cfg.bgm_gain ?? .5, cues, ...(bpm ? { bpm } : {}),
+      amb, amb_gain: cfg.amb_gain ?? .5, hush, duck: true };
     window.__shots = shots.map((s) => ({ id: s.id, chapter: s.chapter, hud: s.hud, start: +s.start.toFixed(3), dur: s.dur, caps: s.caps.map((c) => c[1]) }));
     window.__lint = lint;
     window.__audit = () => audit(duration);
@@ -354,6 +372,11 @@
     const out = [];
     if (duration < 80 || duration > 160) out.push(`DURATION ${duration.toFixed(1)}s (target 90–150s; lint range 80–160s)`);
     if (chapters.length < 6) out.push(`CHAPTERS only ${chapters.length} (target 6–10)`);
+    /* sound design (directing.md §4): at least one near-silence, and an ambience bed under most explained shots */
+    const explained = shots.filter((s) => s.chapter);
+    if (!shots.some((s) => s.hush && s.hush.length)) out.push('SOUND no hush anywhere: add one near-silence (hush: [[u0, u1]]) before the turn or the peak');
+    const withAmb = explained.filter((s) => s.amb).length;
+    if (explained.length && withAmb < explained.length / 2) out.push(`SOUND only ${withAmb} of ${explained.length} explained shots have an ambience bed (amb): give most shots one`);
     let lastM = -Infinity;
     shots.forEach((s) => {
       if (s.dur > 12) out.push(`LONG ${s.id} ${s.dur}s — over 12s: split it or it will sit still`);

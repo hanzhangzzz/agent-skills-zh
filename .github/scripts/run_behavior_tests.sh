@@ -42,6 +42,7 @@ run "launch-video sync check" python3 launch-video/tests/test_check_sync.py
 run "launch-video motion check" python3 launch-video/tests/test_motion_check.py
 run "explainer-video motion check" python3 explainer-video/tests/test_motion_check.py
 run "explainer-video pacing audit" node explainer-video/tests/test_audit.mjs
+run "explainer-video audio" python3 explainer-video/tests/test_audio.py
 run "scanned-book-ocr" python3 -m unittest discover -s scanned-book-ocr/scripts -p 'test_*.py'
 run "README manual installation" python3 .github/scripts/test_readme_install.py
 run "README gallery generator" python3 assets/readme/cards-src/test_build_gallery.py

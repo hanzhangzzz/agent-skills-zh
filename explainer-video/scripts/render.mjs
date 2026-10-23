@@ -12,6 +12,13 @@
 //   node <skill>/scripts/render.mjs --html promo.html [--out out/silent.mp4] [--fps 30] [--subframes 3]
 //     --subframes N  captures N sub-frames per output frame and blends them (ffmpeg tmix) → real motion blur on
 //                    fast moves. N× slower; use 1 (default) while iterating and 3 for the delivery render.
+//     --workers N    render frames in N parallel browsers (default min(4, cores / 3); 1 = the old single page).
+//                    Same frames as --workers 1 up to antialiasing noise (a seek jump re-rasters text a hair differently,
+//                    WebGL differs by a few levels across browsers; worst frame measured ≥ 46 dB PSNR, invisible).
+//     --range a:b    render only t = a…b seconds → out/sample.mp4 (or --out): check a 15 s sample before the full film
+//   node <skill>/scripts/render.mjs --html promo.html --sheet auto   → out/keyframes.jpg (or --out <file.jpg>)
+//                    9 key moments in one labelled 3×3 image (t = 1.5 s for the opening, then mid-points of 8 shots
+//                    spread from the first explained shot to the ending); or --sheet 12.3,40,88 for chosen times.
 //   node <skill>/scripts/render.mjs --html promo.html --stills 0.5,4,9.5   → out/stills/t<sec>.png (or --out <dir>)
 //   --stills shots   one still at the middle and one just before the end of every shot (needs window.__shots)
 //   --lint           with --stills: print the page's window.__lint() findings for each still; exit 1 if any
@@ -21,10 +28,10 @@
 // Env: CHROMIUM_PATH=<browser binary> to reuse an existing Chromium instead of Playwright's download.
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
-import { tmpdir } from 'node:os';
+import { cpus, tmpdir } from 'node:os';
 
 function parseArgs(argv) {
   const out = {};
@@ -38,14 +45,14 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.html) {
-  console.error('usage: render.mjs --html page.html [--out out/silent.mp4] [--fps 30] [--stills 1,2.5]');
+  console.error('usage: render.mjs --html page.html [--out out/silent.mp4] [--fps 30] [--subframes 3] [--workers N] [--range a:b] | --stills 1,2.5 | --sheet auto');
   process.exit(2);
 }
 const html = resolve(args.html);
 if (!existsSync(html)) { console.error(`not found: ${html}`); process.exit(2); }
 const fps = Number(args.fps ?? 30);
 const outDir = resolve(dirname(html), 'out');
-const out = resolve(args.out ?? join(outDir, 'silent.mp4'));
+const out = resolve(args.out ?? join(outDir, args.range ? 'sample.mp4' : 'silent.mp4'));
 
 let chromium;
 try {
@@ -74,44 +81,52 @@ await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 // headless Chromium on macOS defaults to SwiftShader (software WebGL: a three.js scene with post-processing renders at
 // ~1.5 s per frame on the CPU); ANGLE's Metal backend uses the real GPU and produces the same frames
 const launchArgs = process.platform === 'darwin' ? ['--use-angle=metal'] : [];
-const browser = await chromium.launch({ args: launchArgs, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+const launch = () => chromium.launch({ args: launchArgs, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
+const browsers = [await launch()];
+const browser = browsers[0];
 const errors = [];
-page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('requestfailed', (r) => errors.push(`request failed: ${r.url()}`));
-page.on('response', (r) => { if (r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url()}`); });
 async function stop(code, msg) {
   if (msg) console.error(msg);
   if (errors.length) console.error('PAGE ERRORS:\n' + errors.join('\n'));
-  await browser.close();
+  await Promise.all(browsers.map((b) => b.close().catch(() => {})));
   server.close();
   process.exit(code);
 }
-await page.addInitScript(() => { window.__recording = true; });
-await page.goto(`http://127.0.0.1:${server.address().port}/${encodeURIComponent(basename(html))}`);
-// wait for __ready, but stop at the first page error instead of sitting out the timeout
-for (let waited = 0; ; waited += 200) {
-  if (await page.evaluate(() => window.__ready === true)) break;
-  if (errors.length) await stop(2, 'page failed while loading (fix the first error below; `node --check shots.js` catches syntax errors)');
-  if (waited > 60000) await stop(2, 'page never set window.__ready within 60s');
-  await new Promise((ok) => setTimeout(ok, 200));
+let width = 1920, height = 1080;
+// one page = the film loaded and __ready; tag prefixes its errors (render workers)
+async function openPage(b, tag = '') {
+  const pg = await b.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+  pg.on('pageerror', (e) => errors.push(tag + String(e)));
+  pg.on('console', (m) => { if (m.type() === 'error') errors.push(tag + m.text()); });
+  pg.on('requestfailed', (r) => errors.push(`${tag}request failed: ${r.url()}`));
+  pg.on('response', (r) => { if (r.status() >= 400) errors.push(`${tag}HTTP ${r.status()}: ${r.url()}`); });
+  await pg.addInitScript(() => { window.__recording = true; });
+  await pg.goto(`http://127.0.0.1:${server.address().port}/${encodeURIComponent(basename(html))}`);
+  // wait for __ready, but stop at the first page error instead of sitting out the timeout
+  for (let waited = 0; ; waited += 200) {
+    if (await pg.evaluate(() => window.__ready === true)) break;
+    if (errors.length) await stop(2, 'page failed while loading (fix the first error below; `node --check shots.js` catches syntax errors)');
+    if (waited > 60000) await stop(2, 'page never set window.__ready within 60s');
+    await new Promise((ok) => setTimeout(ok, 200));
+  }
+  return pg;
 }
+const page = await openPage(browser);
 const duration = await page.evaluate(() => window.__duration);
 if (!(duration > 0)) await stop(2, 'page must set window.__duration > 0');
-const [width, height] = await page.evaluate(() => window.__size ?? [1920, 1080]);
+[width, height] = await page.evaluate(() => window.__size ?? [1920, 1080]);
 if (width !== 1920 || height !== 1080) {
   await page.setViewportSize({ width, height });
   await page.evaluate(() => new Promise((ok) => requestAnimationFrame(() => ok())));
 }
 
-async function shot(t, path) {
-  await page.evaluate((tt) => window.__seek(tt), t);
+async function shot(t, path, pg = page) {
+  await pg.evaluate((tt) => window.__seek(tt), t);
   // image sources may change per frame (recorded footage); wait until they decode
-  await page.evaluate(() => Promise.all([...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))));
+  await pg.evaluate(() => Promise.all([...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))));
   // video frames as high-quality JPEG: ~5× faster than PNG and invisible after x264; stills stay PNG
-  if (path.endsWith('.jpg')) await page.screenshot({ path, type: 'jpeg', quality: 95 });
-  else return page.screenshot({ path, type: 'png' });
+  if (path.endsWith('.jpg')) await pg.screenshot({ path, type: 'jpeg', quality: 95 });
+  else return pg.screenshot({ path, type: 'png' });
 }
 
 // composition from pixels: diff the frame without HUD / caption against the bare background (#bg plus a scenery
@@ -189,9 +204,52 @@ try {
   } else if (args['cues-out']) {
     const cues = await page.evaluate(() => ({ ...window.__cues, scenes: (window.__shots || []).map((s) => s.start) }));
     if (!cues) throw new Error('page has no window.__cues');
-    const { writeFileSync } = await import('node:fs');
     writeFileSync(resolve(args['cues-out']), JSON.stringify(cues, null, 1));
     console.log(`✓ ${cues.cues.length} cues → ${args['cues-out']}`);
+  } else if (args.sheet) {
+    // key-moment sheet: up to 9 times in one labelled 3-column image (out/keyframes.jpg), composed on a canvas
+    const list = await page.evaluate(() => window.__shots ?? null);
+    let times;
+    if (args.sheet === 'auto') {
+      if (list?.length) {
+        // t = 1.5 s (does the opening grab?) + mid-points of 8 evenly spread shots, from the first explained shot (hud)
+        // through the ending
+        const first = Math.max(0, list.findIndex((x) => x.hud)), last = list.length - 1;
+        const picks = [...new Set(Array.from({ length: 8 }, (_, k) => Math.round(first + k * (last - first) / 7)))];
+        times = [Math.min(1.5, duration / 2), ...picks.map((i) => list[i].start + list[i].dur / 2)];
+      } else times = Array.from({ length: 9 }, (_, k) => (k + .5) * duration / 9);
+    } else times = String(args.sheet).split(',').map(Number);
+    if (!times.length || times.some((t) => !(t >= 0))) throw new Error(`--sheet wants auto or T1,T2,… in seconds, got ${args.sheet}`);
+    const tiles = [];
+    for (const t of times) {
+      const tt = Math.min(t, duration - 0.001);
+      await page.evaluate((x) => window.__seek(x), tt);
+      await page.evaluate(() => Promise.all([...document.images].map((i) => (i.complete ? null : i.decode().catch(() => {})))));
+      const id = (list || []).filter((r) => r.start <= tt).pop()?.id;
+      tiles.push({ img: (await page.screenshot({ type: 'jpeg', quality: 92 })).toString('base64'), label: `t=${tt.toFixed(1)}s` + (id ? ` · ${id}` : '') });
+    }
+    const canvasPage = await browser.newPage();   // blank page: the film's page and its error log stay untouched
+    const jpg = await canvasPage.evaluate(async ([tiles, w, h]) => {
+      const cols = Math.min(3, tiles.length), rows = Math.ceil(tiles.length / cols);
+      const tw = 640, th = Math.round(tw * h / w), cap = 34, gap = 8;
+      const cv = document.createElement('canvas');
+      cv.width = gap + cols * (tw + gap); cv.height = gap + rows * (th + cap + gap);
+      const g = cv.getContext('2d');
+      g.fillStyle = '#111'; g.fillRect(0, 0, cv.width, cv.height);
+      g.font = '600 20px -apple-system, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif'; g.textBaseline = 'middle';
+      for (const [k, t] of tiles.entries()) {
+        const img = new Image(); img.src = 'data:image/jpeg;base64,' + t.img; await img.decode();
+        const x = gap + (k % cols) * (tw + gap), y = gap + Math.floor(k / cols) * (th + cap + gap);
+        g.drawImage(img, x, y, tw, th);
+        g.fillStyle = '#eee'; g.fillText(`${k + 1}  ${t.label}`, x + 6, y + th + cap / 2, tw - 12);
+      }
+      return cv.toDataURL('image/jpeg', .9).split(',')[1];
+    }, [tiles, width, height]);
+    await canvasPage.close();
+    const file = resolve(args.out ?? join(outDir, 'keyframes.jpg'));
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, Buffer.from(jpg, 'base64'));
+    console.log(`✓ ${times.length} key moments → ${file}`);
   } else if (args.stills) {
     const dir = args.out ? resolve(args.out) : join(outDir, 'stills');
     mkdirSync(dir, { recursive: true });
@@ -236,15 +294,47 @@ try {
     console.log(`✓ ${times.length} stills → ${dir}` + (args.lint ? (lintCount ? ` · ${lintCount} issue(s) to fix` : ' · clean') : ''));
     if (lintCount) failed = true;
   } else {
-    const frames = mkdtempSync(join(tmpdir(), 'explainer-video-frames-'));
     const sub = Math.max(1, Math.round(Number(args.subframes ?? 1)));
-    const n = Math.round(duration * fps);
-    for (let i = 0; i < n; i++) {
-      for (let k = 0; k < sub; k++) {
-        await shot((i + k / sub) / fps, join(frames, `${String(i * sub + k).padStart(6, '0')}.jpg`));
-      }
-      if (i % (fps * 5) === 0) console.log(`frame ${i}/${n}`);
+    const total = Math.round(duration * fps);
+    let i0 = 0, i1 = total;
+    if (args.range) {
+      const [ra, rb] = String(args.range).split(':').map(Number);
+      if (!(ra >= 0 && rb > ra)) throw new Error(`--range wants a:b in seconds with b > a ≥ 0, got ${args.range}`);
+      i0 = Math.min(total, Math.round(ra * fps)); i1 = Math.min(total, Math.round(rb * fps));
+      if (i1 <= i0) throw new Error(`--range ${args.range} is outside the film (${duration}s)`);
     }
+    const n = i1 - i0;
+    const autoWorkers = Math.min(4, Math.max(1, Math.floor(cpus().length / 3)));
+    const W = Math.max(1, Math.min(n, args.workers ? Math.round(Number(args.workers)) || 1 : autoWorkers));
+    // one browser per worker: pages inside one browser share its GPU process, which caps a three.js film
+    // (measured on a bloom scene, 3 workers: 1.7× in one browser, 2.0× in three browsers)
+    const pages = [page];
+    browsers.push(...(await Promise.all(Array.from({ length: W - 1 }, launch))));
+    pages.push(...(await Promise.all(browsers.slice(1).map((b, w) => openPage(b, `[worker ${w + 2}] `)))));   // opened at __size
+    const frames = mkdtempSync(join(tmpdir(), 'explainer-video-frames-'));
+    // workers pull contiguous 1-second blocks from a shared queue (balances heavy and light stretches of the film);
+    // a frame file is named by its index in the output, so the encode below is the same for any worker count
+    const block = Math.max(1, Math.round(fps));
+    let next = i0, done = 0, lastReport = 0;
+    const t0 = Date.now();
+    // the first worker that fails stops the others at their next frame; wait for all, then clean up
+    const results = await Promise.allSettled(pages.map(async (pg) => {
+      while (next < i1) {
+        const s0 = next, s1 = Math.min(i1, next + block); next = s1;
+        for (let i = s0; i < s1 && next <= i1; i++) {
+          for (let k = 0; k < sub; k++) await shot((i + k / sub) / fps, join(frames, `${String((i - i0) * sub + k).padStart(6, '0')}.jpg`), pg);
+          if (errors.length) { next = i1 + 1; throw new Error('stopped on a page error while rendering (first error below)'); }
+          if (++done - lastReport >= fps * 5 || done === n) {
+            lastReport = done;
+            const el = (Date.now() - t0) / 1000;
+            console.log(`frame ${done}/${n} · ${el.toFixed(0)}s elapsed · ~${(el / done * (n - done)).toFixed(0)}s left`);
+          }
+        }
+      }
+    }));
+    const failure = results.find((x) => x.status === 'rejected');
+    if (failure) { next = i1 + 1; rmSync(frames, { recursive: true, force: true }); throw failure.reason; }
+    const renderSec = (Date.now() - t0) / 1000;
     mkdirSync(dirname(out), { recursive: true });
     // with sub-frames: read at fps×sub, average each run of `sub` frames (tmix), then keep one frame per output frame.
     // tmix at index n averages n-sub+1..n, so keep n = sub-1, 2sub-1, …: each kept frame blends exactly its own
@@ -254,13 +344,16 @@ try {
     const vf = [...(sub > 1 ? [`tmix=frames=${sub}`, `select='eq(mod(n+1\\,${sub})\\,0)'`, `setpts=N/${fps}/TB`] : []),
       ...(grain > 0 ? [`noise=alls=${Math.min(20, grain)}:allf=t`] : [])];
     const blur = vf.length ? ['-vf', vf.join(',')] : [];
+    const t1 = Date.now();
     const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-framerate', String(fps * sub), '-i', join(frames, '%06d.jpg'),
       ...blur, '-r', String(fps),
-      '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-crf', '16', '-maxrate', '20M', '-bufsize', '40M', '-preset', 'slow',   // the cap keeps film grain from bloating the file
+      '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p', '-crf', '16', '-maxrate', '20M', '-bufsize', '40M', '-preset', 'medium',   // the cap keeps film grain from bloating the file
       '-movflags', '+faststart', out], { stdio: 'inherit' });
     rmSync(frames, { recursive: true, force: true });
     if (r.status !== 0) throw new Error('ffmpeg encode failed');
-    console.log(`✓ ${out} (${duration}s @ ${fps}fps, ${n} frames, ${width}×${height})`);
+    const span = args.range ? ` · t ${(i0 / fps).toFixed(2)}–${(i1 / fps).toFixed(2)}s of ${duration}s` : '';
+    console.log(`✓ ${out} (${(n / fps).toFixed(2)}s @ ${fps}fps, ${n} frames${span}, ${width}×${height}) · ` +
+      `${W} worker(s) × ${sub} subframe(s): render ${renderSec.toFixed(1)}s + encode ${((Date.now() - t1) / 1000).toFixed(1)}s`);
   }
 } catch (e) {
   failed = true;
