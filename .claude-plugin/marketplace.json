@@ -238,6 +238,16 @@
       ]
     },
     {
+      "name": "explainer-video",
+      "source": "./",
+      "strict": false,
+      "description": "One sentence → a 1.5–2.5 minute Chinese explainer animation: an everyday moment slowed into a journey, 6–10 stations with a journey meter and a callback ending; the template owns layout, HUD, captions, transitions and SFX, and a layout/pacing lint replaces eyeballing. 一句话生成知识讲解动画",
+      "version": "1.0.0",
+      "skills": [
+        "./explainer-video"
+      ]
+    },
+    {
       "name": "x-post",
       "source": "./",
       "strict": false,

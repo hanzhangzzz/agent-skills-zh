@@ -388,3 +388,27 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
   "license": "MIT"
 }
 ```
+
+### explainer-video
+
+```json
+{
+  "name": "explainer-video",
+  "version": "1.0.0",
+  "description": "一句话生成 1.5–2.5 分钟中文知识讲解动画：把一个日常瞬间放慢成一段旅程，主角走过 6–10 站、顶部仪表显示进度、结尾回扣；模板负责版式、HUD、字幕、转场与音效，版面与节奏 lint 代替肉眼检查。",
+  "trigger": "/explainer-video",
+  "keywords": [
+    "explainer video",
+    "motion graphics",
+    "science animation",
+    "知识讲解",
+    "科普动画",
+    "讲解视频",
+    "一句话生成视频"
+  ],
+  "compatibility": "Claude Code, Codex",
+  "install_path": "explainer-video/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
