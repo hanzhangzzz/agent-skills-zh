@@ -679,6 +679,23 @@ class Signin(unittest.TestCase):
             factory.return_value.launch.assert_not_called()
             self.assertEqual(factory.return_value.cookies.call_count, 1)
 
+    def test_creator_site_cookies_with_dots_in_their_names_are_accepted(self):
+        # 创作服务平台登录后，浏览器里会多出名字带点的 cookie；点是 RFC 6265 允许的名字字符，不能因此拒收整份会话
+        cookies = {'a1': 'fixture', 'web_session': 'scanned', 'galaxy.creator.beaker.session.id': 'x', 'access-token-creator.xiaohongshu.com': 'y'}
+        with patch.object(xhs, 'Browser') as factory, self.identity({'user_id': 'account-one', 'nickname': '甲', 'guest': False}):
+            factory.return_value.cookies.return_value = cookies
+            result = xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'login', '--finish']))
+        self.assertTrue(result['authenticated'])
+        self.assertEqual(json.loads((self.root / 'profiles/default/credentials.json').read_text())['cookies'], cookies)
+
+    def test_cookie_names_that_would_break_the_header_are_still_rejected(self):
+        for bad in ('a b', 'a;b', 'a=b', 'a,b', 'a\r\nb', ''):
+            with self.subTest(name=bad), patch.object(xhs, 'Browser') as factory:
+                factory.return_value.cookies.return_value = {'a1': 'fixture', 'web_session': 'scanned', bad: 'x'}
+                with self.assertRaises(Failure) as exc:
+                    xhs.execute(xhs.parser().parse_args(['--data-dir', str(self.root), 'login', '--finish']))
+                self.assertEqual(exc.exception.code, 'INVALID_SESSION')
+
 
 class Accounts(unittest.TestCase):
     """Several accounts on one machine: the risk is state leaking between them."""
