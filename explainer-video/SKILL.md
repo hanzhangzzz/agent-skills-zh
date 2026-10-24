@@ -70,7 +70,8 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 规则：
 
-- 结构：钩子 ≤ 3 s 就出现主体 → 3–6 个镜头推进，至少一次尺度揭示或一镜到底 → 高潮镜头（音乐最满或安静后的第一个重音）→ 回扣开头的画面。总长 60–90 s（`--lint` 在 45 s 以下或 100 s 以上报 `DURATION`），每镜 6–14 s（短于 3 s 报 `SHORT`，长于 16 s 报 `LONG`）。
+- **少而精**：默认 45–60 s、3–5 个镜头。精细度来自每个镜头被认真看过的次数，不来自镜头数量（`directing.md` 第 6b 节）。优先**一个世界、一镜到底**：精细的场景只搭一次，在里面拍多个时刻，细节成本被摊薄。
+- 结构：钩子 ≤ 3 s 就出现主体 → 2–3 个镜头推进，至少一次尺度揭示或一镜到底 → 高潮镜头（音乐最满或安静后的第一个重音）→ 回扣开头的画面。`--lint` 在 45 s 以下或 100 s 以上报 `DURATION`；每镜 6–16 s（短于 3 s 报 `SHORT`，长于 16 s 报 `LONG`）。
 - `EX.run({ composition: 'cinema', chrome: 'cinema', theme: …, rate: null })`，所有镜头 `hud: false`；章节只用来分段，不显示。
 - 一帧一个发光主体，≥ 50% 是留白或暗场。画面上除字幕外最多一行字（`--lint` 报 `CLUTTER`：超过 40 个字）；数字只出现最关键的那一个，做成大字。
 - 讲清楚靠视觉隐喻 + 字幕的一句话，不靠标签。观众离开字幕，也能从画面看出“发生了什么变化”。
@@ -126,6 +127,7 @@ const B = EX.tempo(96)                          // B(n) = 第 n 拍的秒数；�
 - **尺寸给足**：一个镜头里所有内容合起来，至少占安全区宽度或高度的 60%，并且大致居中。常用尺寸：主卡片 1000–1300 × 420–560 px；节点图标 132 px，节点间距 ≥ 500 px；token 块字号 46–64 px；代码 34–40 px。宁大勿小，`--lint` 的 `SPARSE` / `OFF-CENTER` 会拦住太小和偏的画面。
 - **骨架先立**：主视觉的骨架（全部节点、卡片外框、坐标轴、格子）在镜头开始 1 秒内全部出现；之后的时间用来让主角移动、状态变化、标注弹出。不要把骨架拆成整段镜头里逐个出现，否则镜头中段画面是半空的。
 - `render` 必须是 `u` 的纯函数：不用 `Math.random`、`Date.now`、定时器、CSS animation/transition；随机用 `rng(seed)`，并在 `init` 里生成好。
+- 3D 镜头用 `cinema3d.js`（`import { makeCinema, timewarp, lightRig, studioEnv, makeSparks, makeFlakes, makePuffs, makeDust } from './cinema3d.js'`）：渲染链已调好（2 倍超采样、物理景深、HDR 辉光、热浪、色差、调色、颗粒、ACES、颜色空间），不要自己从零写。质量标准是 `hero.example.js`（烘焙一爆，9 s 微距镜头；效果见 `out/` 静帧）：一个 `THREE.WebGLRenderer` 放在 `EX.backdrop({ subject: true })`，多镜头时每个镜头一个 `THREE.Scene`，backdrop 的 `render(el, t)` 按当前镜头选场景和相机。
 - 示例教技法，不定风格（风格来自风格库）。写镜头前先读电影模式的标准 `moon.example.js`（light.js 的光、真实素材、无 HUD、少字、长镜头，效果 `<skill>/assets/moon.jpg`），再按需读：`cinema.example.js`（美术指导卡、three.js 后期：辉光 + 景深、动态排版、变速运镜、卡拍子，效果 `<skill>/assets/cinema.jpg`）；`world.example.js`（世界层 + 相机跟拍 + 尺度穿越 + canvas 星空 + 深色主题）和 `three.example.js`（3D 主体 + 3D 点上的标签），效果见 `<skill>/assets/worlds.jpg`；`shots.example.js` 四个镜头（钩子大输入框、片名环形计时器 + 粒子、乱码扫描、骨架先立的路径）；`gallery.example.js` 七种常用画法（剖面 + 引线标注、放大镜插图、仪表盘 + 数字卡、曲线图 + 标注、地图航线、时间轴里程碑、对比条），效果见 `<skill>/assets/gallery.jpg`。缺哪种画面就从里面拿最接近的改，尺寸、层次和动法照抄。插画用渐变分层（底色 + 内层 + 高光 + 柔阴影），不画单薄的细线稿。
 - `EX.pop` 和 `EX.place` 都写 `transform`，同一个元素只用一个；要定位又要弹出，把 `spring(...)` 传给 `place` 的缩放参数。SVG 元素也能用：`place` 移动的是它的原点，所以形状围绕 (0, 0) 画。
 - SVG 的 `id`（渐变、clipPath）全页共享，加镜头前缀（`eg-grad`、`gl-clip`）。恢复元素原色时写回颜色值，不要写 `style.color = ''`，那会退回默认深蓝。

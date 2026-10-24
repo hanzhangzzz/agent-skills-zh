@@ -115,7 +115,7 @@
 
 three.js 的模型基本是方块、球体、圆柱拼出来的。拿它拼写实的有机物（植物、果实、动物、液体），一定显得原始。三档：
 
-1. **题材本身是几何体**：芯片、建筑、城市白模、机器、包装盒。用 three.js 写实打光，例子是 `cinema.example.js`。
+1. **题材本身是几何体，或是一个能精细建模的单个物体**：芯片、建筑、机器、包装盒、一颗豆子。用 three.js + `cinema3d.js` 的渲染链写实打光，例子是 `hero.example.js`（单个物体的微距镜头：47 万顶点的程序几何 + 着色器表面细节）和 `cinema.example.js`。
 2. **题材是有机物，但可以风格化**：选一种把几何简单变成美学的 3D 风格。风格库里有 `brick-toy`（积木）、`paper-popup`（纸雕立体书）、`tilt-shift`（移轴微缩）、`lowpoly-island`（低多边形）、`glass-product`（玻璃产品）、`white-model`（白模投影），以及粘土风。后期照风格库的 `core/three/post.js`：GTAO 环境光遮蔽、物理景深、辉光、调色，内部 2 倍超采样。光照用面光源，加一张低强度的 Poly Haven HDRI（CC0，如 `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr`，`RGBELoader` 读入，放进工作目录），比亮的环境光更像真的。
 3. **必须写实的有机物**：用 Blender 渲染成帧序列，再放进页面（见“Blender 镜头”）。代价最高，一个 10 秒镜头要几十分钟。
 
