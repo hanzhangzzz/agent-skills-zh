@@ -46,10 +46,13 @@
                                                 a three.js scene that holds the main subject (subject: true, so it counts).
                                                 Read EX.cam(t) to follow the camera.
    EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, amb_gain,
-            theme: 'dark', chrome: 'cinema', post: { vignette: .4, grain: 6 } })
+            theme: 'dark', chrome: 'cinema', post: { vignette: .4, grain: 6 }, composition: 'cinema' })
      chrome 'pill' (default, glass pills) | 'cinema' (no boxes: a thin top timeline, small chapter label,
             unboxed caption — for art-directed films); post.vignette 0–1 darkens the corners;
             post.grain (ffmpeg noise strength, 4–10) is added when the video is encoded, not in stills
+     composition 'cinema': the pixel lint stops asking for big, centred, filled infographics (SPARSE / THIN /
+            OFF-CENTER are skipped: one small luminous subject in darkness is the point) and checks instead that the
+            brightest region is not under the caption; EMPTY and every text rule stay. Default: infographic rules.
    const B = EX.tempo(96)                       beat grid: B(n) = seconds of beat n at 96 bpm; the music is synthesized at
                                                 this tempo, so durations, cuts and landings on B(n) hit the beat
      unit s / ms / min / h / 天 / 年 (or seconds: real seconds per unit) lets the rate pill show 慢放 ×N or 快进 ×N itself;
@@ -222,6 +225,7 @@
       stage.insertBefore(v, $('hud'));
     }
     window.__post = { grain: post.grain || 0 };
+    window.__composition = cfg.composition === 'cinema' ? 'cinema' : 'explainer';   /* render.mjs picks its pixel rules */
     const layer = (o, id, parent, before) => {
       const el = document.createElement('div');
       el.id = id; el.className = 'layer'; el.innerHTML = o.html || '';

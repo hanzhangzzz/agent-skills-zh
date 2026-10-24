@@ -7,10 +7,10 @@ SKILL="$(cd "$(dirname "$0")/.." && pwd)"
 W="$1"
 for t in node ffmpeg ffprobe python3; do command -v "$t" >/dev/null || { echo "missing dependency: $t" >&2; exit 2; }; done
 mkdir -p "$W/out"
-cp "$SKILL/assets/engine.js" "$SKILL/assets/explainer.js" "$SKILL/assets/icons.js" "$W/"
+cp "$SKILL/assets/engine.js" "$SKILL/assets/explainer.js" "$SKILL/assets/icons.js" "$SKILL/assets/light.js" "$W/"
 [ -f "$W/index.html" ] || cp "$SKILL/assets/explainer.html" "$W/index.html"
 [ -f "$W/shots.js" ] || cp "$SKILL/assets/shots.example.js" "$W/shots.js"
-cp "$SKILL/assets/shots.example.js" "$SKILL/assets/gallery.example.js" "$SKILL/assets/world.example.js" "$SKILL/assets/three.example.js" "$SKILL/assets/cinema.example.js" "$W/"   # reference shots to read and adapt
+cp "$SKILL/assets/shots.example.js" "$SKILL/assets/gallery.example.js" "$SKILL/assets/world.example.js" "$SKILL/assets/three.example.js" "$SKILL/assets/cinema.example.js" "$SKILL/assets/moon.example.js" "$SKILL/assets/moonmap.jpg" "$W/"   # reference shots to read and adapt
 cd "$W"
 if [ ! -d node_modules/playwright ]; then
   [ -f package.json ] || echo '{"private":true}' > package.json

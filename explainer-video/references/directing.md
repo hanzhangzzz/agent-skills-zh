@@ -62,7 +62,7 @@ node <skill>/scripts/render.mjs --html index.html --stills <t>      # 每个方�
 node <skill>/scripts/render.mjs --html index.html --sheet auto       # 9 个关键时刻拼成一张 out/keyframes.jpg
 ```
 
-用 Read 打开拼图，当一个挑剔的导演，按下面 6 项打 1–10 分，写进 `REVIEW.md`（轮次、分数、问题、改法）：
+用 Read 打开拼图，当一个挑剔的导演，按下面 7 项打 1–10 分，写进 `REVIEW.md`（轮次、分数、问题、改法）：
 
 | 项 | 8 分是什么样 |
 |---|---|
@@ -72,6 +72,7 @@ node <skill>/scripts/render.mjs --html index.html --sheet auto       # 9 个关�
 | 镜头与转场 | 景别和运动有变化，转场是设计过的，没有空白帧 |
 | 节奏 | 快慢有起伏，字幕读得完，没有一帧塞太多东西 |
 | 讲清楚 | 每章一个概念，有具体数字或名词，事实准确 |
+| 震撼 | 至少有一帧让人想截图转发：一个发光的主体、一次尺度揭示、一个“这怎么做到的”时刻。放进社区作品集锦里不显得廉价 |
 
 有一项低于 8 分，就改代码重来，最多三轮。三轮后仍不到 8 分的项，交付时如实说明。打分要严：给 9 分要说得出它比 8 分好在哪。
 

@@ -42,6 +42,8 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 题目不是“一瞬间”时，按 `references/exemplar.md` 第 5 节换仪表（天数、公里、尺度、年份）。
 
+**先选模式**（`worlds.md` 开头）：电影模式是默认，一帧一个发光主体、大片留白、几乎无标注、无 HUD、4–8 个长镜头、60–90 s，用 `light.js` 的光做质感；讲解模式（信息图）是保底，用在题目必须靠多个标注才讲得清时。下文第 3 节的章节数、时长、密度要求只约束讲解模式；电影模式以 `worlds.md` 的表为准。
+
 **风格库**：`bash <skill>/scripts/styles.sh list` 列出 59 种经过实测的代码影片风格，来自 Lemo Opuscar（MIT），首次运行会下载到本机缓存，约 40 MB。每行是“名字 · 一句话本质 · 海报路径”。
 
 1. 按题材挑 3 个候选，用 Read 看它们的海报。
@@ -116,6 +118,7 @@ const B = EX.tempo(96)                          // B(n) = 第 n 拍的秒数；�
 - 画面里出现和仪表同义的数字（大字“第 N 天”、时钟）时，用 `EX.meterAt(t)` 取值（`t` 是 `render` 的第 4 个参数），不要另写一套数字，否则会和顶部仪表对不上。
 - 仪表单位写 `s / ms / min / h / 天 / 年` 时，右上角自动显示“慢放 ×N”或“快进 ×N”；距离、层数这类非时间仪表不显示倍数。不想要倍数写 `rate: null`。
 - 章节颜色依次取 `EX.C.blue / purple / pink / cyan / green / orange / red / indigo`，相邻章节不同色。
+- 电影模式的质感来自 `light.js`（`import './light.js'` 后用 `LIGHT.glow / bokeh / trail / flow / haze / sphere / shader`，用法见文件头和 `moon.example.js`），写实物体用真实素材（`worlds.md` 的“真实素材”：NASA、Poly Haven、博物馆开放数据），并写 `CREDITS.md`。
 - 只用美术指导卡里的颜色、字体和材质。下面的粉彩组件只属于粉彩信息图世界，其他世界不要用白卡和胶囊；数据标注写成大号数字 + 细线 + 等宽小标签。
 - 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`，不用 emoji。现有：`phone laptop server database cloud tower wifi router globe lock unlock key shield user users chip cpu doc chat search gear bolt clock check x arrow card qr bank store sun leaf drop heart eye brain layers box truck bell code sprout tree cup fire thermo ship plane factory pin mountain cart scale star atom dna cell battery money camera calendar`；缺的照 `icons.js` 的格式自己画（24×24、描边 2、1–4 条路径）。
 - 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse dashFlow splitChars riseChars`。
@@ -160,7 +163,7 @@ lint 通过只说明没有硬伤，不说明好看。接着做导演评审（`di
 node <skill>/scripts/render.mjs --html index.html --sheet auto           # 9 个关键时刻拼成 out/keyframes.jpg
 ```
 
-用 Read 打开 `out/keyframes.jpg` 和每一页 `out/sheet-NN.jpg`（全部页都看）；招牌镜头和每个 3D 镜头还要用 Read 打开**原尺寸**静帧（`out/stills/`）逐个检查：物体有没有互相穿插、标注引线有没有落在它指的东西上、有没有不该出现的高光或漏光。拼图缩小后看不出这些问题。然后按 6 项打 1–10 分：开头抓人、一眼看懂、美术统一、镜头与转场、节奏、讲清楚。分数写进 `REVIEW.md`。有一项低于 8 分就改，最多三轮；打 9 分要说得出它比 8 分好在哪。不要写“目检通过”就跳过。
+用 Read 打开 `out/keyframes.jpg` 和每一页 `out/sheet-NN.jpg`（全部页都看）；招牌镜头和每个 3D 镜头还要用 Read 打开**原尺寸**静帧（`out/stills/`）逐个检查：物体有没有互相穿插、标注引线有没有落在它指的东西上、有没有不该出现的高光或漏光。拼图缩小后看不出这些问题。然后按 7 项打 1–10 分：开头抓人、一眼看懂、美术统一、镜头与转场、节奏、讲清楚、震撼。分数写进 `REVIEW.md`。有一项低于 8 分就改，最多三轮；打 9 分要说得出它比 8 分好在哪。不要写“目检通过”就跳过。
 
 ## 6. 15 秒样片，然后渲染与混音
 

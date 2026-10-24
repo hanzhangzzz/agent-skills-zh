@@ -133,7 +133,7 @@ async function shot(t, path, pg = page) {
 // backdrop), so DOM, SVG, canvas and WebGL content all count the same. Returns the ink share of the safe area (x 80–1840, y 180–900;
 // white cards count, a thin outline on an empty frame does not) and the box holding 99% of the ink over the whole frame.
 // Explainer-only: needs #bg #hud #cap inside #stage.
-async function inkStats() {
+async function inkStats(capBox = null) {
   const layers = (ids, v) => page.evaluate(([ids, v]) => {
     /* '*' = everything that is not background: #bg and a scenery backdrop (EX.backdrop without subject: true) stay */
     const bg = (el) => el.id === 'bg' || el.id === 'vignette' || (el.id === 'back' && !('subject' in el.dataset));
@@ -144,20 +144,31 @@ async function inkStats() {
   await layers('*', 'hidden');
   const bare = await page.screenshot({ type: 'png' });
   await layers('*', '');
-  return page.evaluate(async ([a, b]) => {
+  return page.evaluate(async ([a, b, capBox]) => {
     const load = (d) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = 'data:image/png;base64,' + d; });
     const [ia, ib] = await Promise.all([load(a), load(b)]);
     const W = 1920, H = 1080;
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d', { willReadFrequently: true });
     g.drawImage(ia, 0, 0); const A = g.getImageData(0, 0, W, H).data;
     g.drawImage(ib, 0, 0); const B = g.getImageData(0, 0, W, H).data;
-    const ink = new Uint8Array(W * H), rowN = new Float64Array(H);
+    const ink = new Uint8Array(W * H), rowN = new Float64Array(H), hist = new Float64Array(256);
+    const lum = (i) => (2 * A[i] + 5 * A[i + 1] + A[i + 2]) >> 3;
     let safe = 0;
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
       if (Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) <= 12) continue;
-      ink[y * W + x] = 1; rowN[y]++;
+      ink[y * W + x] = 1; rowN[y]++; hist[lum(i)]++;
       if (x >= 80 && x < 1840 && y >= 180 && y < 900) safe++;
+    }
+    // the subject = the brightest content (≥ 85% of the 99.9th-percentile luminance of the ink); share of it under the caption
+    let tot = 0, nInk = hist.reduce((s, v) => s + v, 0), top = 255;
+    for (; top > 0; top--) { tot += hist[top]; if (tot >= nInk * .001) break; }
+    const hot = Math.max(40, Math.round(top * .85));
+    let bright = 0, underCap = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!ink[y * W + x] || lum((y * W + x) * 4) < hot) continue;
+      bright++;
+      if (capBox && x >= capBox.x - 16 && x < capBox.x + capBox.w + 16 && y >= capBox.y - 16 && y < capBox.y + capBox.h + 16) underCap++;
     }
     // where the composition is: rows inked edge to edge are scenery bands (ground, sky, a full-bleed 3D or canvas
     // backdrop); in those rows only what stands out from the row's own median colour counts. The HUD and caption
@@ -178,14 +189,20 @@ async function inkStats() {
     const span = (h) => { let c = 0, lo = 0, hi = h.length - 1; for (let i = 0; i < h.length; i++) { c += h[i]; if (c >= n * .005) { lo = i; break; } }
       c = 0; for (let i = h.length - 1; i >= 0; i--) { c += h[i]; if (c >= n * .005) { hi = i; break; } } return [lo, hi]; };
     const [x0, x1] = span(col), [y0, y1] = span(row);   // the box holding 99% of the counted ink
-    return { cover: safe / (1760 * 720), n, x0, x1, y0, y1 };
-  }, [content.toString('base64'), bare.toString('base64')]);
+    return { cover: safe / (1760 * 720), n, x0, x1, y0, y1, bright, underCap };
+  }, [content.toString('base64'), bare.toString('base64'), capBox]);
 }
-// EMPTY / SPARSE / OFF-CENTER / THIN for one mid-shot still; hud = the shot is an explained shot (not hook/title/ending)
-function compositionIssues(ink, hud) {
+// EMPTY / SPARSE / OFF-CENTER / THIN for one mid-shot still; hud = the shot is an explained shot (not hook/title/ending).
+// mode 'cinema' (EX.run({ composition: 'cinema' })): a small luminous subject in darkness is intended, so only EMPTY and
+// SUBJECT-UNDER-CAPTION (more than 3% of the brightest pixels inside the caption box) are checked.
+function compositionIssues(ink, hud, mode = 'explainer') {
   const SW = 1760, SH = 720, SCX = 960, SCY = 540;
   if (ink.n < 500) return ['EMPTY nothing painted in this shot'];
   const out = [];
+  if (mode === 'cinema') {
+    if (ink.bright && ink.underCap > .03 * ink.bright) out.push(`SUBJECT-UNDER-CAPTION ${((100 * ink.underCap) / ink.bright).toFixed(0)}% of the brightest pixels sit under the caption: move the subject up (keep y < 900) or dim what is behind the caption`);
+    return out;
+  }
   const w = ink.x1 - ink.x0, h = ink.y1 - ink.y0, cx = (ink.x0 + ink.x1) / 2, cy = (ink.y0 + ink.y1) / 2;
   const sparse = hud ? (w * h < .3 * SW * SH || (w < .55 * SW && h < .55 * SH)) : (w * h < .1 * SW * SH && w < .45 * SW);
   if (sparse) out.push(`SPARSE content spans ${w | 0}×${h | 0}px (${(100 * w / SW) | 0}% × ${(100 * h / SH) | 0}% of the safe area): scale the main visual up or add the missing parts — target ≥ 60% of the width or height` + (hud ? '' : ' (titles: ≥ 120 px type plus one strong shape)'));
@@ -272,7 +289,15 @@ try {
         const issues = await page.evaluate((c) => (window.__lint ? window.__lint({ composition: c }) : ['page has no __lint']), midShot.has(s));
         const curRow = await page.evaluate((x) => (window.__shots || []).filter((r) => r.start <= x).pop() ?? null, tt);
         const cur = curRow?.id ?? '';
-        if (midShot.has(s) && (await page.evaluate(() => !!document.getElementById('bg')))) issues.push(...compositionIssues(await inkStats(), !!curRow?.hud));
+        if (midShot.has(s) && (await page.evaluate(() => !!document.getElementById('bg')))) {
+          const [mode, capBox] = await page.evaluate(() => {
+            const c = document.getElementById('cap-pill'), S = document.getElementById('stage').getBoundingClientRect(), k = S.width / 1920;
+            const on = c && c.textContent.trim() && getComputedStyle(c).visibility !== 'hidden' && parseFloat(getComputedStyle(c).opacity) > .35;
+            const r = on ? c.getBoundingClientRect() : null;
+            return [window.__composition || 'explainer', r && { x: (r.left - S.left) / k, y: (r.top - S.top) / k, w: r.width / k, h: r.height / k }];
+          });
+          issues.push(...compositionIssues(await inkStats(capBox), !!curRow?.hud, mode));
+        }
         for (const i of issues) console.log(`LINT t=${s} [${cur}] ${i}`);
         lintCount += issues.length;
       }
