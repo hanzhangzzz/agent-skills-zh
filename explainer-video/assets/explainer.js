@@ -366,16 +366,20 @@
       amb, amb_gain: cfg.amb_gain ?? .5, hush, duck: true };
     window.__shots = shots.map((s) => ({ id: s.id, chapter: s.chapter, hud: s.hud, start: +s.start.toFixed(3), dur: s.dur, caps: s.caps.map((c) => c[1]) }));
     window.__lint = lint;
-    window.__audit = () => audit(duration);
+    window.__audit = () => audit(duration, window.__composition);
 
     LV.start({ duration, width: 1920, height: 1080, scenes, render, after, preload: cfg.preload || [] });
   }
 
   /* timeline audit: pacing rules a model can check without seeing the video */
-  function audit(duration) {
+  /* mode 'cinema' (EX.run({ composition: 'cinema' })): few long shots around one luminous subject, 45–100 s;
+     mode 'explainer': the infographic structure, 6–10 chapters, 80–160 s */
+  function audit(duration, mode = 'explainer') {
     const out = [];
-    if (duration < 80 || duration > 160) out.push(`DURATION ${duration.toFixed(1)}s (target 90–150s; lint range 80–160s)`);
-    if (chapters.length < 6) out.push(`CHAPTERS only ${chapters.length} (target 6–10)`);
+    const cine = mode === 'cinema';
+    if (cine ? duration < 45 || duration > 100 : duration < 80 || duration > 160)
+      out.push(`DURATION ${duration.toFixed(1)}s (${cine ? 'cinema mode: 60–90s; lint range 45–100s' : 'target 90–150s; lint range 80–160s'})`);
+    if (!cine && chapters.length < 6) out.push(`CHAPTERS only ${chapters.length} (target 6–10)`);
     /* sound design (directing.md §4): at least one near-silence, and an ambience bed under most explained shots */
     const explained = shots.filter((s) => s.chapter);
     if (!shots.some((s) => s.hush && s.hush.length)) out.push('SOUND no hush anywhere: add one near-silence (hush: [[u0, u1]]) before the turn or the peak');
@@ -383,8 +387,8 @@
     if (explained.length && withAmb < explained.length / 2) out.push(`SOUND only ${withAmb} of ${explained.length} explained shots have an ambience bed (amb): give most shots one`);
     let lastM = -Infinity;
     shots.forEach((s) => {
-      if (s.dur > 12) out.push(`LONG ${s.id} ${s.dur}s — over 12s: split it or it will sit still`);
-      if (s.chapter && s.dur < 4) out.push(`SHORT ${s.id} ${s.dur}s — an explained shot needs ≥ 4s`);
+      if (s.dur > (cine ? 16 : 12)) out.push(`LONG ${s.id} ${s.dur}s — over ${cine ? 16 : 12}s: split it or it will sit still`);
+      if (s.chapter && s.dur < (cine ? 3 : 4)) out.push(`SHORT ${s.id} ${s.dur}s — an explained shot needs ≥ ${cine ? 3 : 4}s`);
       if (s.hud && s.chapter && !s.caps.length) out.push(`NO-CAPTION ${s.id}`);
       if (s.meter && s.m0 < lastM - 1e-9) out.push(`METER-BACKWARDS ${s.id} starts at ${s.m0} after ${lastM}`);
       if (s.meter) lastM = s.m1;
@@ -399,7 +403,7 @@
     chapters.forEach((c) => {
       const first = shots.find((s) => s.chapter === c.id);
       if (!first) out.push(`EMPTY-CHAPTER ${c.id}`);
-      else if (!shots.filter((s) => s.chapter === c.id).some((s) => s.caps.some(([, x]) => /「.+」/.test(x)))) out.push(`NO-TERM chapter ${c.id}: name its concept once as 「术语」 in a caption`);
+      else if (!cine && !shots.filter((s) => s.chapter === c.id).some((s) => s.caps.some(([, x]) => /「.+」/.test(x)))) out.push(`NO-TERM chapter ${c.id}: name its concept once as 「术语」 in a caption`);
     });
     return out;
   }
@@ -472,6 +476,12 @@
         if (tops.size > 1) issues.push(`WRAP ${name(el)} short label "${plain}" breaks into ${tops.size} lines: widen its box or add white-space:nowrap`);
       }
     });
+    /* cinema mode: a frame carries one short line, not a diagram's worth of labels */
+    if (composition && window.__composition === 'cinema') {
+      const words = texts.filter((x) => !x.inChrome && x.o > .6).map((x) => [...x.el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim());
+      const chars = words.join('').replace(/\s/g, '').length;
+      if (chars > 40) issues.push(`CLUTTER ${chars} characters of on-screen text besides the caption (cinema mode: at most one short line, ≤ 40): cut labels, let the picture explain`);
+    }
     const inter = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
     const chromeBoxes = [...document.querySelectorAll('#cap-pill, #hud-chip, #hud-meter, #hud-rate')].filter((e) => vis(e) > .35).map((e) => {
       const r = e.getBoundingClientRect(); return { e, b: { x: (r.left - S.left) / k, y: (r.top - S.top) / k, w: r.width / k, h: r.height / k } };
@@ -514,5 +524,5 @@
   }
 
   window.EX = { C, TOKEN_COLORS, chapter, shot, world, backdrop, run, tempo, ramp, pop, fadeUp, fadeOut, place, drawPath, num, type, stagger, sweep, meterAt, cam: camAt,
-    planAudit: () => audit(timeline()) };   /* pacing audit without a browser (tests, quick checks) */
+    planAudit: (mode) => audit(timeline(), mode) };   /* pacing audit without a browser (tests, quick checks) */
 })();
