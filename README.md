@@ -148,6 +148,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [launch-video](./launch-video/SKILL.md) | 开源项目证据 → 30 秒发布宣传视频（MP4）；先给 3 种风格候选和试样再出片 | Node.js、Playwright/Chromium、ffmpeg、Python 3；30 种风格（扁平、等轴、调度看板、粘土 3D、HUD、像素、水墨等），画面取自真实素材，配乐音效按风格由脚本合成；证据不足时不编数字 |
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | 单篇公众号文章 → 本地 Markdown 与图片 | Node.js、Python 依赖、Chrome；脚本可安装本地 npm 依赖，受文章可访问性限制 |
 | [xiaohongshu](./xiaohongshu/SKILL.md) | 小红书多账号管理、搜索、收藏夹批量归档、本地材料召回与平台草稿 | Python 标准库、Chrome；每个账号一套独立登录态与浏览器目录，最多两个账号同时工作；媒体按需使用 yt-dlp、ffmpeg、Whisper；收藏按标题预筛，选哪几篇由 Agent 判断；草稿存在专用浏览器本地且不发布；风控即停，不做代理与指纹伪造 |
+| [audio-inbox](./audio-inbox/SKILL.md) | 文件夹收件箱：放进 m4a/wav/视频等，后台自动转 mp3，可落到网盘同步目录 | macOS、带 libmp3lame 的 ffmpeg；launchd 常驻，不联网、不需要账号；桌面/文稿/下载/iCloud 目录受隐私保护不能直接用 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |
 | [x-post](./x-post/SKILL.md) | 文字/线程/配图 → 发到 X，先预览后 --post | macOS；Chrome 已登录 X；agent-browser、sqlite3 |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → 公众号 HTML、可选封面与草稿 | 排版可独立使用；推草稿另需 AppID/Secret、相应 API 权限及 IP 白名单 |
