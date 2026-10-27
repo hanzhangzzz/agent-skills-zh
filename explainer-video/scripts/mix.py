@@ -215,29 +215,38 @@ def main():
     first = measure(premix, norm)
     master = os.path.join(cache, "master.wav")
     gain = TARGET_I - float(first["input_i"]) + 0.5   # slightly over: limiting costs loudness; pass 2 trims it
-    cmd = ["ffmpeg", "-v", "error", "-y", "-i", premix, "-af",
-           # band-limit first: AAC drops the content above ~16 kHz, and a sharp synthesized transient (blip, tick) that
-           # loses its top end overshoots by up to 4 dB AFTER the limiter (measured: -1.9 dBTP master -> +2.2 dBTP AAC).
-           # Limiting the already band-limited signal keeps the encoded true peak under the ceiling.
-           f"lowpass=f=16000,lowpass=f=16000,aresample=176400,volume={gain:.2f}dB,"
-           f"alimiter=limit={10 ** (LIMIT_DB / 20):.4f}:attack=3:release=60:level=0,"
-           "aresample=48000",
-           "-c:a", "pcm_f32le", master]
-    if subprocess.run(cmd).returncode != 0:
-        sys.exit("ffmpeg limiter failed")
-    meas = measure(master, norm)
-    apply = (f"{norm}:measured_I={meas['input_i']}:measured_TP={meas['input_tp']}:measured_LRA={meas['input_lra']}"
-             f":measured_thresh={meas['input_thresh']}:offset={meas['target_offset']}:linear=true:print_format=json,"
-             f"aresample=48000")
+    # AAC can still overshoot on a sharp transient after limiting (measured +2.2 dB on a synthesized blip), and how
+    # much depends on the material. So verify the ENCODED file and, if its true peak is over the target, lower the
+    # limiter ceiling by the measured excess and encode again (at most 3 passes). The target is then met by
+    # measurement, not by an assumed codec headroom.
+    limit_db = LIMIT_DB
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    cmd = ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", a.video, "-i", master, "-filter_complex", f"[1:a]{apply}[a]",
-           "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-           "-shortest", "-movflags", "+faststart", a.out]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.exit(f"ffmpeg loudnorm / mux failed: {r.stderr[-400:]}")
-    mode = re.search(r'"normalization_type"\s*:\s*"(\w+)"', r.stderr)
-    i, tp = loudness(a.out)
+    for attempt in range(3):
+        cmd = ["ffmpeg", "-v", "error", "-y", "-i", premix, "-af",
+               # band-limit first: AAC drops the content above ~16 kHz, and a transient that loses its top end
+               # overshoots after the limiter; limiting the already band-limited signal removes most of that.
+               f"lowpass=f=16000,lowpass=f=16000,aresample=176400,volume={gain:.2f}dB,"
+               f"alimiter=limit={10 ** (limit_db / 20):.4f}:attack=3:release=60:level=0,"
+               "aresample=48000",
+               "-c:a", "pcm_f32le", master]
+        if subprocess.run(cmd).returncode != 0:
+            sys.exit("ffmpeg limiter failed")
+        meas = measure(master, norm)
+        apply = (f"{norm}:measured_I={meas['input_i']}:measured_TP={meas['input_tp']}:measured_LRA={meas['input_lra']}"
+                 f":measured_thresh={meas['input_thresh']}:offset={meas['target_offset']}:linear=true:print_format=json,"
+                 f"aresample=48000")
+        cmd = ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", a.video, "-i", master, "-filter_complex", f"[1:a]{apply}[a]",
+               "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+               "-shortest", "-movflags", "+faststart", a.out]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.exit(f"ffmpeg loudnorm / mux failed: {r.stderr[-400:]}")
+        mode = re.search(r'"normalization_type"\s*:\s*"(\w+)"', r.stderr)
+        i, tp = loudness(a.out)
+        if tp <= TARGET_TP:
+            break
+        print(f"  true peak {tp:.1f} dBTP after encoding > {TARGET_TP}: limiter ceiling {limit_db:.1f} → {limit_db - (tp - TARGET_TP) - .3:.1f} dB, re-encoding")
+        limit_db -= (tp - TARGET_TP) + .3
     print(f"✓ {a.out} ({dur:.2f}s, {len(cues)} cues, {len(runs)} ambience runs, {len(hush)} hush, "
           f"music: {'custom' if a.music else 'synthesized'})")
     print(f"  loudness: premix {float(first['input_i']):.1f} LUFS → final {i:.1f} LUFS integrated, true peak {tp:.1f} dBTP "
