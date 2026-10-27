@@ -216,7 +216,11 @@ def main():
     master = os.path.join(cache, "master.wav")
     gain = TARGET_I - float(first["input_i"]) + 0.5   # slightly over: limiting costs loudness; pass 2 trims it
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", premix, "-af",
-           f"aresample=176400,volume={gain:.2f}dB,alimiter=limit={10 ** (LIMIT_DB / 20):.4f}:attack=3:release=60:level=0,"
+           # band-limit first: AAC drops the content above ~16 kHz, and a sharp synthesized transient (blip, tick) that
+           # loses its top end overshoots by up to 4 dB AFTER the limiter (measured: -1.9 dBTP master -> +2.2 dBTP AAC).
+           # Limiting the already band-limited signal keeps the encoded true peak under the ceiling.
+           f"lowpass=f=16000,lowpass=f=16000,aresample=176400,volume={gain:.2f}dB,"
+           f"alimiter=limit={10 ** (LIMIT_DB / 20):.4f}:attack=3:release=60:level=0,"
            "aresample=48000",
            "-c:a", "pcm_f32le", master]
     if subprocess.run(cmd).returncode != 0:
