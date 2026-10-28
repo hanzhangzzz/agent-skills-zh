@@ -1111,81 +1111,48 @@ def inject_dark_mode_attrs(html: str, dark_mode: dict, style_map: dict) -> str:
     return html
 
 
+_HL_KEYWORDS = {
+    'function', 'const', 'let', 'var', 'return', 'if', 'else', 'for', 'while',
+    'import', 'from', 'export', 'class', 'def', 'print', 'async', 'await',
+    'try', 'catch', 'throw', 'new', 'this', 'true', 'false', 'null', 'None',
+    'True', 'False', 'elif', 'except', 'finally', 'with', 'as', 'in', 'not',
+    'and', 'or', 'is', 'lambda', 'yield', 'pass', 'break', 'continue',
+    'do', 'switch', 'case', 'default', 'typeof', 'instanceof', 'void',
+    'struct', 'enum', 'impl', 'trait', 'pub', 'fn', 'mut', 'self', 'Self',
+    'type', 'interface', 'extends', 'implements', 'abstract', 'static',
+    'raise', 'del', 'global', 'nonlocal', 'assert',
+}
+_HL_BUILTINS = {
+    'int', 'str', 'float', 'bool', 'list', 'dict', 'set', 'tuple',
+    'len', 'range', 'enumerate', 'zip', 'map', 'filter', 'sorted',
+    'String', 'Number', 'Boolean', 'Array', 'Object', 'Promise',
+    'console', 'document', 'window', 'Math', 'JSON', 'Date',
+}
+# 一次扫描：每个片段只着色一次，插入的 span 不会被后续规则再匹配
+_HL_TOKEN = re.compile(
+    r"(?P<string>f?(?:&quot;.*?&quot;|&#x27;.*?&#x27;|\"[^\"]*?\"|'[^']*?')|`[^`]*?`)"
+    r"|(?P<entity>&#?\w+;)"
+    r"|(?P<comment>(?<!:)//.*|#(?!\{).+)"
+    r"|(?P<decorator>@\w+)"
+    r"|(?P<number>(?<!\w)\d+\.?\d*)"
+    r"|(?P<word>[A-Za-z_]\w*)"
+)
+_HL_COLORS = {"string": "#ce9178", "comment": "#6a9955", "decorator": "#c586c0", "number": "#b5cea8"}
+
+
+def _highlight_token(m: re.Match) -> str:
+    kind, text = m.lastgroup, m.group(0)
+    if kind == "word":
+        color = "#569cd6" if text in _HL_KEYWORDS else "#4ec9b0" if text in _HL_BUILTINS else None
+    else:
+        color = _HL_COLORS.get(kind)
+    return f'<span style="color:{color}">{text}</span>' if color else text
+
+
 def _basic_syntax_highlight(code_html: str) -> str:
-    """增强语法高亮：注释、字符串、关键字、数字、装饰器、类型"""
-    # 装饰器 @xxx
-    code_html = re.sub(
-        r'(@\w+)',
-        r'<span style="color:#c586c0">\1</span>',
-        code_html
-    )
-    # 单行注释 // ... 和 # ...（排除 URL 中的 ://）
-    code_html = re.sub(
-        r'(?<!:)(//.*?)(<br>|$)',
-        r'<span style="color:#6a9955">\1</span>\2',
-        code_html
-    )
-    code_html = re.sub(
-        r'(#[^{].*?)(<br>|$)',
-        r'<span style="color:#6a9955">\1</span>\2',
-        code_html
-    )
-    # f-string: f"..." / f'...'（Python）
-    code_html = re.sub(
-        r'(f&quot;.*?&quot;|f&#x27;.*?&#x27;|f"[^"<]*?"|f\'[^\'<]*?\')',
-        r'<span style="color:#ce9178">\1</span>',
-        code_html
-    )
-    # 模板字符串 `...`（JS）
-    code_html = re.sub(
-        r'(`[^`<]*?`)',
-        r'<span style="color:#ce9178">\1</span>',
-        code_html
-    )
-    # 字符串（双引号和单引号，HTML 转义形式）
-    code_html = re.sub(
-        r'(&quot;.*?&quot;|&#x27;.*?&#x27;|"[^"<]*?"|\'[^\'<]*?\')',
-        r'<span style="color:#ce9178">\1</span>',
-        code_html
-    )
-    # 数字（整数和浮点数）
-    code_html = re.sub(
-        r'(?<![a-zA-Z0-9_])(\d+\.?\d*)',
-        r'<span style="color:#b5cea8">\1</span>',
-        code_html
-    )
-    # 常见关键字
-    keywords = [
-        'function', 'const', 'let', 'var', 'return', 'if', 'else', 'for', 'while',
-        'import', 'from', 'export', 'class', 'def', 'print', 'async', 'await',
-        'try', 'catch', 'throw', 'new', 'this', 'true', 'false', 'null', 'None',
-        'True', 'False', 'elif', 'except', 'finally', 'with', 'as', 'in', 'not',
-        'and', 'or', 'is', 'lambda', 'yield', 'pass', 'break', 'continue',
-        'do', 'switch', 'case', 'default', 'typeof', 'instanceof', 'void',
-        'struct', 'enum', 'impl', 'trait', 'pub', 'fn', 'mut', 'self', 'Self',
-        'type', 'interface', 'extends', 'implements', 'abstract', 'static',
-        'raise', 'del', 'global', 'nonlocal', 'assert',
-    ]
-    for kw in keywords:
-        code_html = re.sub(
-            rf'(?<![a-zA-Z0-9_])({kw})(?![a-zA-Z0-9_])',
-            rf'<span style="color:#569cd6">\1</span>',
-            code_html
-        )
-    # 内置类型/函数
-    builtins = [
-        'int', 'str', 'float', 'bool', 'list', 'dict', 'set', 'tuple',
-        'len', 'range', 'enumerate', 'zip', 'map', 'filter', 'sorted',
-        'String', 'Number', 'Boolean', 'Array', 'Object', 'Promise',
-        'console', 'document', 'window', 'Math', 'JSON', 'Date',
-    ]
-    for bt in builtins:
-        code_html = re.sub(
-            rf'(?<![a-zA-Z0-9_])({bt})(?![a-zA-Z0-9_])',
-            rf'<span style="color:#4ec9b0">\1</span>',
-            code_html
-        )
-    return code_html
+    """语法高亮：注释、字符串、关键字、数字、装饰器、类型。只处理标签之间的文本，不碰标签本身"""
+    parts = re.split(r'(<[^>]+>)', code_html)
+    return ''.join(p if p.startswith('<') else _HL_TOKEN.sub(_highlight_token, p) for p in parts)
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
@@ -1619,14 +1586,14 @@ def inject_inline_styles(html: str, theme: dict, skip_wrapper: bool = False, out
         pre_content = pre_content.replace("\n", "<br>")
         # 语法高亮：仅对有语言标记的代码块启用（避免破坏 URL 等纯文本内容）
         has_language = bool(re.search(r'class="language-', pre_content))
-        if has_language:
-            pre_content = _basic_syntax_highlight(pre_content)
-        # 替换内部 code 标签
+        # 替换内部 code 标签（先于高亮，避免 class 属性被当成代码着色）
         pre_content = re.sub(
             r"<code[^>]*>",
             f'<code style="{pre_code_style}">',
             pre_content,
         )
+        if has_language:
+            pre_content = _basic_syntax_highlight(pre_content)
         # Mac 风格工具栏（红黄绿三圆点）
         dot_base = "display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px"
         mac_header = (
