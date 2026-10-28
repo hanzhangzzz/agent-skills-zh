@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-19-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-21-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -21,7 +21,7 @@ Install only what you need. Each skill has its own runtime requirements; choose 
 | Keep online content locally | [WeChat](./wechat-article-md-local/SKILL.md) · [Xiaohongshu video](./xiaohongshu/SKILL.md) · [X content](./x-article-download/SKILL.md) |
 | Get an open-source project seen and tried | [Open-source README writing](./readme-craft/SKILL.md) · [Launch video](./launch-video/SKILL.md) |
 | Turn content into something readable or publishable | [Split reading view](./md2view/SKILL.md) · [WeChat layout](./hkr-render/SKILL.md) · [Image prompt](./gpt-image2-prompt-director/SKILL.md) |
-| Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [CI review](./ci-review/SKILL.md) |
+| Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [CI review](./ci-review/SKILL.md) · [Expensive-model budget guard](./model-guard/SKILL.md) |
 
 Not sure where to start? The text-only example below uses your existing agent without image-generation access or a platform account.
 
@@ -151,7 +151,8 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [xiaohongshu](./xiaohongshu/SKILL.md) | Xiaohongshu multi-account management, search, batch archival from your own collections, local recall and platform drafts | Python standard library, Chrome; one isolated session and browser directory per account, at most two accounts at a time; optional yt-dlp/ffmpeg/Whisper; collections are prefiltered by title only, the agent picks; drafts stay local to the dedicated browser and are never published; stops on risk control; no proxy or fingerprint spoofing |
 | [audio-inbox](./audio-inbox/SKILL.md) | Folder inbox: drop m4a/wav/video files, get mp3s automatically in the background; point the output at a cloud-drive sync folder | macOS, ffmpeg with libmp3lame; runs under launchd, offline, no accounts; Desktop/Documents/Downloads/iCloud folders are privacy-protected and not supported directly |
 | [x-article-download](./x-article-download/SKILL.md) | Tweets/articles/account content → local Markdown | Browser; batch path needs xreach, video needs yt-dlp/Whisper; some content requires login |
-| [x-post](./x-post/SKILL.md) | Text / thread / images → posted to X; dry-run first, then --post | macOS; Chrome logged in to X; agent-browser, sqlite3 |
+| [x-post](./x-post/SKILL.md) | Text / thread / images → posted to X; dry-run first, then --post | macOS; agent-chrome profile x-main logged in to X; agent-browser |
+| [agent-chrome](./agent-chrome/SKILL.md) | Logged-in Chrome for automation: one profile per account, fixed CDP port, up/down | macOS, Google Chrome, Python 3, Node ≥ 22; agent-browser / Playwright attach to the port instead of launching; optional read-only cookie seeding from your main Chrome |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → WeChat HTML, optional cover and draft | Formatting works independently; draft upload needs AppID/Secret, API permissions, and IP allowlisting |
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | Idea → image-generation prompt | Text writing needs an agent; evaluator needs Node.js; actual images need a separate image tool |
 | [repo-tidy](./repo-tidy/SKILL.md) | Prepare branches/worktrees while retaining unverified work | Git, Python 3; hooks and terminal integrations need separate setup |
@@ -160,6 +161,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [harness](./harness/SKILL.md) | Inspect, implement, and review through a TODO board | Scripts use `claude -p`, requiring Claude Code CLI; scheduled mode needs a scheduler |
 | [ci-review](./ci-review/SKILL.md) | Execution review for PRs/MRs, plus value review for bot branches | GitHub/GitLab CI, credentials, model service; auto-merge is opt-in; behavioral Markdown is reviewed too |
 | [hook-test-kit](./hook-test-kit/SKILL.md) | Behavior-test scaffolding for Claude Code hooks | Bash and a hook to test; run the generated tests and mutation checks |
+| [model-guard](./model-guard/SKILL.md) | Expensive models think and review; a hook enforces delegation once plan quota crosses the reserve | Claude Code 2.1.301+ plan users, Python 3; run install.sh to register the hook and status-line tap; Codex 0.163+ is guarded too after you trust the hook once |
 | [git-push-guard](./git-push-guard/README.md) | Ask before an agent pushes directly to main/master | Claude Code hook-only plugin; not server-side protection or a guard for every terminal command |
 
 ## Feedback and contributing

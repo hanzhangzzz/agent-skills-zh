@@ -55,13 +55,23 @@
     "tagline": "推文 / X 长文 / 整账号 → Markdown"
   },
   {
+    "name": "agent-chrome",
+    "tag": "登录态 Chrome · CDP",
+    "one": "每个账号一个 profile、一个固定 CDP 端口；正式版 Chrome 由它 up/down，agent-browser 和 Playwright 只连端口",
+    "input": "python3 scripts/agent_chrome.py add x-main --sites x.com,twitter.com --default-for x\npython3 scripts/agent_chrome.py up x --headless\nagent-browser --cdp 19304 open https://x.com/home\npython3 scripts/agent_chrome.py down x-main",
+    "out_label": "输出",
+    "output": "{\"profile\":\"x-main\",\"port\":19304,\n \"ws\":\"ws://127.0.0.1:19304/devtools/browser/…\",\n \"pid\":20107,\"headless\":true,\"reused\":false}\n\n~/.chrome-profiles/<站点>-<别名>/   登录态只存这一份\n<hl>seed --from-main</hl>   从主 Chrome 只读引导 cookie\n有头窗口后台打开，不抢焦点；down 走 Browser.close 落盘 cookie",
+    "src": "输出结构来自 agent-chrome/SKILL.md（macOS；正式版 Chrome、Python 3、Node ≥ 22）",
+    "tagline": "一账号一 profile 一端口，脚本只连不起"
+  },
+  {
     "name": "x-post",
     "tag": "发布 → X",
-    "one": "用本机 Chrome 已登录的 X 账号发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图",
+    "one": "用 agent-chrome 的 x-main 登录态发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图",
     "input": "posts.md：\n主帖正文\nimage: ./card.png\n---\n第一条回复\n---\n第二条回复\n\nnode scripts/x_post.mjs --file posts.md          # 预览\nnode scripts/x_post.mjs --file posts.md --post   # 发布",
     "out_label": "输出",
-    "output": "x-post-out/\n├── dry-run.png      预览截图，人审后再发\n├── posted.png       发布后帖子页截图\n└── result.json\n    {\"url\":\"https://x.com/<handle>/status/<id>\",\n     \"verified\":{\"posts\":4,\"image\":true}}\n\n登录态：解密 Chrome profile 的 X cookie 注入 agent-browser，\n临时文件用完即删；不用 X API",
-    "src": "输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、sqlite3）",
+    "output": "x-post-out/\n├── dry-run.png      预览截图，人审后再发\n├── posted.png       发布后帖子页截图\n└── result.json\n    {\"url\":\"https://x.com/<handle>/status/<id>\",\n     \"verified\":{\"posts\":4,\"image\":true}}\n\n登录态：只存 agent-chrome 的 x-main profile，\nagent-browser --cdp 连正式 Chrome；不用 X API",
+    "src": "输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、agent-chrome）",
     "tagline": "文字 / 线程 / 配图 → 发到 X"
   },
   {
@@ -169,6 +179,16 @@
     "src": "流程来自 hook-test-kit/SKILL.md；测试数量由具体 hook 决定",
     "tagline": "给 hook 脚本生成行为矩阵测试，变异实验收尾",
     "out_label": "输出格式示例"
+  },
+  {
+    "name": "model-guard",
+    "tag": "预算闸 · 强制分工",
+    "one": "贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent",
+    "input": "Fable session 执行：\n\nBash  npm test\n\n（5h 已用 75%，距重置 4 小时）",
+    "output": "exit 2，原因回灌给模型：\n[model-guard] 5h 余量 25% < 保留线 40%×剩余时间 = 32%\n已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，\n禁止 fork）、/model opus 或 /compact。\n\n用量数据缺失或过期时放行",
+    "src": "拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图",
+    "tagline": "贵模型越线后强制派活给便宜 subagent",
+    "out_label": "hook 返回格式"
   },
   {
     "name": "scanned-book-ocr",

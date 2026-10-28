@@ -6,7 +6,7 @@
 
 面向中文开发者，按需安装。这里有翻译、OCR、内容存档、文档可视化和仓库维护工具；每项的运行环境不同，先选你要完成的任务。
 
-[![Skills](https://img.shields.io/badge/skills-19-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-21-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -21,7 +21,7 @@
 | 把文章、视频内容留到本地 | [公众号](./wechat-article-md-local/SKILL.md) · [小红书视频](./xiaohongshu/SKILL.md) · [X 内容](./x-article-download/SKILL.md) |
 | 让开源项目被看见、被试用 | [开源 README 写作](./readme-craft/SKILL.md) · [发布宣传视频](./launch-video/SKILL.md) |
 | 把已有内容变成可阅读、可发布的结果 | [双栏阅读视图](./md2view/SKILL.md) · [公众号排版](./hkr-render/SKILL.md) · [生图提示词](./gpt-image2-prompt-director/SKILL.md) |
-| 管好 Agent 的代码工作 | [分支与工作树](./repo-tidy/SKILL.md) · [跨仓库定位](./repo-map/SKILL.md) · [自主推进](./do-something/SKILL.md) · [CI 审查](./ci-review/SKILL.md) |
+| 管好 Agent 的代码工作 | [分支与工作树](./repo-tidy/SKILL.md) · [跨仓库定位](./repo-map/SKILL.md) · [自主推进](./do-something/SKILL.md) · [CI 审查](./ci-review/SKILL.md) · [贵模型预算闸](./model-guard/SKILL.md) |
 
 不知道先试哪个？下面的提示词示例只需要你已有的 Agent，不需要图片生成权限或平台账号。
 
@@ -150,7 +150,8 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [xiaohongshu](./xiaohongshu/SKILL.md) | 小红书多账号管理、搜索、收藏夹批量归档、本地材料召回与平台草稿 | Python 标准库、Chrome；每个账号一套独立登录态与浏览器目录，最多两个账号同时工作；媒体按需使用 yt-dlp、ffmpeg、Whisper；收藏按标题预筛，选哪几篇由 Agent 判断；草稿存在专用浏览器本地且不发布；风控即停，不做代理与指纹伪造 |
 | [audio-inbox](./audio-inbox/SKILL.md) | 文件夹收件箱：放进 m4a/wav/视频等，后台自动转 mp3，可落到网盘同步目录 | macOS、带 libmp3lame 的 ffmpeg；launchd 常驻，不联网、不需要账号；桌面/文稿/下载/iCloud 目录受隐私保护不能直接用 |
 | [x-article-download](./x-article-download/SKILL.md) | 推文/文章/账号内容 → 本地 Markdown | 浏览器；批量路径需 xreach，视频需 yt-dlp/Whisper；部分内容需要登录 |
-| [x-post](./x-post/SKILL.md) | 文字/线程/配图 → 发到 X，先预览后 --post | macOS；Chrome 已登录 X；agent-browser、sqlite3 |
+| [x-post](./x-post/SKILL.md) | 文字/线程/配图 → 发到 X，先预览后 --post | macOS；agent-chrome 的 x-main profile 已登录 X；agent-browser |
+| [agent-chrome](./agent-chrome/SKILL.md) | 带登录态的自动化 Chrome：每账号一个 profile、固定 CDP 端口、up/down | macOS、正式版 Chrome、Python 3、Node ≥ 22；agent-browser / Playwright 只连端口不自起浏览器；可从主 Chrome 只读引导 cookie |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → 公众号 HTML、可选封面与草稿 | 排版可独立使用；推草稿另需 AppID/Secret、相应 API 权限及 IP 白名单 |
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | 想法 → 生图提示词 | 文本编写只需 Agent；内置评测需 Node.js，实际生图另需图片工具 |
 | [repo-tidy](./repo-tidy/SKILL.md) | 安全准备分支/工作树，保留未证实合并的工作 | Git、Python 3；hook 与终端增强功能需单独配置 |
@@ -159,6 +160,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [harness](./harness/SKILL.md) | 巡检、修复、复审共用 TODO 看板 | 脚本通过 `claude -p` 运行，需 Claude Code CLI；定时模式需相应调度能力 |
 | [ci-review](./ci-review/SKILL.md) | PR/MR 执行审查，机器人分支额外审价值 | GitHub/GitLab CI、凭据与模型服务；自动合并需显式开启；会改变行为的 Markdown 同样审查 |
 | [hook-test-kit](./hook-test-kit/SKILL.md) | Claude Code hook 的行为测试骨架 | Bash 与待测 hook；生成后需运行测试及变异检查 |
+| [model-guard](./model-guard/SKILL.md) | 贵模型只做思考与审阅，套餐余量越过保留线后由 hook 强制分工 | Claude Code 2.1.301+ 套餐用户、Python 3；需运行 install.sh 注册 hook 与状态栏旁路；Codex 0.163+ 同样拦截，需在 Codex 内信任一次 hook |
 | [git-push-guard](./git-push-guard/README.md) | 对 Agent 直推 main/master 请求确认 | Claude Code 纯 hook 插件；不是 Git 服务端保护，也不拦截所有终端操作 |
 
 ## 反馈与贡献

@@ -32,6 +32,19 @@ run() { # run <名称> <cwd> <断言...>
   if [ "$ok" = 1 ]; then echo "✓ ${label}"; pass=$((pass+1)); else fail=$((fail+1)); fi
 }
 
+assert_out() { # assert_out <名称> <输出> <断言...>：同 run，但输出由调用方自己产生（需注入环境变量时）
+  local label="$1" out="$2"; shift 2
+  local a ok=1
+  for a in "$@"; do
+    if [ "${a#!}" != "$a" ]; then
+      printf '%s' "$out" | grep -qE "${a#!}" && { echo "✗ ${label} 不应命中 [${a#!}]"; ok=0; }
+    elif ! printf '%s' "$out" | grep -qE "$a"; then
+      echo "✗ ${label} 断言未命中 [$a] 实得: $(printf '%s' "$out" | head -1)"; ok=0
+    fi
+  done
+  if [ "$ok" = 1 ]; then echo "✓ ${label}"; pass=$((pass+1)); else fail=$((fail+1)); fi
+}
+
 # T1 非 git 目录
 mkdir -p "$WORK/plain"
 run "非 git 目录无输出" "$WORK/plain" EMPTY
@@ -50,10 +63,54 @@ g "$WORK/std" commit -q --allow-empty -m wip
 run "ahead 1：无归位建议" "$WORK/std" 'ahead 1 / behind 0' '!归位'
 g "$WORK/std" push -q origin master
 
-# T4 behind 1（wip 已上远端，本地回退一格 → 远端领先 1）
+# T4 behind 1（wip 已上远端，本地回退一格 → 远端领先 1）：主检出在 master 且干净 → 自动快进
 g "$WORK/std" reset -q --hard HEAD~1
 g "$WORK/std" fetch -q origin
-run "behind 1：有归位建议" "$WORK/std" 'behind 1' '归位'
+run "behind 1 干净主检出：自动快进、无归位建议" "$WORK/std" '已自动快进到 origin/master（\+1）' 'behind 0' '!归位'
+
+# T4b 已跟踪文件有改动：不动工作区，只报告落后
+g "$WORK/std" reset -q --hard HEAD~1
+echo dirty > "$WORK/std/tracked.txt"; g "$WORK/std" add tracked.txt
+run "behind 1 但已跟踪改动：不自动拉、有归位建议" "$WORK/std" 'behind 1' '归位' '!自动快进'
+g "$WORK/std" reset -q --hard origin/master
+g "$WORK/std" reset -q --hard HEAD~1
+
+# T4c 只有未跟踪文件：照常快进
+echo u > "$WORK/std/untracked.txt"
+run "behind 1 仅未跟踪文件：照常快进" "$WORK/std" '已自动快进到 origin/master（\+1）'
+rm -f "$WORK/std/untracked.txt"
+
+# T4d 远端挂起：限时放弃，不拖垮 hook（10s timeout）
+mkrepo "$WORK/slow" master
+git -C "$WORK/slow" remote add origin "ssh://unreachable.invalid/x.git"
+git -C "$WORK/slow" update-ref refs/remotes/origin/master HEAD
+t0=$(date +%s)
+out=$(cd "$WORK/slow" && GIT_SSH_COMMAND="sleep 30 #" bash "$HOOK" 2>/dev/null); elapsed=$(( $(date +%s) - t0 ))
+if printf '%s' "$out" | grep -q '自动对齐失败（超时 3s' && [ "$elapsed" -lt 6 ]; then
+  echo "✓ 远端挂起：${elapsed}s 内超时放弃并报告"; pass=$((pass+1))
+else
+  echo "✗ 远端挂起：耗时 ${elapsed}s 实得: ${out:0:120}"; fail=$((fail+1))
+fi
+
+# T4e 远端挂起但上次 fetch 已领先：退回本地快进
+g "$WORK/slow" commit -q --allow-empty -m ahead
+git -C "$WORK/slow" update-ref refs/remotes/origin/master HEAD
+g "$WORK/slow" reset -q --hard HEAD~1
+out=$(cd "$WORK/slow" && GIT_SSH_COMMAND="sleep 30 #" bash "$HOOK" 2>/dev/null)
+assert_out "远端挂起：按上次 fetch 本地快进" "$out" '拉取失败（超时 3s），已按上次 fetch 快进（\+1）' 'behind 0'
+
+# T4f 失败原因取第一条 fatal 行（origin 已删、残留 remote ref）
+mkrepo "$WORK/gone" master
+git -C "$WORK/gone" remote add origin "$WORK/no-such-origin.git"
+git -C "$WORK/gone" update-ref refs/remotes/origin/master HEAD
+out=$(cd "$WORK/gone" && bash "$HOOK" 2>/dev/null)
+assert_out "失败原因可读" "$out" "自动对齐失败（'.*no-such-origin.git' does not appear" '!and the repository exists'
+
+# T4g session 从主检出子目录启动：照常快进
+g "$WORK/std" reset -q --hard HEAD~1
+mkdir -p "$WORK/std/src/deep"
+run "子目录启动：照常快进" "$WORK/std/src/deep" '已自动快进到 origin/master（\+1）'
+rmdir -p "$WORK/std/src/deep" 2>/dev/null || true
 
 # T5 工作区脏
 g "$WORK/std" reset -q --hard origin/master
@@ -62,7 +119,7 @@ run "工作区 2 处改动（含未跟踪）" "$WORK/std" '工作区改动: 2'
 
 # T6 feature 分支
 g "$WORK/std" checkout -q -b feature
-run "feature 分支：有归位建议" "$WORK/std" '分支: feature' '归位'
+run "feature 分支：有归位建议、不自动拉" "$WORK/std" '分支: feature' '归位' '!自动快进'
 
 # T7 trunk 流派仓库（无 origin/master|main）
 mkrepo "$WORK/trunk" trunk
@@ -84,6 +141,11 @@ run "detached HEAD：分支显示 HEAD 且有归位建议" "$WORK/std" '分支: 
 g "$WORK/std" checkout -q feature
 g "$WORK/std" worktree add -q -b wt2 "$WORK/wt"
 run "linked worktree 正常显示" "$WORK/wt" '\[repo-status\]' '分支: wt2'
+
+# T12 linked worktree 检出 master 且落后：不是主检出，不得自动拉
+g "$WORK/std" worktree add -q "$WORK/wtm" master
+g "$WORK/wtm" reset -q --hard HEAD~1
+run "linked worktree 在 master 落后：不自动拉" "$WORK/wtm" '分支: master' 'behind 1' '!自动快进'
 
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]

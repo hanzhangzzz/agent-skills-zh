@@ -24,6 +24,8 @@ run "repo-tidy CLI" bash repo-tidy/tests/test_repo_tidy.sh "$WORK/repo-tidy"
 run "repo-tidy session cwd" bash repo-tidy/tests/test_session_cwd.sh "$WORK/session-cwd"
 run "repo-tidy Codex session isolation" python3 repo-tidy/tests/test_codex_session.py
 run "repo-tidy installer" bash repo-tidy/tests/test_install.sh "$WORK/repo-tidy-install"
+run "model-guard rules" bash model-guard/tests/test_guard.sh "$WORK/model-guard-rules"
+run "model-guard installer" bash model-guard/tests/test_install.sh "$WORK/model-guard-install"
 run "repo-map" bash repo-map/scripts/test_repo_map.sh
 run "harness" bash harness/scripts/test_harness.sh
 run "hkr-render network" python3 hkr-render/scripts/test_publish_network.py

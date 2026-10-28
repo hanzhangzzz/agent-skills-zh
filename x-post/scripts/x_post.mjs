@@ -1,34 +1,32 @@
 #!/usr/bin/env node
-// Post a tweet or a thread to X with the login already present in the user's
-// local Chrome profile. Drives the X web composer through `agent-browser`;
-// no X API, no reverse-engineered endpoints. Default is a dry run that only
-// composes and screenshots; `--post` actually publishes.
-import crypto from "node:crypto";
+// Post a tweet or a thread to X with the login stored in the agent-chrome profile
+// (default `x` -> x-main). agent-chrome starts the real Chrome on a fixed CDP port;
+// `agent-browser --cdp <port>` drives the X web composer. No X API, no cookie copying.
+// Default is a dry run that only composes and screenshots; `--post` actually publishes.
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const USAGE = `Usage:
-  x_post.mjs (--file <posts.md> | --text <text>) [--image <path>]... [--profile Default]
-             [--session x-post] [--out <dir>] [--post] [--allow-long] [--headless]
-  x_post.mjs --check-login [--profile Default]
+  x_post.mjs (--file <posts.md> | --text <text>) [--image <path>]... [--profile x]
+             [--session x-post] [--out <dir>] [--post] [--allow-long] [--headed]
+  x_post.mjs --check-login [--profile x]
 
 --file     Markdown-ish file: posts separated by a line that is exactly "---".
            Inside a post, a line "image: <path>" (relative to the file) attaches
            an image; up to 4 per post. Images are only supported on the first post.
 --text     Single post text (use --file for threads).
 --image    Attach image(s) to the first post (repeatable, max 4).
---profile  Chrome profile directory name (Default, "Profile 1", ...). Default: Default.
+--profile  agent-chrome profile or site name (x-main, x, ...). Default: x.
 --session  agent-browser session name. Default: x-post.
 --out      Directory for screenshots and result.json. Default: ./x-post-out.
 --post     Publish. Without it the composer is filled and screenshotted only.
 --allow-long  Skip the 280 weighted-character check (Premium accounts).
---headless    Do not show the browser window.
+--headed      Show the browser window (default: headless).
 `;
 
 function parseArgs(argv) {
-  const a = { images: [], profile: "Default", session: "x-post", out: "x-post-out", post: false, allowLong: false, headed: true };
+  const a = { images: [], profile: "x", session: "x-post", out: "x-post-out", post: false, allowLong: false, headed: false };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i]; const next = () => argv[++i];
     if (k === "--file") a.file = next();
@@ -39,7 +37,7 @@ function parseArgs(argv) {
     else if (k === "--out") a.out = next();
     else if (k === "--post") a.post = true;
     else if (k === "--allow-long") a.allowLong = true;
-    else if (k === "--headless") a.headed = false;
+    else if (k === "--headed") a.headed = true;
     else if (k === "--check-login") a.checkLogin = true;
     else if (k === "--help" || k === "-h") { console.log(USAGE); process.exit(0); }
     else throw new Error(`Unknown argument: ${k}`);
@@ -77,51 +75,17 @@ export function weightedLength(text) {
   return n;
 }
 
-// ---------- Chrome cookies (macOS) ----------
-function decryptChromeCookie(encryptedHex, safeStoragePassword) {
-  const encrypted = Buffer.from(encryptedHex, "hex");
-  if (encrypted.subarray(0, 3).toString() !== "v10") return "";
-  const key = crypto.pbkdf2Sync(safeStoragePassword, "saltysalt", 1003, 16, "sha1");
-  const decipher = crypto.createDecipheriv("aes-128-cbc", key, Buffer.alloc(16, " "));
-  decipher.setAutoPadding(false);
-  const raw = Buffer.concat([decipher.update(encrypted.subarray(3)), decipher.final()]);
-  const pad = raw[raw.length - 1];
-  const unpadded = raw.subarray(0, raw.length - pad);
-  // Chrome >= 130 prefixes the value with a 32-byte SHA-256 of the host key.
-  const value = unpadded.length > 32 ? unpadded.subarray(32) : unpadded;
-  return value.toString("utf8");
-}
-
-function chromeXStateFile(profile) {
-  if (process.platform !== "darwin") throw new Error("Chrome cookie extraction is macOS-only.");
-  const src = path.join(os.homedir(), "Library/Application Support/Google/Chrome", profile, "Cookies");
-  if (!fs.existsSync(src)) throw new Error(`Chrome cookie DB not found: ${src}`);
-  // The keychain lookup may show a macOS prompt once; the user must click Allow.
-  const pw = execFileSync("security", ["find-generic-password", "-w", "-s", "Chrome Safe Storage"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "x-post-"));
-  const db = path.join(tmpDir, "Cookies.sqlite");
-  fs.copyFileSync(src, db); // the live DB is locked by Chrome; always read a copy
-  const sql = "select host_key,name,path,is_secure,is_httponly,expires_utc,hex(encrypted_value) from cookies where host_key like '%x.com' and name in ('auth_token','ct0','twid','guest_id','personalization_id','kdt');";
-  const rows = execFileSync("sqlite3", ["-separator", "\t", db, sql], { encoding: "utf8" }).split("\n").filter(Boolean);
-  fs.rmSync(db, { force: true });
-  const cookies = rows.map((line) => {
-    const [domain, name, p, sec, ho, exp, hex] = line.split("\t");
-    const value = decryptChromeCookie(hex, pw);
-    return { name, value, domain, path: p || "/", secure: sec === "1", httpOnly: ho === "1", expires: Number(exp) > 0 ? Math.floor(Number(exp) / 1e6 - 11644473600) : -1, sameSite: "Lax" };
-  }).filter((c) => c.value);
-  if (!cookies.some((c) => c.name === "auth_token") || !cookies.some((c) => c.name === "ct0")) {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    throw new Error(`Chrome profile "${profile}" has no X login cookies. Open Chrome with that profile, log in to x.com, then retry.`);
-  }
-  const state = path.join(tmpDir, "state.json");
-  fs.writeFileSync(state, JSON.stringify({ cookies, origins: [] }), { mode: 0o600 });
-  return { state, tmpDir };
-}
+// ---------- agent-chrome ----------
+// agent-chrome lives next to this skill in the same repo; resolve through the real path because
+// skills are installed as symlinks.
+const AGENT_CHROME = path.resolve(path.dirname(fs.realpathSync(new URL(import.meta.url))), "../../agent-chrome/scripts/agent_chrome.py");
+const agentChrome = (args) => execFileSync("python3", [AGENT_CHROME, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+const loginFix = (profile) => `Fix the login, then retry:\n  python3 "${AGENT_CHROME}" up ${profile}   # headed window, log in / scan, then: python3 "${AGENT_CHROME}" down ${profile}\n  python3 "${AGENT_CHROME}" seed ${profile} --from-main --domains x.com,twitter.com   # copy the login from the main Chrome`;
 
 // ---------- agent-browser ----------
-function makeBrowser(session) {
-  const env = { ...process.env, AGENT_BROWSER_SESSION: session, AGENT_BROWSER_SESSION_NAME: session };
-  const run = (args, opts = {}) => execFileSync("agent-browser", args, { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"], ...opts }).trim();
+function makeBrowser(session, port) {
+  const env = { ...process.env, AGENT_BROWSER_SESSION: session };
+  const run = (args, opts = {}) => execFileSync("agent-browser", ["--cdp", String(port), ...args], { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"], ...opts }).trim();
   const quiet = (args) => { try { return run(args); } catch { return ""; } };
   // `eval` prints the value; objects arrive as a JSON-encoded string, so unwrap twice.
   const evalJson = (js) => {
@@ -141,9 +105,10 @@ async function main() {
   fs.mkdirSync(out, { recursive: true });
 
   // Fail fast on external dependencies.
-  for (const bin of ["agent-browser", "sqlite3", "security"]) {
+  for (const bin of ["agent-browser", "python3"]) {
     try { execFileSync("which", [bin], { stdio: "ignore" }); } catch { throw new Error(`Missing dependency: ${bin}`); }
   }
+  if (!fs.existsSync(AGENT_CHROME)) throw new Error(`agent-chrome not found at ${AGENT_CHROME} (install the agent-chrome skill from the same repo).`);
 
   let posts = [];
   if (!args.checkLogin) {
@@ -161,15 +126,16 @@ async function main() {
     });
   }
 
-  const { state, tmpDir } = chromeXStateFile(args.profile);
-  const b = makeBrowser(args.session);
+  let chrome;
+  try { chrome = JSON.parse(agentChrome(["up", args.profile, ...(args.headed ? [] : ["--headless"])])); }
+  catch (e) { throw new Error(`agent-chrome up failed: ${(e.stderr || e.message).toString().trim()}`); }
+  const b = makeBrowser(args.session, chrome.port);
   try {
-    b.quiet(["close"]);
-    await sleep(800);
-    b.run(["--state", state, "open", "https://x.com/home", ...(args.headed ? ["--headed"] : [])]);
+    b.quiet(["close"]); // drop a stale agent-browser connection from an earlier run; Chrome itself stays up
+    b.run(["open", "https://x.com/home"]);
     await sleep(4000);
     const handle = b.evalJson(`document.querySelector('a[data-testid="AppTabBar_Profile_Link"]')?.getAttribute('href') || null`);
-    if (!handle) throw new Error("Not logged in after injecting Chrome cookies (login page shown). Log in to x.com in Chrome and retry.");
+    if (!handle) throw new Error(`Not logged in: profile ${chrome.profile} shows the X login page.\n${loginFix(chrome.profile)}`);
     const account = handle.replace(/^\//, "");
     if (args.checkLogin) { console.log(JSON.stringify({ loggedIn: true, account })); return; }
 
@@ -206,7 +172,7 @@ async function main() {
     if (problems.length) throw new Error(`Composer verification failed: ${problems.join("; ")}. Screenshot: ${shot}`);
 
     if (!args.post) {
-      const result = { mode: "dry-run", account, posts: posts.length, images: expectedImages, screenshot: shot, note: "Composer left open in the browser window; rerun with --post to publish." };
+      const result = { mode: "dry-run", account, posts: posts.length, images: expectedImages, screenshot: shot, note: "Nothing was published; review the screenshot, then rerun with --post." };
       fs.writeFileSync(path.join(out, "result.json"), JSON.stringify(result, null, 2));
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -215,7 +181,7 @@ async function main() {
     b.run(["click", check.inDialog ? 'div[role="dialog"] button[data-testid="tweetButton"]' : 'button[data-testid="tweetButtonInline"]']);
     await sleep(6000);
     const stillOpen = b.evalJson(`!!document.querySelector('div[role="dialog"] button[data-testid="tweetButton"]')`);
-    if (stillOpen) throw new Error("The composer dialog is still open after clicking Post; X may have rejected the post. See the browser window.");
+    if (stillOpen) throw new Error("The composer dialog is still open after clicking Post; X may have rejected the post. Rerun with --headed to inspect.");
 
     // Find the new post on the profile, then verify the thread on its own page.
     b.run(["open", `https://x.com/${account}`]);
@@ -233,7 +199,8 @@ async function main() {
     fs.writeFileSync(path.join(out, "result.json"), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result, null, 2));
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true }); // never leave decrypted cookies on disk
+    b.quiet(["close"]); // disconnects agent-browser only
+    if (!chrome.reused) { try { agentChrome(["down", chrome.profile]); } catch { /* reported by agent-chrome status */ } }
   }
 }
 

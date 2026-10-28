@@ -9,7 +9,7 @@ description: "Prepare safe task branches/worktrees, preserve active or unverifie
 
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
-- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
+- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净；主检出在 master/main 且已跟踪文件干净时先限时 3s `git pull --ff-only`，拉不下来退回按上次 fetch 本地快进，失败只报告；远端挂起时每个 session 开局多等约 3s）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
 - `scripts/session-cwd.sh` —— Claude Code 按终端键记录 cwd；Codex 用 `--agent codex` 按真实 thread ID 隔离。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
 - `scripts/codex-session.py` —— 保存 Codex 会话目录及终端绑定，按客户端 PID、启动时间校验归属；共享后端继承的终端环境变量不能作为绑定依据
 - `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
@@ -104,6 +104,8 @@ Codex 声明改为 `codex-<thread ID>.task`，cwd 存在 `codex-<thread ID>`。�
 - `<UUID>` —— `TERM_SESSION_ID` 的 UUID 段，iTerm2 与 Terminal.app 都设这个变量
 - `tty-<name>` —— 控制终端名，POSIX 通用回退
 
+位置文件第 1 行是 cwd，第 2 行 `owner <PID> <启动时间>` 记写入它的 agent 进程。agent 退出后标签页和文件都还在，tty 也会被新标签页复用，所以 `editor-here.sh` 只在 owner 仍存活且启动时间一致时采信该文件（连同同键的 `.task`），否则回退终端当前路径。没有 owner 行的旧格式文件不采信，运行中的 session 下一轮对话就会被 hook 改写成新格式。
+
 其它终端设 `SESSION_KEY_CMD` 指定一条输出「当前标签页唯一键」的命令，`editor-here.sh` 会拿它去查同名或 `tty-` 前缀的位置文件。例如 tmux：
 
 ```bash
@@ -116,7 +118,7 @@ export SESSION_KEY_CMD="tmux display-message -p '#{pane_id}'"
 
 先跑 `install.sh status`，它会分层告诉你卡在哪一环：hook 没注册、终端认不出、位置文件不新鲜（hook 没在跑）、`editor-here.sh` 不可执行。
 
-快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash "$SKILL_DIR/scripts/editor-here.sh"` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`iterm-codex` 走经过校验的 Codex 绑定，`iterm` 走 Claude/终端位置文件，`terminal-path` 说明回退了）。Codex 检查 `<终端 UUID>.codex` 的绑定及 `codex-<thread ID>[.task]`，不要用继承的终端环境变量声明任务。
+快捷键打开了错目录 → `EDITOR_HERE_DRY=1 bash "$SKILL_DIR/scripts/editor-here.sh"` 看它解析到什么，再看 `$TMPDIR/editor-here.log` 最后一行的来源标签（`iterm-codex` 走经过校验的 Codex 绑定，`iterm` 走 Claude/终端位置文件，`terminal-path` 说明回退了，前面若有 `stale(...)` 表示该键的位置文件 owner 已退出）。Codex 检查 `<终端 UUID>.codex` 的绑定及 `codex-<thread ID>[.task]`，不要用继承的终端环境变量声明任务。
 
 ### 卸载
 
@@ -130,7 +132,7 @@ rm -rf ~/.claude/session-cwd                        # 位置文件
 ## 何时用
 
 - 用户说「归位」「整理仓库」「清理分支/worktree」
-- 需要修改仓库的新任务开工前；只读审计、问答、续任务不归位，`[repo-status]` 本身不触发动作
+- 需要修改仓库的新任务开工前；只读审计、问答、续任务不归位，`[repo-status]` 除主检出自动快进外不触发动作
 - 显式调用 do-something 时遵循该 skill 的 do/main 续做规则，不额外开普通任务分支
 - 用户明确要求提交后的仓库整理
 

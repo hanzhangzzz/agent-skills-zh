@@ -62,15 +62,31 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 }
 ```
 
+### agent-chrome
+
+```json
+{
+  "name": "agent-chrome",
+  "version": "1.0.0",
+  "description": "本机 AI 浏览器自动化的统一 Chrome 启动器：每账号一个 profile（站点-别名），正式版 Chrome 固定 CDP 端口 up/down，agent-browser / Playwright 只连端口；可从主 Chrome 只读引导 cookie",
+  "trigger": "/agent-chrome",
+  "keywords": ["Chrome", "CDP", "profile", "登录态", "agent-browser", "Playwright", "浏览器自动化"],
+  "compatibility": "Claude Code, Codex (macOS)",
+  "install_path": "agent-chrome/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### x-post
 
 ```json
 {
   "name": "x-post",
   "version": "1.0.0",
-  "description": "用本机 Chrome 已登录的 X 账号发帖或线程（可配图）：先预览截图，人审后 --post 发布并回帖页核对",
+  "description": "用 agent-chrome 的 x-main profile 登录态发 X 帖子或线程（可配图）：先预览截图，人审后 --post 发布并回帖页核对",
   "trigger": "/x-post",
-  "keywords": ["X", "Twitter", "发推", "发帖", "线程", "agent-browser", "Chrome cookie"],
+  "keywords": ["X", "Twitter", "发推", "发帖", "线程", "agent-browser", "agent-chrome"],
   "compatibility": "Claude Code",
   "install_path": "x-post/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
@@ -169,6 +185,22 @@ Machine-readable index of every skill in this repository. Agents can parse this 
   "keywords": ["hook", "测试", "PreToolUse", "SessionStart", "UserPromptSubmit", "行为测试"],
   "compatibility": "Claude Code",
   "install_path": "hook-test-kit/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
+### model-guard
+
+```json
+{
+  "name": "model-guard",
+  "version": "1.0.0",
+  "description": "Budget guard for expensive top-tier models (Fable/astra) in Claude Code and Codex: soft rule to delegate heavy work to cheap subagents, hard PreToolUse enforcement once plan quota crosses a time-decaying reserve. Hooks need install.sh. 贵模型预算闸：越过套餐保留线后强制分工",
+  "trigger": "/model-guard",
+  "keywords": ["model guard", "fable", "astra", "rate limit", "quota", "budget", "subagent", "PreToolUse", "statusline", "贵模型", "配额", "预算闸"],
+  "compatibility": "Claude Code 2.1.301+ (plan users), Codex CLI 0.163+ (trust the hook once)",
+  "install_path": "model-guard/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
   "license": "MIT"
 }

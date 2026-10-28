@@ -17,7 +17,22 @@ FAKE_HOME="$SCRATCH/home"; mkdir -p "$FAKE_HOME"
 run_cwd() {  # run_cwd <会话id> <json> ; 回显 stdout
   printf '%s' "$2" | env HOME="$FAKE_HOME" TERM_SESSION_ID="$1" ITERM_SESSION_ID="$1" bash "$CWD_HOOK" --agent claude
 }
-state() { cat "$FAKE_HOME/.claude/session-cwd/$1" 2>/dev/null; }
+state() { head -1 "$FAKE_HOME/.claude/session-cwd/$1" 2>/dev/null; }
+
+# 假 ps：给 hook 的父进程（本测试 shell，全程存活）造一个 tty，让 owner 落在可控进程上；
+# 其余调用交给真 ps。CI 没有控制终端也能测 owner 校验。
+REAL_PS="$(command -v ps)"
+TTY_BIN="$SCRATCH/ttyps"; mkdir -p "$TTY_BIN"
+cat > "$TTY_BIN/ps" <<EOF
+#!/bin/sh
+[ "\$1" = "-o" ] && [ "\$2" = "tty=" ] && { echo ttys999; exit 0; }
+exec "$REAL_PS" "\$@"
+EOF
+chmod +x "$TTY_BIN/ps"
+run_cwd_tty() {  # 同 run_cwd，但 owner = 当前测试 shell；$3 可指定写入侧 locale
+  printf '%s' "$2" | env HOME="$FAKE_HOME" PATH="$TTY_BIN:$PATH" LC_ALL="${3:-C}" \
+    TERM_SESSION_ID="$1" ITERM_SESSION_ID="$1" bash "$CWD_HOOK" --agent claude
+}
 
 TARGET="$SCRATCH/proj"; mkdir -p "$TARGET"
 
@@ -116,12 +131,12 @@ peek() { env HOME="$FAKE_HOME" SESSION_KEY_CMD="echo $SID" EDITOR_HERE_DRY=1 bas
 task() { env HOME="$FAKE_HOME" TERM_SESSION_ID="w0t0p1:$SID" bash "$TASK_HOOK" "$@"; }
 
 # 16. 声明后快捷键指向声明的目录
-run_cwd "w0t0p1:$SID" "{\"cwd\":\"$TARGET\"}" >/dev/null
+run_cwd_tty "w0t0p1:$SID" "{\"cwd\":\"$TARGET\"}" >/dev/null
 task "$TDIR" >/dev/null
 [ "$(peek)" = "$TDIR" ] && ok "声明任务目录后快捷键跟随" || bad "声明生效" "实际: $(peek)"
 
 # 17. hook 刷新 cwd 不会冲掉声明（每轮对话都会发生，这是关键）
-run_cwd "w0t0p1:$SID" "{\"cwd\":\"$TARGET\"}" >/dev/null
+run_cwd_tty "w0t0p1:$SID" "{\"cwd\":\"$TARGET\"}" >/dev/null
 [ "$(peek)" = "$TDIR" ] && ok "hook 刷新 cwd 不冲掉声明" || bad "声明被冲掉" "实际: $(peek)"
 
 # 18. --show 打印当前声明
@@ -140,6 +155,48 @@ out=$(env -u TERM_SESSION_ID -u ITERM_SESSION_ID HOME="$FAKE_HOME" bash "$TASK_H
 rc=$?
 [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "拿不到终端会话 id" \
   && ok "无会话 id 时明确报错（不静默失败）" || bad "无会话 id 报错" "rc=$rc out=$out"
+
+# ── owner 校验：写位置文件的 agent 退出后，快捷键不得再采信它 ──
+# 真实事故：标签页里跑过 claude（jev-quality），退出后 cd 到别处，快捷键仍打开 jev-quality
+SD="$FAKE_HOME/.claude/session-cwd"
+STALE="$SCRATCH/stale-proj"; mkdir -p "$STALE"
+peek_key() { env HOME="$FAKE_HOME" SESSION_KEY_CMD="echo $1" EDITOR_HERE_DRY=1 bash "$EDITOR" 2>/dev/null; }
+OLD_START="Mon Oct 12 13:34:18 2026"
+
+# 22. hook 写入的第 2 行是 owner，指向存活的写入者
+line2=$(sed -n 2p "$SD/$SID")
+pid=$(printf '%s' "$line2" | awk '{print $2}')
+[ "${line2%% *}" = "owner" ] && [ "$pid" = "$$" ] \
+  && ok "位置文件记录 owner（写入者 PID + 启动时间）" || bad "owner 行" "实际: $line2（期望 PID $$）"
+
+# 23. 存活 owner → 采信
+[ "$(peek_key "$SID")" = "$TARGET" ] && ok "owner 存活时采信位置文件" || bad "存活 owner" "实际: $(peek_key "$SID")"
+
+# 24. owner 已退出 → 不采信
+( : ) & dead=$!; wait "$dead"
+printf '%s\nowner %s %s\n' "$STALE" "$dead" "$OLD_START" > "$SD/DEAD"
+[ "$(peek_key DEAD)" != "$STALE" ] && ok "owner 已退出时不打开过期目录" || bad "过期 owner" "仍打开 $STALE"
+
+# 25. PID 被复用（进程活着但启动时间不符）→ 不采信
+printf '%s\nowner %s %s\n' "$STALE" "$$" "Thu Jan 1 00:00:00 1970" > "$SD/REUSED"
+[ "$(peek_key REUSED)" != "$STALE" ] && ok "PID 复用（启动时间不符）不采信" || bad "PID 复用" "仍打开 $STALE"
+
+# 26. 旧格式（无 owner 行）→ 不采信；活着的 session 下一轮对话就会被 hook 改写
+printf '%s\n' "$STALE" > "$SD/LEGACY"
+[ "$(peek_key LEGACY)" != "$STALE" ] && ok "无 owner 的旧格式文件不采信" || bad "旧格式" "仍打开 $STALE"
+
+# 27. owner 已退出时，同键的 .task 声明一并失效
+printf '%s\n' "$STALE" > "$SD/DEAD.task"
+[ "$(peek_key DEAD)" != "$STALE" ] && ok "owner 退出后 .task 声明一并失效" || bad ".task 失效" "仍打开 $STALE"
+
+# 28. tty 被新标签页复用：旧 tty- 文件 owner 已死 → 不采信
+printf '%s\nowner %s %s\n' "$STALE" "$dead" "$OLD_START" > "$SD/tty-ttys888"
+[ "$(peek_key /dev/ttys888)" != "$STALE" ] && ok "复用 tty 的旧位置文件不采信" || bad "tty 复用" "仍打开 $STALE"
+
+# 29. 写入侧与读取侧 locale 不同仍匹配（快捷键进程的 LANG 往往与终端不同）
+run_cwd_tty "w0t0p1:LOC" "{\"cwd\":\"$TARGET\"}" zh_CN.UTF-8 >/dev/null
+out=$(env LC_ALL=en_US.UTF-8 HOME="$FAKE_HOME" SESSION_KEY_CMD="echo LOC" EDITOR_HERE_DRY=1 bash "$EDITOR" 2>/dev/null)
+[ "$out" = "$TARGET" ] && ok "读写两侧 locale 不同仍能匹配 owner" || bad "locale" "实际: $out"
 
 echo "── 通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ]

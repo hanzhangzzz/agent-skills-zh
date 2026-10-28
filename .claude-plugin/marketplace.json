@@ -188,6 +188,16 @@
       ]
     },
     {
+      "name": "model-guard",
+      "source": "./",
+      "strict": false,
+      "description": "Budget guard for expensive top-tier models (Fable/astra) in Claude Code and Codex: soft rule to delegate heavy work to cheap subagents, hard PreToolUse enforcement once plan quota crosses a time-decaying reserve. Hooks need install.sh. 贵模型预算闸：越过套餐保留线后强制分工",
+      "version": "1.0.0",
+      "skills": [
+        "./model-guard"
+      ]
+    },
+    {
       "name": "scanned-book-ocr",
       "source": "./",
       "strict": false,
@@ -241,10 +251,20 @@
       "name": "x-post",
       "source": "./",
       "strict": false,
-      "description": "Publish a tweet or thread with images to X using the login in your local Chrome profile; dry-run first, then --post. 用本机 Chrome 登录态发 X 帖子和线程",
+      "description": "Publish a tweet or thread with images to X using the login in the agent-chrome profile x-main; dry-run first, then --post. 用 agent-chrome 登录态发 X 帖子和线程",
       "version": "1.0.0",
       "skills": [
         "./x-post"
+      ]
+    },
+    {
+      "name": "agent-chrome",
+      "source": "./",
+      "strict": false,
+      "description": "One launcher for logged-in automation Chrome: a profile per account, real Chrome on a fixed CDP port with up/down; agent-browser and Playwright attach instead of launching. 本机自动化 Chrome 统一启动器",
+      "version": "1.0.0",
+      "skills": [
+        "./agent-chrome"
       ]
     }
   ]
