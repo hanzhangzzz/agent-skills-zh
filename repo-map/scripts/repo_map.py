@@ -260,8 +260,18 @@ def require_macos():
 
 
 def python_bin():
-    """launchd 不继承 shell PATH，也不跑 pyenv 初始化：优先系统自带解释器。"""
-    return '/usr/bin/python3' if Path('/usr/bin/python3').exists() else sys.executable
+    """写进 plist 的解释器：用执行 schedule on 的这个解释器的绝对路径。
+
+    launchd 不继承 shell PATH、不跑 pyenv 初始化，所以不能写 `python3`；
+    也不能写 /usr/bin/python3：它在 launchd 下会被 macOS TCC 拒绝读 ~/Desktop、
+    ~/Documents（Errno 1 Operation not permitted），仓库放在这些目录时同步全废。
+    """
+    exe = sys.executable
+    if exe.startswith(('/usr/bin/', '/Library/Developer/CommandLineTools/')):
+        print(f'警告: 当前解释器 {exe} 是系统 python，launchd 下读不了 ~/Desktop、'
+              '~/Documents；仓库在这些目录时请改用 pyenv/Homebrew 的 python3 执行 schedule on。',
+              file=sys.stderr)
+    return exe
 
 
 def schedule_on(interval):
