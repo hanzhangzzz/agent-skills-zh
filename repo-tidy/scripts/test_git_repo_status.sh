@@ -32,6 +32,19 @@ run() { # run <名称> <cwd> <断言...>
   if [ "$ok" = 1 ]; then echo "✓ ${label}"; pass=$((pass+1)); else fail=$((fail+1)); fi
 }
 
+assert_out() { # assert_out <名称> <输出> <断言...>：同 run，但输出由调用方自己产生（需注入环境变量时）
+  local label="$1" out="$2"; shift 2
+  local a ok=1
+  for a in "$@"; do
+    if [ "${a#!}" != "$a" ]; then
+      printf '%s' "$out" | grep -qE "${a#!}" && { echo "✗ ${label} 不应命中 [${a#!}]"; ok=0; }
+    elif ! printf '%s' "$out" | grep -qE "$a"; then
+      echo "✗ ${label} 断言未命中 [$a] 实得: $(printf '%s' "$out" | head -1)"; ok=0
+    fi
+  done
+  if [ "$ok" = 1 ]; then echo "✓ ${label}"; pass=$((pass+1)); else fail=$((fail+1)); fi
+}
+
 # T1 非 git 目录
 mkdir -p "$WORK/plain"
 run "非 git 目录无输出" "$WORK/plain" EMPTY
@@ -73,11 +86,31 @@ git -C "$WORK/slow" remote add origin "ssh://unreachable.invalid/x.git"
 git -C "$WORK/slow" update-ref refs/remotes/origin/master HEAD
 t0=$(date +%s)
 out=$(cd "$WORK/slow" && GIT_SSH_COMMAND="sleep 30 #" bash "$HOOK" 2>/dev/null); elapsed=$(( $(date +%s) - t0 ))
-if printf '%s' "$out" | grep -q '自动对齐失败（超时' && [ "$elapsed" -lt 9 ]; then
+if printf '%s' "$out" | grep -q '自动对齐失败（超时 3s' && [ "$elapsed" -lt 6 ]; then
   echo "✓ 远端挂起：${elapsed}s 内超时放弃并报告"; pass=$((pass+1))
 else
   echo "✗ 远端挂起：耗时 ${elapsed}s 实得: ${out:0:120}"; fail=$((fail+1))
 fi
+
+# T4e 远端挂起但上次 fetch 已领先：退回本地快进
+g "$WORK/slow" commit -q --allow-empty -m ahead
+git -C "$WORK/slow" update-ref refs/remotes/origin/master HEAD
+g "$WORK/slow" reset -q --hard HEAD~1
+out=$(cd "$WORK/slow" && GIT_SSH_COMMAND="sleep 30 #" bash "$HOOK" 2>/dev/null)
+assert_out "远端挂起：按上次 fetch 本地快进" "$out" '拉取失败（超时 3s），已按上次 fetch 快进（\+1）' 'behind 0'
+
+# T4f 失败原因取第一条 fatal 行（origin 已删、残留 remote ref）
+mkrepo "$WORK/gone" master
+git -C "$WORK/gone" remote add origin "$WORK/no-such-origin.git"
+git -C "$WORK/gone" update-ref refs/remotes/origin/master HEAD
+out=$(cd "$WORK/gone" && bash "$HOOK" 2>/dev/null)
+assert_out "失败原因可读" "$out" "自动对齐失败（'.*no-such-origin.git' does not appear" '!and the repository exists'
+
+# T4g session 从主检出子目录启动：照常快进
+g "$WORK/std" reset -q --hard HEAD~1
+mkdir -p "$WORK/std/src/deep"
+run "子目录启动：照常快进" "$WORK/std/src/deep" '已自动快进到 origin/master（\+1）'
+rmdir -p "$WORK/std/src/deep" 2>/dev/null || true
 
 # T5 工作区脏
 g "$WORK/std" reset -q --hard origin/master

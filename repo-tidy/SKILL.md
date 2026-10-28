@@ -9,7 +9,7 @@ description: "Prepare safe task branches/worktrees, preserve active or unverifie
 
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
-- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净；主检出在 master/main 且已跟踪文件干净时先限时 6s `git pull --ff-only`，失败只报告）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
+- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净；主检出在 master/main 且已跟踪文件干净时先限时 3s `git pull --ff-only`，拉不下来退回按上次 fetch 本地快进，失败只报告；远端挂起时每个 session 开局多等约 3s）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
 - `scripts/session-cwd.sh` —— Claude Code 按终端键记录 cwd；Codex 用 `--agent codex` 按真实 thread ID 隔离。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
 - `scripts/codex-session.py` —— 保存 Codex 会话目录及终端绑定，按客户端 PID、启动时间校验归属；共享后端继承的终端环境变量不能作为绑定依据
 - `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
