@@ -111,8 +111,26 @@ draft 支持文字/图文/视频三种模式，
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
+  <div class="top"><span class="name">agent-chrome</span><span class="tag">登录态 Chrome · CDP</span></div>
+  <div class="one">每个账号一个 profile、一个固定 CDP 端口；正式版 Chrome 由它 up/down，agent-browser 和 Playwright 只连端口</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>python3 scripts/agent_chrome.py add x-main --sites x.com,twitter.com --default-for x
+python3 scripts/agent_chrome.py up x --headless
+agent-browser --cdp 19304 open https://x.com/home
+python3 scripts/agent_chrome.py down x-main</pre></div>
+    <div class="pane"><h4>输出</h4><pre>{&quot;profile&quot;:&quot;x-main&quot;,&quot;port&quot;:19304,
+ &quot;ws&quot;:&quot;ws://127.0.0.1:19304/devtools/browser/…&quot;,
+ &quot;pid&quot;:20107,&quot;headless&quot;:true,&quot;reused&quot;:false}
+
+~/.chrome-profiles/&lt;站点&gt;-&lt;别名&gt;/   登录态只存这一份
+<span class="hl">seed --from-main</span>   从主 Chrome 只读引导 cookie
+有头窗口后台打开，不抢焦点；down 走 Browser.close 落盘 cookie</pre><div class="src">输出结构来自 agent-chrome/SKILL.md（macOS；正式版 Chrome、Python 3、Node ≥ 22）</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
   <div class="top"><span class="name">x-post</span><span class="tag">发布 → X</span></div>
-  <div class="one">用本机 Chrome 已登录的 X 账号发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图</div>
+  <div class="one">用 agent-chrome 的 x-main 登录态发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图</div>
   <div class="grid">
     <div class="pane in"><h4>输入 · 触发</h4><pre>posts.md：
 主帖正文
@@ -131,8 +149,8 @@ node scripts/x_post.mjs --file posts.md --post   # 发布</pre></div>
     {&quot;url&quot;:&quot;https://x.com/&lt;handle&gt;/status/&lt;id&gt;&quot;,
      &quot;verified&quot;:{&quot;posts&quot;:4,&quot;image&quot;:true}}
 
-登录态：解密 Chrome profile 的 X cookie 注入 agent-browser，
-临时文件用完即删；不用 X API</pre><div class="src">输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、sqlite3）</div></div>
+登录态：只存 agent-chrome 的 x-main profile，
+agent-browser --cdp 连正式 Chrome；不用 X API</pre><div class="src">输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、agent-chrome）</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

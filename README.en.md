@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-19-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-20-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -150,7 +150,8 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [wechat-article-md-local](./wechat-article-md-local/SKILL.md) | One WeChat article → local Markdown and images | Node.js, Python dependencies, Chrome; wrapper can install local npm dependencies; article must be accessible |
 | [xiaohongshu](./xiaohongshu/SKILL.md) | Xiaohongshu multi-account management, search, batch archival from your own collections, local recall and platform drafts | Python standard library, Chrome; one isolated session and browser directory per account, at most two accounts at a time; optional yt-dlp/ffmpeg/Whisper; collections are prefiltered by title only, the agent picks; drafts stay local to the dedicated browser and are never published; stops on risk control; no proxy or fingerprint spoofing |
 | [x-article-download](./x-article-download/SKILL.md) | Tweets/articles/account content → local Markdown | Browser; batch path needs xreach, video needs yt-dlp/Whisper; some content requires login |
-| [x-post](./x-post/SKILL.md) | Text / thread / images → posted to X; dry-run first, then --post | macOS; Chrome logged in to X; agent-browser, sqlite3 |
+| [x-post](./x-post/SKILL.md) | Text / thread / images → posted to X; dry-run first, then --post | macOS; agent-chrome profile x-main logged in to X; agent-browser |
+| [agent-chrome](./agent-chrome/SKILL.md) | Logged-in Chrome for automation: one profile per account, fixed CDP port, up/down | macOS, Google Chrome, Python 3, Node ≥ 22; agent-browser / Playwright attach to the port instead of launching; optional read-only cookie seeding from your main Chrome |
 | [hkr-render](./hkr-render/SKILL.md) | Markdown → WeChat HTML, optional cover and draft | Formatting works independently; draft upload needs AppID/Secret, API permissions, and IP allowlisting |
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | Idea → image-generation prompt | Text writing needs an agent; evaluator needs Node.js; actual images need a separate image tool |
 | [repo-tidy](./repo-tidy/SKILL.md) | Prepare branches/worktrees while retaining unverified work | Git, Python 3; hooks and terminal integrations need separate setup |

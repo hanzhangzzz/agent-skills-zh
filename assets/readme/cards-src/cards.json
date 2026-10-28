@@ -45,13 +45,23 @@
     "tagline": "推文 / X 长文 / 整账号 → Markdown"
   },
   {
+    "name": "agent-chrome",
+    "tag": "登录态 Chrome · CDP",
+    "one": "每个账号一个 profile、一个固定 CDP 端口；正式版 Chrome 由它 up/down，agent-browser 和 Playwright 只连端口",
+    "input": "python3 scripts/agent_chrome.py add x-main --sites x.com,twitter.com --default-for x\npython3 scripts/agent_chrome.py up x --headless\nagent-browser --cdp 19304 open https://x.com/home\npython3 scripts/agent_chrome.py down x-main",
+    "out_label": "输出",
+    "output": "{\"profile\":\"x-main\",\"port\":19304,\n \"ws\":\"ws://127.0.0.1:19304/devtools/browser/…\",\n \"pid\":20107,\"headless\":true,\"reused\":false}\n\n~/.chrome-profiles/<站点>-<别名>/   登录态只存这一份\n<hl>seed --from-main</hl>   从主 Chrome 只读引导 cookie\n有头窗口后台打开，不抢焦点；down 走 Browser.close 落盘 cookie",
+    "src": "输出结构来自 agent-chrome/SKILL.md（macOS；正式版 Chrome、Python 3、Node ≥ 22）",
+    "tagline": "一账号一 profile 一端口，脚本只连不起"
+  },
+  {
     "name": "x-post",
     "tag": "发布 → X",
-    "one": "用本机 Chrome 已登录的 X 账号发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图",
+    "one": "用 agent-chrome 的 x-main 登录态发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图",
     "input": "posts.md：\n主帖正文\nimage: ./card.png\n---\n第一条回复\n---\n第二条回复\n\nnode scripts/x_post.mjs --file posts.md          # 预览\nnode scripts/x_post.mjs --file posts.md --post   # 发布",
     "out_label": "输出",
-    "output": "x-post-out/\n├── dry-run.png      预览截图，人审后再发\n├── posted.png       发布后帖子页截图\n└── result.json\n    {\"url\":\"https://x.com/<handle>/status/<id>\",\n     \"verified\":{\"posts\":4,\"image\":true}}\n\n登录态：解密 Chrome profile 的 X cookie 注入 agent-browser，\n临时文件用完即删；不用 X API",
-    "src": "输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、sqlite3）",
+    "output": "x-post-out/\n├── dry-run.png      预览截图，人审后再发\n├── posted.png       发布后帖子页截图\n└── result.json\n    {\"url\":\"https://x.com/<handle>/status/<id>\",\n     \"verified\":{\"posts\":4,\"image\":true}}\n\n登录态：只存 agent-chrome 的 x-main profile，\nagent-browser --cdp 连正式 Chrome；不用 X API",
+    "src": "输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、agent-chrome）",
     "tagline": "文字 / 线程 / 配图 → 发到 X"
   },
   {

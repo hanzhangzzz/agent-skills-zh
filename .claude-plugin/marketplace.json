@@ -241,10 +241,20 @@
       "name": "x-post",
       "source": "./",
       "strict": false,
-      "description": "Publish a tweet or thread with images to X using the login in your local Chrome profile; dry-run first, then --post. 用本机 Chrome 登录态发 X 帖子和线程",
+      "description": "Publish a tweet or thread with images to X using the login in the agent-chrome profile x-main; dry-run first, then --post. 用 agent-chrome 登录态发 X 帖子和线程",
       "version": "1.0.0",
       "skills": [
         "./x-post"
+      ]
+    },
+    {
+      "name": "agent-chrome",
+      "source": "./",
+      "strict": false,
+      "description": "One launcher for logged-in automation Chrome: a profile per account, real Chrome on a fixed CDP port with up/down; agent-browser and Playwright attach instead of launching. 本机自动化 Chrome 统一启动器",
+      "version": "1.0.0",
+      "skills": [
+        "./agent-chrome"
       ]
     }
   ]
