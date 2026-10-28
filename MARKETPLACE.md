@@ -365,6 +365,22 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
 }
 ```
 
+### audio-inbox
+
+```json
+{
+  "name": "audio-inbox",
+  "version": "1.0.0",
+  "description": "Mac 上的音频收件箱：往文件夹放 m4a、wav、amr、视频等，launchd 后台自动转 mp3，原文件移到 _done，输出可放进网盘同步目录。",
+  "trigger": "/audio-inbox",
+  "keywords": ["m4a", "mp3", "ffmpeg", "launchd", "音频转换", "微信音频", "自动转码", "网盘同步"],
+  "compatibility": "Claude Code, Codex, OpenClaw (macOS)",
+  "install_path": "audio-inbox/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### readme-craft
 
 ```json

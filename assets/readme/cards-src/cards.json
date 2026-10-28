@@ -35,6 +35,16 @@
     "tagline": "小红书 → 本地材料与草稿"
   },
   {
+    "name": "audio-inbox",
+    "tag": "文件夹 → mp3",
+    "one": "把一个文件夹变成音频收件箱：放进 m4a、wav、视频等，launchd 后台自动转 mp3，原文件移到 _done；输出放进网盘同步目录即自动同步",
+    "input": "bash scripts/install.sh --inbox ~/音频收件箱 --out ~/音频mp3\nbash scripts/selftest.sh\n\n之后把文件拖进收件箱：\n~/音频收件箱/Lion2.m4a\n~/音频收件箱/周三/nopns44m.m4a",
+    "out_label": "输出",
+    "output": "~/音频mp3/\n├── Lion2.mp3          450 秒录音，约 165kbps\n└── 周三/nopns44m.mp3\n~/音频收件箱/_done/    原文件移到这里，不删除\n\naudio-inbox.log：\n10:29:41 转换：Lion2.m4a\n10:29:43 ✅ Lion2.m4a → …/Lion2.mp3\n10:29:46 ✅ 周三/nopns44m.m4a → …/周三/nopns44m.mp3",
+    "src": "2026-10-15 在 macOS 上真实安装并放入录音的结果（launchd 触发；不联网、不需要账号）",
+    "tagline": "音频丢进文件夹 → 自动变 mp3"
+  },
+  {
     "name": "x-article-download",
     "tag": "X / Twitter → Markdown",
     "one": "单条推文、X 长文或整个账号批量下载；自动识别纯文字帖 / 视频帖 / GitHub 推荐帖",
