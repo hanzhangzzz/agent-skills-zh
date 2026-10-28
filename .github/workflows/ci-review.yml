@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq '[.[] | select(.body | startswith("<!-- ci-review last="))] | last | .body // ""' \
+            --jq '[.[] | select((.body // "") | startswith("<!-- ci-review last="))] | last | .body // ""' \
             > /tmp/ci-review-sticky.md
           bash .github/scripts/ci-review-verdict.sh check "$HEAD_REF" "$HEAD_SHA" \
             /tmp/ci-review-sticky.md "$CI_REVIEW_MERGE_BRANCHES"
