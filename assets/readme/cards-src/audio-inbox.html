@@ -1,0 +1,40 @@
+<!doctype html><meta charset="utf-8"><style>
+*{box-sizing:border-box} body{margin:0;background:#F5F0E6;font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;color:#2B2622}
+.card{width:1200px;height:675px;padding:44px 52px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.top{display:flex;align-items:baseline;gap:18px;margin-bottom:8px}
+.name{font:700 40px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#5D4037}
+.tag{font-size:16px;color:#fff;background:#5D4037;border-radius:999px;padding:5px 14px}
+.one{font-size:22px;color:#6B5E52;margin:4px 0 22px}
+.grid{display:grid;grid-template-columns:5fr 7fr;gap:22px;flex:1;min-height:0}
+.pane{background:#fff;border:2px solid #5D4037;border-radius:18px;padding:18px 22px;box-shadow:0 6px 0 rgba(93,64,55,.12);display:flex;flex-direction:column;min-height:0}
+.pane h4{margin:0 0 10px;font-size:15px;letter-spacing:.12em;color:#8C7B6E;text-transform:uppercase}
+pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#2B2622;overflow:hidden}
+.pane.in pre{font-size:20px;line-height:1.6}
+.hl{color:#2F6FB3;font-weight:700}
+.ok{color:#2E7D32}.warn{color:#C62828}
+.foot{position:absolute;right:52px;bottom:26px;font-size:15px;color:#9A8B7E}
+.arrow{position:absolute;left:calc(5fr);}
+.src{font-size:13px;color:#9A8B7E;margin-top:auto;padding-top:8px}
+</style>
+<div class="card">
+  <div class="top"><span class="name">audio-inbox</span><span class="tag">文件夹 → mp3</span></div>
+  <div class="one">把一个文件夹变成音频收件箱：放进 m4a、wav、视频等，launchd 后台自动转 mp3，原文件移到 _done；输出放进网盘同步目录即自动同步</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>bash scripts/install.sh --inbox ~/音频收件箱 --out ~/音频mp3
+bash scripts/selftest.sh
+
+之后把文件拖进收件箱：
+~/音频收件箱/Lion2.m4a
+~/音频收件箱/周三/nopns44m.m4a</pre></div>
+    <div class="pane"><h4>输出</h4><pre>~/音频mp3/
+├── Lion2.mp3          450 秒录音，约 165kbps
+└── 周三/nopns44m.mp3
+~/音频收件箱/_done/    原文件移到这里，不删除
+
+audio-inbox.log：
+10:29:41 转换：Lion2.m4a
+10:29:43 ✅ Lion2.m4a → …/Lion2.mp3
+10:29:46 ✅ 周三/nopns44m.m4a → …/周三/nopns44m.mp3</pre><div class="src">2026-10-15 在 macOS 上真实安装并放入录音的结果（launchd 触发；不联网、不需要账号）</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>

@@ -148,13 +148,13 @@
       ]
     },
     {
-      "name": "xiaohongshu-downloader",
+      "name": "xiaohongshu",
       "source": "./",
       "strict": false,
-      "description": "Download a Xiaohongshu (RedNote) video and transcribe the voice-over with Whisper into a Markdown transcript. 小红书视频下载 + 口播逐字稿",
-      "version": "1.0.0",
+      "description": "小红书统一入口：多账号登录态管理、搜索、翻自己的收藏与收藏夹、单篇或批量图文/视频下载、口播转录、本地关键词召回，以及把文字/图文/视频存成平台草稿。内置签名源码，无独立 CLI/MCP/RAG 服务。",
+      "version": "3.4.0",
       "skills": [
-        "./xiaohongshu-downloader"
+        "./xiaohongshu"
       ]
     },
     {
@@ -188,6 +188,16 @@
       ]
     },
     {
+      "name": "model-guard",
+      "source": "./",
+      "strict": false,
+      "description": "Budget guard for expensive top-tier models (Fable/astra) in Claude Code and Codex: soft rule to delegate heavy work to cheap subagents, hard PreToolUse enforcement once plan quota crosses a time-decaying reserve. Hooks need install.sh. 贵模型预算闸：越过套餐保留线后强制分工",
+      "version": "1.0.0",
+      "skills": [
+        "./model-guard"
+      ]
+    },
+    {
       "name": "scanned-book-ocr",
       "source": "./",
       "strict": false,
@@ -208,6 +218,16 @@
       ]
     },
     {
+      "name": "audio-inbox",
+      "source": "./",
+      "strict": false,
+      "description": "macOS folder inbox: drop m4a/wav/video files and launchd converts them to mp3 in the background; output can sit in a cloud-drive sync folder. 音频收件箱，自动转 mp3",
+      "version": "1.0.0",
+      "skills": [
+        "./audio-inbox"
+      ]
+    },
+    {
       "name": "readme-craft",
       "source": "./",
       "strict": false,
@@ -221,7 +241,7 @@
       "name": "launch-video",
       "source": "./",
       "strict": false,
-      "description": "Make a 30-second launch video for an open-source project: pain, mechanism, verified proof, install command. Real footage, frame-exact HTML rendering, synthesized licence-free audio. 开源项目发布宣传视频",
+      "description": "Make a 30-second launch video for an open-source project: pain, mechanism, verified proof, install command. Proposes 3 of 29 visual styles with real-footage probes, then renders frame-exact HTML/three.js with style-matched, licence-free audio. 开源项目发布宣传视频",
       "version": "1.0.0",
       "skills": [
         "./launch-video"
@@ -235,6 +255,26 @@
       "version": "1.0.0",
       "skills": [
         "./model-prompt-audit"
+      ]
+    },
+    {
+      "name": "x-post",
+      "source": "./",
+      "strict": false,
+      "description": "Publish a tweet or thread with images to X using the login in the agent-chrome profile x-main; dry-run first, then --post. 用 agent-chrome 登录态发 X 帖子和线程",
+      "version": "1.0.0",
+      "skills": [
+        "./x-post"
+      ]
+    },
+    {
+      "name": "agent-chrome",
+      "source": "./",
+      "strict": false,
+      "description": "One launcher for logged-in automation Chrome: a profile per account, real Chrome on a fixed CDP port with up/down; agent-browser and Playwright attach instead of launching. 本机自动化 Chrome 统一启动器",
+      "version": "1.0.0",
+      "skills": [
+        "./agent-chrome"
       ]
     }
   ]

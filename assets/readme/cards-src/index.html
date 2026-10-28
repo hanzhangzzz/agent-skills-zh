@@ -57,24 +57,55 @@ source_url: &quot;https://mp.weixin.qq.com/s/M-K8…&quot;
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
-  <div class="top"><span class="name">xiaohongshu-downloader</span><span class="tag">小红书视频 → 逐字稿</span></div>
-  <div class="one">收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中</div>
+  <div class="top"><span class="name">xiaohongshu</span><span class="tag">搜索 → 本地知识材料</span></div>
+  <div class="one">一个 Skill 路由到确定性脚本：多账号登录态、搜索、翻收藏夹、单篇或批量下载、本地召回，以及存成平台草稿</div>
   <div class="grid">
-    <div class="pane in"><h4>输入 · 触发</h4><pre>https://xhslink.com/…
-https://www.xiaohongshu.com/explore/…
+    <div class="pane in"><h4>输入 · 触发</h4><pre>搜小红书上的 AI 游戏开发经验
+把小号收藏里关于 UI 的几篇下载下来
+下载这篇笔记并提取口播
+把这段文案和两张图存成工作号草稿</pre></div>
+    <div class="pane"><h4>输出结构</h4><pre>xhs.py profiles / login / search / albums
+       / collected / fetch / recall / draft
 
-（收到小红书链接即自动触发，
- 也可说：小红书视频转文字）</pre></div>
-    <div class="pane"><h4>输出结构</h4><pre>&lt;OUTPUT_DIR&gt;/小红书-Obsidian加CloudCode打造个人生活操作系统/
-├── transcript.md          口播逐字稿（Markdown）
-├── videos/
-│   └── video.mp4
-└── transcripts/
-    ├── audio.srt          带时间轴
-    ├── audio.txt
-    └── audio-zh.md        英文视频附中文翻译
+用户数据目录/
+├── profiles/&lt;标签&gt;/   每号一套登录态与浏览器
+└── accounts/&lt;账号&gt;/
+├── library.sqlite    搜索记录与知识索引
+└── notes/&lt;帖子ID&gt;/
+    ├── source.json
+    ├── note.md
+    ├── image-001.jpg  图文按需下载
+    ├── video.mp4      视频按需下载
+    └── video.txt      口播按需转录
 
-中文口播直接保存；英文口播翻译后保存</pre><div class="src">输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）</div></div>
+--profile 标签 指定用哪个号；
+collected 按标题预筛收藏，选篇交给 Agent；
+fetch 可一次传多个 ID 批量下载；
+draft 支持文字/图文/视频三种模式，
+草稿存在专用浏览器本地，不发布；
+召回为关键词检索，OCR 与向量检索未实现</pre><div class="src">结构约定来自 xiaohongshu/SKILL.md；此卡不是运行截图</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">audio-inbox</span><span class="tag">文件夹 → mp3</span></div>
+  <div class="one">把一个文件夹变成音频收件箱：放进 m4a、wav、视频等，launchd 后台自动转 mp3，原文件移到 _done；输出放进网盘同步目录即自动同步</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>bash scripts/install.sh --inbox ~/音频收件箱 --out ~/音频mp3
+bash scripts/selftest.sh
+
+之后把文件拖进收件箱：
+~/音频收件箱/Lion2.m4a
+~/音频收件箱/周三/nopns44m.m4a</pre></div>
+    <div class="pane"><h4>输出</h4><pre>~/音频mp3/
+├── Lion2.mp3          450 秒录音，约 165kbps
+└── 周三/nopns44m.mp3
+~/音频收件箱/_done/    原文件移到这里，不删除
+
+audio-inbox.log：
+10:29:41 转换：Lion2.m4a
+10:29:43 ✅ Lion2.m4a → …/Lion2.mp3
+10:29:46 ✅ 周三/nopns44m.m4a → …/周三/nopns44m.mp3</pre><div class="src">2026-10-15 在 macOS 上真实安装并放入录音的结果（launchd 触发；不联网、不需要账号）</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
@@ -98,6 +129,50 @@ https://www.xiaohongshu.com/explore/…
 
 整账号：遍历全部推文，跳过需登录的 X Article，
 靠含代码块的推文拿到真实提示词</pre><div class="src">输出结构来自 x-article-download/SKILL.md（视频路径需 yt-dlp / whisper）</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">agent-chrome</span><span class="tag">登录态 Chrome · CDP</span></div>
+  <div class="one">每个账号一个 profile、一个固定 CDP 端口；正式版 Chrome 由它 up/down，agent-browser 和 Playwright 只连端口</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>python3 scripts/agent_chrome.py add x-main --sites x.com,twitter.com --default-for x
+python3 scripts/agent_chrome.py up x --headless
+agent-browser --cdp 19304 open https://x.com/home
+python3 scripts/agent_chrome.py down x-main</pre></div>
+    <div class="pane"><h4>输出</h4><pre>{&quot;profile&quot;:&quot;x-main&quot;,&quot;port&quot;:19304,
+ &quot;ws&quot;:&quot;ws://127.0.0.1:19304/devtools/browser/…&quot;,
+ &quot;pid&quot;:20107,&quot;headless&quot;:true,&quot;reused&quot;:false}
+
+~/.chrome-profiles/&lt;站点&gt;-&lt;别名&gt;/   登录态只存这一份
+<span class="hl">seed --from-main</span>   从主 Chrome 只读引导 cookie
+有头窗口后台打开，不抢焦点；down 走 Browser.close 落盘 cookie</pre><div class="src">输出结构来自 agent-chrome/SKILL.md（macOS；正式版 Chrome、Python 3、Node ≥ 22）</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">x-post</span><span class="tag">发布 → X</span></div>
+  <div class="one">用 agent-chrome 的 x-main 登录态发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>posts.md：
+主帖正文
+image: ./card.png
+---
+第一条回复
+---
+第二条回复
+
+node scripts/x_post.mjs --file posts.md          # 预览
+node scripts/x_post.mjs --file posts.md --post   # 发布</pre></div>
+    <div class="pane"><h4>输出</h4><pre>x-post-out/
+├── dry-run.png      预览截图，人审后再发
+├── posted.png       发布后帖子页截图
+└── result.json
+    {&quot;url&quot;:&quot;https://x.com/&lt;handle&gt;/status/&lt;id&gt;&quot;,
+     &quot;verified&quot;:{&quot;posts&quot;:4,&quot;image&quot;:true}}
+
+登录态：只存 agent-chrome 的 x-main profile，
+agent-browser --cdp 连正式 Chrome；不用 X API</pre><div class="src">输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、agent-chrome）</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
@@ -294,6 +369,24 @@ bash worker-reviewer.sh --loop</pre></div>
 ├── 隔离 fixture
 ├── 按 hook 行为设计的输入与断言
 └── 变异实验：破坏规则后确认测试失败</pre><div class="src">流程来自 hook-test-kit/SKILL.md；测试数量由具体 hook 决定</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
+  <div class="top"><span class="name">model-guard</span><span class="tag">预算闸 · 强制分工</span></div>
+  <div class="one">贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>Fable session 执行：
+
+Bash  npm test
+
+（5h 已用 75%，距重置 4 小时）</pre></div>
+    <div class="pane"><h4>hook 返回格式</h4><pre>exit 2，原因回灌给模型：
+[model-guard] 5h 余量 25% &lt; 保留线 40%×剩余时间 = 32%
+已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，
+禁止 fork）、/model opus 或 /compact。
+
+用量数据缺失或过期时放行</pre><div class="src">拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

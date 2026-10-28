@@ -2,8 +2,9 @@
 """Lay a background track and timed SFX cues under a silent render.
 
 cues.json:
-  {"bgm_gain": 0.5, "cues": [{"t": 1.8, "sfx": "click", "gain": 0.6}, ...]}
-`sfx` is a name from synth_audio.py (click tick pop chime snap whoosh reveal type)
+  {"mood": "calm", "bpm": 100, "bgm_gain": 0.5, "cues": [{"t": 1.8, "sfx": "click", "gain": 0.6}, ...]}
+`mood` / `bpm` pick the synthesized bed (see synth_audio.py; both optional).
+`sfx` is a name from synth_audio.py (click tick pop chime snap whoosh reveal type thud blip glitch drop)
 or a path to your own audio file (relative to cues.json).
 
 Usage: mix.py --video silent.mp4 --cues cues.json --out final.mp4 [--music licensed.mp3]
@@ -45,7 +46,12 @@ def main():
             sys.exit(f"cue at t={c['t']} is outside the video (0–{dur:.2f}s)")
 
     cache = os.path.join(os.path.dirname(os.path.abspath(a.out)), ".audio")
-    subprocess.run([sys.executable, os.path.join(HERE, "synth_audio.py"), "--out", cache, "--duration", f"{dur:.3f}"], check=True)
+    synth = [sys.executable, os.path.join(HERE, "synth_audio.py"), "--out", cache, "--duration", f"{dur:.3f}",
+             "--mood", spec.get("mood", "calm")]
+    if spec.get("bpm"):
+        synth += ["--bpm", str(spec["bpm"])]
+    if subprocess.run(synth).returncode != 0:
+        sys.exit("synth_audio.py failed (check mood / bpm in cues.json)")
     music = os.path.abspath(a.music) if a.music else os.path.join(cache, "bgm.wav")
     if not os.path.exists(music):
         sys.exit(f"music file not found: {music}")

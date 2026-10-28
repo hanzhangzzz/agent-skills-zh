@@ -25,14 +25,24 @@
     "out_label": "历史运行输出摘录"
   },
   {
-    "name": "xiaohongshu-downloader",
-    "tag": "小红书视频 → 逐字稿",
-    "one": "收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中",
-    "input": "https://xhslink.com/…\nhttps://www.xiaohongshu.com/explore/…\n\n（收到小红书链接即自动触发，\n 也可说：小红书视频转文字）",
+    "name": "xiaohongshu",
+    "tag": "搜索 → 本地知识材料",
+    "one": "一个 Skill 路由到确定性脚本：多账号登录态、搜索、翻收藏夹、单篇或批量下载、本地召回，以及存成平台草稿",
+    "input": "搜小红书上的 AI 游戏开发经验\n把小号收藏里关于 UI 的几篇下载下来\n下载这篇笔记并提取口播\n把这段文案和两张图存成工作号草稿",
     "out_label": "输出结构",
-    "output": "<OUTPUT_DIR>/小红书-Obsidian加CloudCode打造个人生活操作系统/\n├── transcript.md          口播逐字稿（Markdown）\n├── videos/\n│   └── video.mp4\n└── transcripts/\n    ├── audio.srt          带时间轴\n    ├── audio.txt\n    └── audio-zh.md        英文视频附中文翻译\n\n中文口播直接保存；英文口播翻译后保存",
-    "src": "输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）",
-    "tagline": "小红书视频 → 口播逐字稿"
+    "output": "xhs.py profiles / login / search / albums\n       / collected / fetch / recall / draft\n\n用户数据目录/\n├── profiles/<标签>/   每号一套登录态与浏览器\n└── accounts/<账号>/\n├── library.sqlite    搜索记录与知识索引\n└── notes/<帖子ID>/\n    ├── source.json\n    ├── note.md\n    ├── image-001.jpg  图文按需下载\n    ├── video.mp4      视频按需下载\n    └── video.txt      口播按需转录\n\n--profile 标签 指定用哪个号；\ncollected 按标题预筛收藏，选篇交给 Agent；\nfetch 可一次传多个 ID 批量下载；\ndraft 支持文字/图文/视频三种模式，\n草稿存在专用浏览器本地，不发布；\n召回为关键词检索，OCR 与向量检索未实现",
+    "src": "结构约定来自 xiaohongshu/SKILL.md；此卡不是运行截图",
+    "tagline": "小红书 → 本地材料与草稿"
+  },
+  {
+    "name": "audio-inbox",
+    "tag": "文件夹 → mp3",
+    "one": "把一个文件夹变成音频收件箱：放进 m4a、wav、视频等，launchd 后台自动转 mp3，原文件移到 _done；输出放进网盘同步目录即自动同步",
+    "input": "bash scripts/install.sh --inbox ~/音频收件箱 --out ~/音频mp3\nbash scripts/selftest.sh\n\n之后把文件拖进收件箱：\n~/音频收件箱/Lion2.m4a\n~/音频收件箱/周三/nopns44m.m4a",
+    "out_label": "输出",
+    "output": "~/音频mp3/\n├── Lion2.mp3          450 秒录音，约 165kbps\n└── 周三/nopns44m.mp3\n~/音频收件箱/_done/    原文件移到这里，不删除\n\naudio-inbox.log：\n10:29:41 转换：Lion2.m4a\n10:29:43 ✅ Lion2.m4a → …/Lion2.mp3\n10:29:46 ✅ 周三/nopns44m.m4a → …/周三/nopns44m.mp3",
+    "src": "2026-10-15 在 macOS 上真实安装并放入录音的结果（launchd 触发；不联网、不需要账号）",
+    "tagline": "音频丢进文件夹 → 自动变 mp3"
   },
   {
     "name": "x-article-download",
@@ -43,6 +53,26 @@
     "output": "<OUTPUT_DIR>/{清理后的标题}/\n├── {清理后的标题}.md\n│     元信息（作者 / 日期 / 原文链接）\n│     正文；英文自动译中，文末附英文原文\n└── images/\n    ├── 01-xxx.jpg        ?format=jpg&name=large 原图\n    └── ...\n\n整账号：遍历全部推文，跳过需登录的 X Article，\n靠含代码块的推文拿到真实提示词",
     "src": "输出结构来自 x-article-download/SKILL.md（视频路径需 yt-dlp / whisper）",
     "tagline": "推文 / X 长文 / 整账号 → Markdown"
+  },
+  {
+    "name": "agent-chrome",
+    "tag": "登录态 Chrome · CDP",
+    "one": "每个账号一个 profile、一个固定 CDP 端口；正式版 Chrome 由它 up/down，agent-browser 和 Playwright 只连端口",
+    "input": "python3 scripts/agent_chrome.py add x-main --sites x.com,twitter.com --default-for x\npython3 scripts/agent_chrome.py up x --headless\nagent-browser --cdp 19304 open https://x.com/home\npython3 scripts/agent_chrome.py down x-main",
+    "out_label": "输出",
+    "output": "{\"profile\":\"x-main\",\"port\":19304,\n \"ws\":\"ws://127.0.0.1:19304/devtools/browser/…\",\n \"pid\":20107,\"headless\":true,\"reused\":false}\n\n~/.chrome-profiles/<站点>-<别名>/   登录态只存这一份\n<hl>seed --from-main</hl>   从主 Chrome 只读引导 cookie\n有头窗口后台打开，不抢焦点；down 走 Browser.close 落盘 cookie",
+    "src": "输出结构来自 agent-chrome/SKILL.md（macOS；正式版 Chrome、Python 3、Node ≥ 22）",
+    "tagline": "一账号一 profile 一端口，脚本只连不起"
+  },
+  {
+    "name": "x-post",
+    "tag": "发布 → X",
+    "one": "用 agent-chrome 的 x-main 登录态发帖或线程（主帖可配图）：先预览截图给人审，再 --post 发布并回帖页核对段数与配图",
+    "input": "posts.md：\n主帖正文\nimage: ./card.png\n---\n第一条回复\n---\n第二条回复\n\nnode scripts/x_post.mjs --file posts.md          # 预览\nnode scripts/x_post.mjs --file posts.md --post   # 发布",
+    "out_label": "输出",
+    "output": "x-post-out/\n├── dry-run.png      预览截图，人审后再发\n├── posted.png       发布后帖子页截图\n└── result.json\n    {\"url\":\"https://x.com/<handle>/status/<id>\",\n     \"verified\":{\"posts\":4,\"image\":true}}\n\n登录态：只存 agent-chrome 的 x-main profile，\nagent-browser --cdp 连正式 Chrome；不用 X API",
+    "src": "输出结构来自 x-post/SKILL.md（macOS；需 agent-browser、agent-chrome）",
+    "tagline": "文字 / 线程 / 配图 → 发到 X"
   },
   {
     "name": "hkr-render",
@@ -159,6 +189,16 @@
     "src": "流程来自 hook-test-kit/SKILL.md；测试数量由具体 hook 决定",
     "tagline": "给 hook 脚本生成行为矩阵测试，变异实验收尾",
     "out_label": "输出格式示例"
+  },
+  {
+    "name": "model-guard",
+    "tag": "预算闸 · 强制分工",
+    "one": "贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent",
+    "input": "Fable session 执行：\n\nBash  npm test\n\n（5h 已用 75%，距重置 4 小时）",
+    "output": "exit 2，原因回灌给模型：\n[model-guard] 5h 余量 25% < 保留线 40%×剩余时间 = 32%\n已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，\n禁止 fork）、/model opus 或 /compact。\n\n用量数据缺失或过期时放行",
+    "src": "拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图",
+    "tagline": "贵模型越线后强制派活给便宜 subagent",
+    "out_label": "hook 返回格式"
   },
   {
     "name": "scanned-book-ocr",

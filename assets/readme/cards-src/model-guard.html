@@ -17,24 +17,20 @@ pre{margin:0;white-space:pre-wrap;word-break:break-all;font:16px/1.5 ui-monospac
 .src{font-size:13px;color:#9A8B7E;margin-top:auto;padding-top:8px}
 </style>
 <div class="card">
-  <div class="top"><span class="name">xiaohongshu-downloader</span><span class="tag">小红书视频 → 逐字稿</span></div>
-  <div class="one">收到小红书链接自动触发：下载视频，Whisper 转录口播为 Markdown，英文自动译中</div>
+  <div class="top"><span class="name">model-guard</span><span class="tag">预算闸 · 强制分工</span></div>
+  <div class="one">贵模型只做思考、方案与审阅；套餐余量越过随时间递减的保留线后，PreToolUse hook 只放行派便宜 subagent</div>
   <div class="grid">
-    <div class="pane in"><h4>输入 · 触发</h4><pre>https://xhslink.com/…
-https://www.xiaohongshu.com/explore/…
+    <div class="pane in"><h4>输入 · 触发</h4><pre>Fable session 执行：
 
-（收到小红书链接即自动触发，
- 也可说：小红书视频转文字）</pre></div>
-    <div class="pane"><h4>输出结构</h4><pre>&lt;OUTPUT_DIR&gt;/小红书-Obsidian加CloudCode打造个人生活操作系统/
-├── transcript.md          口播逐字稿（Markdown）
-├── videos/
-│   └── video.mp4
-└── transcripts/
-    ├── audio.srt          带时间轴
-    ├── audio.txt
-    └── audio-zh.md        英文视频附中文翻译
+Bash  npm test
 
-中文口播直接保存；英文口播翻译后保存</pre><div class="src">输出结构来自 xiaohongshu-downloader/SKILL.md（需 yt-dlp + whisper）</div></div>
+（5h 已用 75%，距重置 4 小时）</pre></div>
+    <div class="pane"><h4>hook 返回格式</h4><pre>exit 2，原因回灌给模型：
+[model-guard] 5h 余量 25% &lt; 保留线 40%×剩余时间 = 32%
+已拦下 Bash。请派 subagent（model=opus/sonnet/haiku，
+禁止 fork）、/model opus 或 /compact。
+
+用量数据缺失或过期时放行</pre><div class="src">拒绝格式来自 model-guard/scripts/model_guard.py 与 tests/test_guard.sh；此卡不是运行截图</div></div>
   </div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>

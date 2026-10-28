@@ -46,17 +46,49 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 }
 ```
 
-### xiaohongshu-downloader
+### xiaohongshu
 
 ```json
 {
-  "name": "xiaohongshu-downloader",
+  "name": "xiaohongshu",
+  "version": "3.4.0",
+  "description": "小红书统一入口：多账号登录态管理、搜索、翻自己的收藏与收藏夹、单篇或批量图文/视频下载、口播转录、本地关键词召回，以及把文字/图文/视频存成平台草稿。内置签名源码，无独立 CLI/MCP/RAG 服务。",
+  "trigger": "/xiaohongshu",
+  "keywords": ["xiaohongshu", "rednote", "小红书", "多账号", "矩阵号", "搜索", "收藏夹", "批量下载", "草稿", "Whisper"],
+  "compatibility": "Codex, Claude Code; macOS/Linux",
+  "install_path": "xiaohongshu/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "Apache-2.0"
+}
+```
+
+### agent-chrome
+
+```json
+{
+  "name": "agent-chrome",
   "version": "1.0.0",
-  "description": "Download a Xiaohongshu (RedNote) video from xiaohongshu.com / xhslink.com and transcribe the voice-over with Whisper into a Markdown transcript. 小红书视频下载 + 口播逐字稿",
-  "trigger": "auto on xiaohongshu.com / xhslink.com links",
-  "keywords": ["xiaohongshu", "rednote", "xhs", "video", "download", "whisper", "transcript", "transcription", "markdown", "小红书", "口播", "逐字稿", "视频转文字"],
-  "compatibility": "Claude Code, Codex",
-  "install_path": "xiaohongshu-downloader/",
+  "description": "本机 AI 浏览器自动化的统一 Chrome 启动器：每账号一个 profile（站点-别名），正式版 Chrome 固定 CDP 端口 up/down，agent-browser / Playwright 只连端口；可从主 Chrome 只读引导 cookie",
+  "trigger": "/agent-chrome",
+  "keywords": ["Chrome", "CDP", "profile", "登录态", "agent-browser", "Playwright", "浏览器自动化"],
+  "compatibility": "Claude Code, Codex (macOS)",
+  "install_path": "agent-chrome/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
+### x-post
+
+```json
+{
+  "name": "x-post",
+  "version": "1.0.0",
+  "description": "用 agent-chrome 的 x-main profile 登录态发 X 帖子或线程（可配图）：先预览截图，人审后 --post 发布并回帖页核对",
+  "trigger": "/x-post",
+  "keywords": ["X", "Twitter", "发推", "发帖", "线程", "agent-browser", "agent-chrome"],
+  "compatibility": "Claude Code",
+  "install_path": "x-post/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
   "license": "MIT"
 }
@@ -153,6 +185,22 @@ Machine-readable index of every skill in this repository. Agents can parse this 
   "keywords": ["hook", "测试", "PreToolUse", "SessionStart", "UserPromptSubmit", "行为测试"],
   "compatibility": "Claude Code",
   "install_path": "hook-test-kit/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
+### model-guard
+
+```json
+{
+  "name": "model-guard",
+  "version": "1.0.0",
+  "description": "Budget guard for expensive top-tier models (Fable/astra) in Claude Code and Codex: soft rule to delegate heavy work to cheap subagents, hard PreToolUse enforcement once plan quota crosses a time-decaying reserve. Hooks need install.sh. 贵模型预算闸：越过套餐保留线后强制分工",
+  "trigger": "/model-guard",
+  "keywords": ["model guard", "fable", "astra", "rate limit", "quota", "budget", "subagent", "PreToolUse", "statusline", "贵模型", "配额", "预算闸"],
+  "compatibility": "Claude Code 2.1.301+ (plan users), Codex CLI 0.163+ (trust the hook once)",
+  "install_path": "model-guard/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
   "license": "MIT"
 }
@@ -333,6 +381,22 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
 }
 ```
 
+### audio-inbox
+
+```json
+{
+  "name": "audio-inbox",
+  "version": "1.0.0",
+  "description": "Mac 上的音频收件箱：往文件夹放 m4a、wav、amr、视频等，launchd 后台自动转 mp3，原文件移到 _done，输出可放进网盘同步目录。",
+  "trigger": "/audio-inbox",
+  "keywords": ["m4a", "mp3", "ffmpeg", "launchd", "音频转换", "微信音频", "自动转码", "网盘同步"],
+  "compatibility": "Claude Code, Codex, OpenClaw (macOS)",
+  "install_path": "audio-inbox/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### readme-craft
 
 ```json
@@ -355,7 +419,7 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
 {
   "name": "launch-video",
   "version": "1.0.0",
-  "description": "为开源项目制作 30 秒发布宣传视频：痛点、原理、可核实证据与安装命令；真实素材、HTML 逐帧渲染、合成配乐。",
+  "description": "为开源项目制作 30 秒发布宣传视频：痛点、原理、可核实证据与安装命令；按项目从 29 种视觉风格中给出 3 个候选并渲染试样，真实素材、HTML/three.js 逐帧渲染、按风格合成配乐。",
   "trigger": "/launch-video",
   "keywords": [
     "launch video",

@@ -21,6 +21,8 @@ CODE_ROOT = Path.home() / "Desktop/Works/code"
 FETCH_TIMEOUT = 30
 TREE_TIMEOUT = 120  # switch / ff / worktree 这类要动工作区的操作，大仓库给足时间
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}  # 永不挂在交互认证上
+# 用户可能把 skill 软链到某个 worktree 里；回收前要查，否则软链悬空、skill「丢失」
+SKILL_DIRS = [Path.home() / d for d in (".claude/skills", ".codex/skills", ".agents/skills")]
 
 
 def git(repo, *args, timeout=15):
@@ -34,6 +36,28 @@ def git(repo, *args, timeout=15):
         return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
+
+
+def skill_links_into(path):
+    """返回 SKILL_DIRS 一级条目及其下一层中，realpath 落在 path 之下的软链。"""
+    target = os.path.realpath(path)
+    hits = []
+    for d in SKILL_DIRS:
+        if not d.is_dir():
+            continue
+        for e in d.iterdir():
+            cands = [e]
+            if e.is_dir() and not e.is_symlink():
+                try:
+                    cands += list(e.iterdir())
+                except OSError:
+                    pass
+            for c in cands:
+                if c.is_symlink():
+                    r = os.path.realpath(c)
+                    if r == target or r.startswith(target + os.sep):
+                        hits.append(str(c))
+    return hits
 
 
 def fatal_line(err, fallback):
@@ -183,7 +207,11 @@ def analyze(repo: Path) -> RepoPlan:
             wt_of[br] = path
         rc_w, out_w, _ = git(Path(path), "status", "--porcelain", timeout=60)
         dirty = rc_w != 0 or bool(out_w)  # 状态查不出来时按脏处理，宁可不删
-        if br in deletable and not dirty:
+        links = skill_links_into(path) if br in deletable and not dirty else []
+        if links:
+            plan.keep.append((f"worktree {path}",
+                              f"跳过回收：有 skill 软链指向它 → {', '.join(links)}"))
+        elif br in deletable and not dirty:
             plan.del_worktrees.append((path, br))
         elif br in deletable and dirty:
             plan.keep.append((f"worktree {path}", f"分支 {br} 可清理但工作区脏"))
@@ -197,7 +225,7 @@ def analyze(repo: Path) -> RepoPlan:
         plan.del_branches = [(n, r) for n, r in plan.del_branches if n not in blocked]
         deletable -= blocked
         for n in sorted(blocked):
-            plan.keep.append((n, f"可清理但被脏 worktree 占用: {wt_of[n]}"))
+            plan.keep.append((n, f"可清理但被保留的 worktree 占用: {wt_of[n]}"))
 
     # --- 当前分支归位 ---
     rc, head, _ = git(repo, "rev-parse", "--abbrev-ref", "HEAD")

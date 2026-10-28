@@ -10,10 +10,20 @@
 #   task-here.sh <目录>     声明当前任务目录
 #   task-here.sh --clear    取消声明，回到 hook 记录的 cwd
 #   task-here.sh --show     打印当前声明（没有则空）
+#   task-here.sh --bind <终端 UUID>  将当前 Codex thread 绑定到已核验的 TUI 客户端
 #
-# 声明写在 <键>.task，优先级高于 session-cwd.sh 写的 <键>；后者每轮对话都会被
+# Codex 按 CODEX_THREAD_ID 写 codex-<thread>.task；其它调用写 <终端键>.task。
+# 声明优先级高于 session-cwd.sh 写的 cwd；后者每轮对话都会被
 # hook 刷新成 cwd，会把声明冲掉，所以必须分开存。
 set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${1:-}" = "--bind" ]; then
+  exec python3 "$SCRIPT_DIR/codex-session.py" bind "${2:-}"
+fi
+if [ -n "${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-}}" ]; then
+  exec python3 "$SCRIPT_DIR/codex-session.py" task "${1:-}"
+fi
 
 STATE_DIR="${CLAUDE_HOME:-$HOME/.claude}/session-cwd"
 sid="${TERM_SESSION_ID:-${ITERM_SESSION_ID:-}}"

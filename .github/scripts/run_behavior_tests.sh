@@ -21,10 +21,16 @@ run "agent instruction checkout" python3 .github/scripts/test_agent_instruction_
 run "git-push-guard" bash git-push-guard/scripts/test_hook.sh
 run "repo-tidy status hook" bash repo-tidy/scripts/test_git_repo_status.sh
 run "repo-tidy CLI" bash repo-tidy/tests/test_repo_tidy.sh "$WORK/repo-tidy"
+run "repo-tidy session cwd" bash repo-tidy/tests/test_session_cwd.sh "$WORK/session-cwd"
+run "repo-tidy Codex session isolation" python3 repo-tidy/tests/test_codex_session.py
+run "repo-tidy installer" bash repo-tidy/tests/test_install.sh "$WORK/repo-tidy-install"
+run "model-guard rules" bash model-guard/tests/test_guard.sh "$WORK/model-guard-rules"
+run "model-guard installer" bash model-guard/tests/test_install.sh "$WORK/model-guard-install"
 run "repo-map" bash repo-map/scripts/test_repo_map.sh
 run "harness" bash harness/scripts/test_harness.sh
 run "hkr-render network" python3 hkr-render/scripts/test_publish_network.py
 run "wechat article wrapper" python3 wechat-article-md-local/tests/test_download_wrapper.py
+run "xiaohongshu deterministic CLI" python3 -S xiaohongshu/tests/test_xhs.py
 run "md2view" bash -c 'cd md2view/scripts && python3 -m unittest test_build_reader test_parse_blocks test_verify_anchors'
 run "do-something contracts" python3 do-something/tests/test_mr_title_contract.py
 run "do-something value policy" python3 do-something/tests/test_flywheel_policy.py
@@ -32,7 +38,10 @@ run "model-prompt-audit" python3 model-prompt-audit/tests/test_model_prompt_audi
 run "ci-review verdict gate" bash ci-review/tests/test_verdict_gate.sh
 run "ci-review policy" python3 ci-review/tests/test_review_policy.py
 run "ci-review installer" bash ci-review/tests/test_install.sh
+run "audio-inbox" bash audio-inbox/tests/test_audio_inbox.sh
 run "launch-video audio" python3 launch-video/tests/test_synth_audio.py
+run "launch-video sync check" python3 launch-video/tests/test_check_sync.py
+run "launch-video motion check" python3 launch-video/tests/test_motion_check.py
 run "scanned-book-ocr" python3 -m unittest discover -s scanned-book-ocr/scripts -p 'test_*.py'
 run "README manual installation" python3 .github/scripts/test_readme_install.py
 run "README gallery generator" python3 assets/readme/cards-src/test_build_gallery.py
