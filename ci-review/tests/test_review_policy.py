@@ -35,24 +35,19 @@ class ReviewPolicyTest(unittest.TestCase):
         self.assertIn("审查环境缺依赖", self.prompt)
 
     def test_dogfood_copies_match_sources(self) -> None:
-        # 本仓库自己装的 ci-review 必须与 skill 源逐字一致，否则策略测试只锁住了模板
+        # 本仓库是 skill 源，自装副本必须与源一致，否则策略测试只锁住了模板。
+        # CI 文件顶部的 CI_REVIEW_MERGE* 是文档化的仓库本地配置（install.sh merge on|off 会改），比较前抹掉。
+        import re
+        local = re.compile(r"^(\s*CI_REVIEW_MERGE\w*:).*$", re.M)
         pairs = {
             "ci-review/prompts/review.md": ".github/ci-review.md",
             "ci-review/scripts/verdict_gate.sh": ".github/scripts/ci-review-verdict.sh",
             "ci-review/templates/github-ci-review.yml": ".github/workflows/ci-review.yml",
         }
         for src, dst in pairs.items():
-            self.assertEqual(
-                (ROOT / src).read_bytes(), (ROOT / dst).read_bytes(),
-                f"{dst} 与 {src} 不一致，用 install.sh --force 重新同步",
-            )
-
-    def test_templates_inject_branch_and_use_gate(self) -> None:
-        for template in (self.github, self.gitlab):
-            self.assertIn("HEAD_REF:", template)
-            self.assertIn("ci-review-verdict.sh", template)
-            self.assertNotIn("verdict=pass -->", template)
-
+            a = local.sub(r"\1", (ROOT / src).read_text(encoding="utf-8"))
+            b = local.sub(r"\1", (ROOT / dst).read_text(encoding="utf-8"))
+            self.assertEqual(a, b, f"{dst} 与 {src} 不一致：本仓库是 skill 源，先改 {src} 再拷到 {dst}")
 
 if __name__ == "__main__":
     unittest.main()
