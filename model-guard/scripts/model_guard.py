@@ -332,9 +332,16 @@ def codex_windows(path, now):
 
 
 def effective_floor(cfg, reserve_key):
-    """实际生效的下限 = min(配置下限, 保留额)。"""
+    """实际生效的下限 = min(配置下限, 保留额)。配置下限被手改坏（非数字、超大整数、越界）时
+    回退默认值：下限是安全兜底，配置写坏不能让闸静默失效。"""
     floor_key = reserve_key.replace("reserve_", "reserve_floor_")
-    return min(float(cfg.get(floor_key, DEFAULTS[floor_key])), float(cfg.get(reserve_key, DEFAULTS[reserve_key])))
+    try:
+        floor = float(cfg.get(floor_key, DEFAULTS[floor_key]))
+        if not 0 <= floor <= 100:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        floor = float(DEFAULTS[floor_key])
+    return min(floor, float(cfg.get(reserve_key, DEFAULTS[reserve_key])))
 
 
 def evaluate(windows, cfg, now):

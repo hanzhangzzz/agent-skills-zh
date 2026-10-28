@@ -124,6 +124,11 @@ expect 0 "reserve_floor_7d=5 可配：7d 已用 90% 剩 1 小时放行"  "$FABLE
 python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.update(json.loads(sys.argv[2]));[c.pop(k) for k in sys.argv[3:]];json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" '{}' reserve_floor_7d
 limits 10 $H5 90 3600
 expect 2 "配置缺下限键时用默认 15%：7d 已用 90% 剩 1 小时拦"   "$FABLE" Bash '{"command":"ls"}'
+for bad in '"abc"' "$(python3 -c 'print("9"*400)')" '-5' '500'; do
+  python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_floor_7d"]=json.loads(sys.argv[2]);json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" "$bad"
+  expect 2 "配置下限写坏（${bad:0:12}）时回退默认 15%，闸不失效" "$FABLE" Bash '{"command":"ls"}'
+done
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.pop("reserve_floor_7d");json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
 
 # 模型名缓存：命中后只扫新增行；/model 切换立即生效；文件被重写变短时退回整段倒读
 CACHED="$SCRATCH/cached.jsonl"; transcript "$CACHED" claude-fable-5-1
@@ -169,6 +174,13 @@ python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"assi
 expect 0 "增量里切到 sonnet、其后还有 user 行：取 sonnet 放行"  "$CACHED" Bash '{"command":"ls"}'
 python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"w"}})+"\n")' "$CACHED"
 expect 0 "再追加 user 行：缓存的 sonnet 行偏移正确、哈希命中，放行" "$CACHED" Bash '{"command":"ls"}'
+# 冷路径与热路径同一口径：末尾没写换行的行即使是完整 JSON 也不采信
+rm -rf "$CLAUDE_HOME/model-guard/model-cache"
+printf '%s\n%s' '{"type":"assistant","message":{"model":"claude-opus-5-5"}}' '{"type":"assistant","message":{"model":"claude-fable-5-1"}}' > "$CACHED"
+expect 0 "冷缓存：末尾无换行的完整 JSON 行（fable）不采信，按上一行 opus 放行" "$CACHED" Bash '{"command":"ls"}'
+expect 0 "热缓存：同一文件口径一致，仍放行"                          "$CACHED" Bash '{"command":"ls"}'
+printf '\n' >> "$CACHED"
+expect 2 "换行写入后 fable 行生效并拦"                               "$CACHED" Bash '{"command":"ls"}'
 
 limits 65 $((5*3600 - 60)) 10 $D6
 expect 2 "5h 窗口开头（u=65%）拦"                    "$FABLE" Bash '{"command":"ls"}'
