@@ -295,8 +295,15 @@ def build_config(args):
     if not cfg["expensive_models"]:
         sys.exit("❌ 贵模型列表不能为空")
     for key in ("reserve_5h", "reserve_7d", "reserve_floor_5h", "reserve_floor_7d"):
-        if not 0 <= cfg[key] <= 100:
-            sys.exit(f"❌ {key} 必须在 0-100 之间")
+        value = cfg[key]
+        ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        try:
+            ok = ok and 0 <= float(value) <= 100
+        except OverflowError:
+            ok = False
+        if not ok:
+            flag = "--" + key.replace("_", "-")
+            sys.exit(f"❌ {key} 必须是 0-100 的数字（当前 {str(value)[:20]!r}），用 {flag} 重新指定")
     cfg["version"] = 1
     return cfg
 

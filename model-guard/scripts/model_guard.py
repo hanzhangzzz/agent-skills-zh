@@ -331,17 +331,22 @@ def codex_windows(path, now):
     return []
 
 
-def effective_floor(cfg, reserve_key):
-    """实际生效的下限 = min(配置下限, 保留额)。配置下限被手改坏（非数字、超大整数、越界）时
-    回退默认值：下限是安全兜底，配置写坏不能让闸静默失效。"""
-    floor_key = reserve_key.replace("reserve_", "reserve_floor_")
+def percent_setting(cfg, key):
+    """读 0-100 的百分比配置。被手改坏（非数字、超大整数、越界）时回退默认值：
+    配置写坏不能让闸静默失效（否则 evaluate 抛错后 guard 走 fail open）。"""
     try:
-        floor = float(cfg.get(floor_key, DEFAULTS[floor_key]))
-        if not 0 <= floor <= 100:
+        value = float(cfg.get(key, DEFAULTS[key]))
+        if not 0 <= value <= 100:
             raise ValueError
+        return value
     except (TypeError, ValueError, OverflowError):
-        floor = float(DEFAULTS[floor_key])
-    return min(floor, float(cfg.get(reserve_key, DEFAULTS[reserve_key])))
+        return float(DEFAULTS[key])
+
+
+def effective_floor(cfg, reserve_key):
+    """实际生效的下限 = min(配置下限, 保留额)。"""
+    return min(percent_setting(cfg, reserve_key.replace("reserve_", "reserve_floor_")),
+               percent_setting(cfg, reserve_key))
 
 
 def evaluate(windows, cfg, now):
@@ -357,7 +362,7 @@ def evaluate(windows, cfg, now):
             continue
         left = resets - now
         remaining = min(max(left / span, 0.0), 1.0)
-        reserve = float(cfg.get(reserve_key, DEFAULTS[reserve_key]))
+        reserve = percent_setting(cfg, reserve_key)
         floor = effective_floor(cfg, reserve_key)
         line = max(reserve * remaining, floor)
         results.append((label, u, max(left, 0), reserve, floor, line, (100 - u) < line))

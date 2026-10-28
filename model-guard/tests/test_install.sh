@@ -99,6 +99,16 @@ check "配置下限被写成超大整数时（有用量数据）--status 同样�
   "bash '$INSTALL' --status 2>&1 | grep -q '下限 10%' && bash '$INSTALL' --status 2>&1 | grep -q '结论：' && ! bash '$INSTALL' --status 2>&1 | grep -q Traceback"
 rm -f "$CLAUDE_HOME/model-guard/rate-limits.json"
 py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_floor_5h"]=15;json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
+py 'import json,sys,time;n=int(time.time());json.dump({"five_hour":{"used_percentage":50,"resets_at":n+3600},"seven_day":{"used_percentage":50,"resets_at":n+86400},"saved_at":n},open(sys.argv[1],"w"))' "$CLAUDE_HOME/model-guard/rate-limits.json"
+py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_7d"]="abc";json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
+check "配置保留额写坏时（有用量数据）--status 不崩" \
+  "bash '$INSTALL' --status 2>&1 | grep -q '结论：' && ! bash '$INSTALL' --status 2>&1 | grep -q Traceback"
+bash "$INSTALL" >/dev/null 2>"$SCRATCH/bad-install.err"; rc=$?
+check "配置写坏时安装器给出可读提示而非 traceback" \
+  "[ $rc -ne 0 ] && grep -q 'reserve_7d 必须是 0-100 的数字' '$SCRATCH/bad-install.err' && ! grep -q Traceback '$SCRATCH/bad-install.err'"
+bash "$INSTALL" --reserve-7d 60 >/dev/null 2>&1; rc=$?
+check "用对应参数重新指定即可修回（安装器不被坏配置锁死）" "[ $rc -eq 0 ] && grep -q '\"reserve_7d\": 60' '$CLAUDE_HOME/model-guard.json'"
+rm -f "$CLAUDE_HOME/model-guard/rate-limits.json"
 
 # 7. 卸载后 settings.json 与安装前等价，软提示块移除，配置保留
 setup uninstall

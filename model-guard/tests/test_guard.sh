@@ -129,6 +129,11 @@ for bad in '"abc"' "$(python3 -c 'print("9"*400)')" '-5' '500'; do
   expect 2 "配置下限写坏（${bad:0:12}）时回退默认 15%，闸不失效" "$FABLE" Bash '{"command":"ls"}'
 done
 python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.pop("reserve_floor_7d");json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
+for bad in '"abc"' "$(python3 -c 'print("9"*400)')" '-5'; do
+  python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_7d"]=json.loads(sys.argv[2]);json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" "$bad"
+  expect 2 "配置保留额写坏（${bad:0:12}）时回退默认值，闸不失效" "$FABLE" Bash '{"command":"ls"}'
+done
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_7d"]=50;json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
 
 # 模型名缓存：命中后只扫新增行；/model 切换立即生效；文件被重写变短时退回整段倒读
 CACHED="$SCRATCH/cached.jsonl"; transcript "$CACHED" claude-fable-5-1
