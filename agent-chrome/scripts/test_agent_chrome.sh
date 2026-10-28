@@ -54,4 +54,9 @@ check "目录被占时 down 拒绝" "[ $rc -ne 0 ] && kill -0 $other"
 kill "$other"; for _ in $(seq 1 50); do kill -0 "$other" 2>/dev/null || break; sleep 0.2; done
 pkill -f -- "--user-data-dir=$UDD" 2>/dev/null; sleep 0.5
 
+# Without node the graceful Browser.close path is unavailable, but down must still stop Chrome via SIGTERM.
+python3 "$AC" up test-tmp --headless >/dev/null
+err=$(PATH=/usr/bin:/bin python3 "$AC" down test-tmp 2>&1); rc=$?
+check "缺 node 时 down 仍用 SIGTERM 关掉" "[ $rc -eq 0 ] && echo '$err' | grep -q 'SIGTERM' && ! python3 '$AC' status test-tmp | grep -q '\"running\": true'"
+
 if [ "$fails" -eq 0 ]; then echo "ALL PASS"; else echo "$fails FAILED"; exit 1; fi

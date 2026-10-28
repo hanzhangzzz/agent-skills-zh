@@ -305,11 +305,15 @@ def down(reg, target, force=False):
     graceful = False
     v = version(p["port"])
     if v:  # Browser.close flushes the cookie store; SIGTERM drops the last ~30s of cookie changes
-        r = helper(["close", "--ws", v["webSocketDebuggerUrl"]], timeout=15)
+        try:  # a missing/old node only costs the graceful path; down must still stop the browser
+            ok = helper(["close", "--ws", v["webSocketDebuggerUrl"]], timeout=15).returncode == 0
+        except Fail as e:
+            ok = False
+            print(f"agent_chrome: {e}", file=sys.stderr)
         deadline = time.time() + 10
-        while r.returncode == 0 and alive(pid) and time.time() < deadline:
+        while ok and alive(pid) and time.time() < deadline:
             time.sleep(0.2)
-        graceful = r.returncode == 0 and not alive(pid)
+        graceful = ok and not alive(pid)
     if not graceful:
         print(f"agent_chrome: {name} 未能经 Browser.close 正常关闭，改用 SIGTERM，最近的 cookie 改动可能没落盘", file=sys.stderr)
     if alive(pid):
