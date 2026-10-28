@@ -15,7 +15,7 @@ case "$MODE" in check|merge) ;; *) echo "未知模式：$MODE" >&2; exit 1;; esa
 [ -r "$STICKY_FILE" ] || { echo "sticky 不可读：$STICKY_FILE" >&2; exit 1; }
 [[ "$UNRESOLVED" =~ ^[0-9]+$ ]] || { echo "未解决线程数不是整数：$UNRESOLVED" >&2; exit 1; }
 
-FIRST_LINE="$(head -n 1 "$STICKY_FILE")"
+FIRST_LINE="$(head -n 1 "$STICKY_FILE" | tr -d '\r')"
 if [[ "$FIRST_LINE" =~ ^\<\!--[[:space:]]ci-review[[:space:]]last=([^[:space:]]+)[[:space:]]execution=(pass|fail)[[:space:]]value=(pass|fail|na)[[:space:]]--\>$ ]]; then
   STICKY_SHA="${BASH_REMATCH[1]}"
   EXECUTION="${BASH_REMATCH[2]}"
