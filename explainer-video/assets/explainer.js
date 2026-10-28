@@ -10,7 +10,10 @@
      dur: 7,                                    seconds on screen (reading time + action time)
      meter: [0.001, 0.004],                     journey-meter value at shot start and end (omit = hold)
      caps: [[0, '再经「TLS 加密」：内容只剩乱码。'], [3.5, '…']],   bottom captions, u = local seconds;
-                                                「关键词」 is highlighted in the chapter colour
+                                                「关键词」 is highlighted in the chapter colour (EX.run accent
+                                                outside chapters). A caption stays until the next one or the shot
+                                                ends; end it earlier with a third element [t, text, end] or clear
+                                                it with [t, null] (e.g. before a title card)
      sfx: [[1.2, 'pop'], [3, 'chime', .5]],     extra cues at local seconds (name, gain). Names:
                                                 UI   click tick pop chime snap whoosh reveal type thud blip glitch drop
                                                 foley pour paper glass metal wood crackle impact riser swoosh-soft
@@ -45,7 +48,9 @@
                                                 world: sky, starfield, particles (scenery: the composition lint ignores it), or
                                                 a three.js scene that holds the main subject (subject: true, so it counts).
                                                 Read EX.cam(t) to follow the camera.
-   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, amb_gain,
+   EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, amb_gain, accent,
+            accent: '#hex',    colour of 「term」 in captions for shots outside any chapter (hook, title, ending);
+                               default: the first chapter's colour, else the framework blue — set it in cinema films
             autoCues: false,   (default true) turns off the automatic chapter whoosh / dissolve tick / fly whoosh;
                                each shot's own sfx stay. Turn it off when you write a score (the auto whoosh lands in
                                score troughs and audio_check reports HISS)
@@ -188,6 +193,7 @@
   }
 
   /* start times and meter values of every shot (no DOM, so it can be checked offline: EX.planAudit()) */
+  let ACCENT = null;                                   /* EX.run({ accent }): colour for shots outside any chapter */
   function timeline() {
     let t = 0, lastMeter = null;
     shots.forEach((s, i) => {
@@ -199,7 +205,7 @@
       s.flyDur = s.fly ?? FLY;
       s.start = t; t += s.dur;
       s.ch = chapters.find((c) => c.id === s.chapter) || null;
-      s.color = s.ch ? s.ch.color : (chapters[0] ? chapters[0].color : C.blue);   /* hook / ending: the first chapter's colour */
+      s.color = s.ch ? s.ch.color : (ACCENT || (chapters[0] ? chapters[0].color : C.blue));   /* hook / ending: EX.run accent, else the first chapter's colour */
       s.m0 = s.meter ? s.meter[0] : lastMeter; s.m1 = s.meter ? s.meter[1] : lastMeter;
       lastMeter = s.m1;
     });
@@ -207,6 +213,7 @@
   }
 
   function run(cfg = {}) {
+    ACCENT = cfg.accent || null;
     const meterCfg = Object.assign({ label: '', unit: '', decimals: 0, max: 1, ticks: [] }, cfg.meter || {});
     /* rate pill: how much real time one second of film covers. The meter unit is converted to seconds
        (meter.seconds overrides), and the label switches itself: 慢放 when film time > real time, 快进 otherwise. */
@@ -335,8 +342,8 @@
       $('hud-rate-v').style.color = cur.color;
       /* caption */
       let cap = null, capT = 0;
-      for (const [a, text] of cur.caps) if (u >= a) { cap = text; capT = a; }
-      if (cap == null) { capPill.style.opacity = 0; capPill.style.visibility = 'hidden'; return; }
+      for (const [a, text, end] of cur.caps) if (u >= a) { cap = end != null && u >= end ? null : text; capT = a; }   /* [t, null] or an end time clears it */
+      if (!cap) { capPill.style.opacity = 0; capPill.style.visibility = 'hidden'; return; }
       const key = cur.id + '|' + cap;
       if (key !== lastCapKey) { capPill.innerHTML = capHTML(cap, cur.color); lastCapKey = key; }
       const p = expoOut(prog(u, capT, capT + .45));
@@ -396,9 +403,10 @@
       if (s.hud && s.chapter && !s.caps.length) out.push(`NO-CAPTION ${s.id}`);
       if (s.meter && s.m0 < lastM - 1e-9) out.push(`METER-BACKWARDS ${s.id} starts at ${s.m0} after ${lastM}`);
       if (s.meter) lastM = s.m1;
-      s.caps.forEach(([a, text], i) => {
+      s.caps.forEach(([a, text, end], i) => {
+        if (!text) return;                                   /* [t, null]: a clear, not a caption */
         const plain = text.replace(/[「」]/g, '');
-        const until = i + 1 < s.caps.length ? s.caps[i + 1][0] : s.dur;
+        const until = Math.min(end ?? Infinity, i + 1 < s.caps.length ? s.caps[i + 1][0] : s.dur);
         const need = plain.length / 6 + 1;
         if (plain.length > 24) out.push(`CAPTION-LONG ${s.id} "${plain}" ${plain.length} chars (max 24, split it)`);
         if (until - a < need - .05) out.push(`CAPTION-FAST ${s.id} "${plain.slice(0, 10)}…" on screen ${(until - a).toFixed(1)}s, needs ${need.toFixed(1)}s`);

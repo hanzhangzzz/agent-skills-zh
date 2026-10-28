@@ -97,3 +97,12 @@ test('camera: shots at different `at` fly; a zoom keeps one world point fixed on
   const screen = (p) => (w - p[0]) / p[2];
   for (const t of [5.3, 5.6, 5.9]) assert.ok(Math.abs(screen(EX.cam(t)) - screen(a)) < 1e-6, 'zoom drifts at t=' + t);
 });
+
+test('a caption clear [t, null] is not audited as a caption, and an end time shortens the reading window', () => {
+  // the ending caption cleared before a title card: no CAPTION-FAST, no crash on the null text
+  const cleared = plan((EX) => film(EX, { s7: { caps: [[0.3, '这一步叫「术语7」。'], [5, '它让下一步成为可能。'], [9, null]] } }));
+  assert.ok(!has(cleared, 'CAPTION-FAST'), cleared.join('\n'));
+  // the same caption ended at 1 s is too fast to read: the end time must count
+  const ended = plan((EX) => film(EX, { s7: { caps: [[0.3, '这一步叫「术语7」。', 1.3], [5, '它让下一步成为可能。']] } }));
+  assert.ok(has(ended, 'CAPTION-FAST'), ended.join('\n'));
+});
