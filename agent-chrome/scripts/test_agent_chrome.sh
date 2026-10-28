@@ -33,4 +33,25 @@ python3 "$AC" add daemon-main --daemon >/dev/null
 err=$(python3 "$AC" down daemon-main 2>&1); rc=$?
 check "daemon 无 --force 拒绝 down" "[ $rc -ne 0 ] && echo '$err' | grep -q daemon"
 
+python3 "$AC" add solo-main >/dev/null
+check "站点名兜底到 <站点>-main" "[ \"\$(python3 '$AC' resolve solo)\" = solo-main ]"
+
+# Same-process up -> down (the seed path): the spawned Chrome must be reaped, not waited on as a zombie.
+check "同进程 up/down 正常关闭且不空等" "python3 -c '
+import sys, time; sys.path.insert(0, \"$HERE\"); import agent_chrome as a
+r = a.load(); a.up(r, \"test-tmp\", True); t = time.time(); d = a.down(r, \"test-tmp\")
+assert d[\"graceful\"] and not d[\"sigkill\"] and time.time() - t < 8, d'"
+
+# A Chrome on the same dir but another port is not ours: up and down must both refuse and leave it alive.
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --user-data-dir="$UDD" \
+  --remote-debugging-port=19399 --no-first-run about:blank >/dev/null 2>&1 &
+other=$!
+for _ in $(seq 1 50); do curl -sf http://127.0.0.1:19399/json/version >/dev/null && break; sleep 0.2; done
+err=$(python3 "$AC" up test-tmp --headless 2>&1); rc=$?
+check "目录被占时 up 拒绝并报 pid" "[ $rc -ne 0 ] && echo '$err' | grep -q 'pid $other'"
+err=$(python3 "$AC" down test-tmp 2>&1); rc=$?
+check "目录被占时 down 拒绝" "[ $rc -ne 0 ] && kill -0 $other"
+kill "$other"; for _ in $(seq 1 50); do kill -0 "$other" 2>/dev/null || break; sleep 0.2; done
+pkill -f -- "--user-data-dir=$UDD" 2>/dev/null; sleep 0.5
+
 if [ "$fails" -eq 0 ]; then echo "ALL PASS"; else echo "$fails FAILED"; exit 1; fi

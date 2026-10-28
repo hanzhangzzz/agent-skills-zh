@@ -57,6 +57,8 @@ def resolve(reg, key):
         return key
     if key in reg["site_defaults"]:
         return reg["site_defaults"][key]
+    if f"{key}-main" in reg["profiles"]:  # the first account of a site is always <site>-main
+        return f"{key}-main"
     raise Fail(f"未登记的 profile 或站点: {key}（先 add，或 ls 查看）")
 
 
@@ -88,6 +90,11 @@ def main_proc(udd):
 
 
 def alive(pid):
+    try:  # a Chrome we spawned in this process lingers as a zombie until reaped
+        if os.waitpid(pid, os.WNOHANG)[0] == pid:
+            return False
+    except ChildProcessError:
+        pass
     try:
         os.kill(pid, 0)
         return True
@@ -133,6 +140,17 @@ def port_busy(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def helper(args, stdin=None, timeout=60):
+    """Run chrome_helper.mjs; needs Node >= 22 for the global WebSocket."""
+    node = shutil.which("node")
+    if not node:
+        raise Fail("缺少 node（需要 >= 22），装好后重试")
+    major = int(subprocess.run([node, "--version"], capture_output=True, text=True).stdout.strip().lstrip("v").split(".")[0])
+    if major < 22:
+        raise Fail(f"node 版本过低（v{major}），需要 >= 22")
+    return subprocess.run([node, HELPER, *args], input=stdin, capture_output=True, text=True, timeout=timeout)
+
+
 # ---------- commands ----------
 def cmd_ls(reg, a):
     rows = [("NAME", "PORT", "SITES", "DAEMON", "RUNNING", "DIR")]
@@ -164,7 +182,7 @@ def detect_keychain(udd):
             con.close()
     if not rows:
         return "real"
-    r = subprocess.run(["node", HELPER, "detect"], input=json.dumps(rows), capture_output=True, text=True)
+    r = helper(["detect"], json.dumps(rows))
     if r.returncode != 0:
         raise Fail(f"keychain 检测失败: {r.stderr.strip()}")
     return r.stdout.strip()
@@ -206,7 +224,7 @@ def cmd_resolve(reg, a):
 
 
 def open_window(ws, url):
-    r = subprocess.run(["node", HELPER, "window", "--ws", ws, "--url", url or "about:blank"], capture_output=True, text=True)
+    r = helper(["window", "--ws", ws, "--url", url or "about:blank"])
     if r.returncode != 0:
         raise Fail(f"开窗口失败: {r.stderr.strip()}")
 
@@ -279,15 +297,21 @@ def down(reg, target, force=False):
     if p.get("daemon") and not force:
         raise Fail(f"{name} 标记为 daemon，常驻不关；确需关闭加 --force")
     udd = abs_dir(p)
-    pid, _ = main_proc(udd)
+    pid, cmd = main_proc(udd)
     if not pid:
         return {"profile": name, "stopped": False, "note": "未在运行"}
-    v = version(p["port"]) if listener(p["port"]) == pid else None
-    if v:  # graceful: Browser.close flushes the cookie store, SIGTERM drops the last ~30s of changes
-        subprocess.run(["node", HELPER, "close", "--ws", v["webSocketDebuggerUrl"]], capture_output=True, timeout=15)
+    if f"--remote-debugging-port={p['port']} " not in cmd + " ":
+        raise Fail(f"{name} 的目录被另一个 Chrome 占用（pid {pid}，不是 agent-chrome 在端口 {p['port']} 起的），不会杀它")
+    graceful = False
+    v = version(p["port"])
+    if v:  # Browser.close flushes the cookie store; SIGTERM drops the last ~30s of cookie changes
+        r = helper(["close", "--ws", v["webSocketDebuggerUrl"]], timeout=15)
         deadline = time.time() + 10
-        while alive(pid) and time.time() < deadline:
+        while r.returncode == 0 and alive(pid) and time.time() < deadline:
             time.sleep(0.2)
+        graceful = r.returncode == 0 and not alive(pid)
+    if not graceful:
+        print(f"agent_chrome: {name} 未能经 Browser.close 正常关闭，改用 SIGTERM，最近的 cookie 改动可能没落盘", file=sys.stderr)
     if alive(pid):
         os.kill(pid, signal.SIGTERM)
         deadline = time.time() + 5
@@ -304,7 +328,7 @@ def down(reg, target, force=False):
             os.kill(cpid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-    return {"profile": name, "stopped": True, "pid": pid, "sigkill": killed}
+    return {"profile": name, "stopped": True, "pid": pid, "graceful": graceful, "sigkill": killed}
 
 
 def cmd_down(reg, a):
@@ -352,8 +376,7 @@ def cmd_seed(reg, a):
             raise Fail(f"主 Chrome 里没有这些域名的 cookie: {','.join(domains)}")
         info = up(reg, name, headless=True)
         try:
-            r = subprocess.run(["node", HELPER, "seed", "--ws", info["ws"]],
-                               input=json.dumps(rows), capture_output=True, text=True)
+            r = helper(["seed", "--ws", info["ws"]], json.dumps(rows), timeout=300)
         finally:
             if not info["reused"]:
                 down(reg, name, force=True)
