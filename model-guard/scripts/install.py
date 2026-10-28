@@ -131,10 +131,10 @@ def read_text(path):
 
 # ── 软提示 ────────────────────────────────────────────────────────
 def bad_note(cfg, key):
-    """配置非法时的标注：显示的是与运行时同一个 percent_setting 算出的生效值。"""
+    """配置非法时的标注。不带数字：下限还会被保留额压低，生效值只由前面的数字给出。"""
     if mg.percent_setting(cfg, key)[1]:
         return ""
-    return f"（{key} 配置非法，按默认 {mg.DEFAULTS[key]:g}% 生效）"
+    return f"（{key} 配置非法，已回退默认值）"
 
 
 def reserve_text(cfg, reserve_key):

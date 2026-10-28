@@ -117,7 +117,7 @@ for key in reserve_5h reserve_7d reserve_floor_5h reserve_floor_7d; do
     check "${label}：运行时按默认 ${def}% 生效，闸不失效" "[ $rc = 2 ]"
     bash "$INSTALL" --status >"$SCRATCH/bad-status.out" 2>&1
     check "${label}：--status 显示生效值并标注非法、判定与运行时一致" \
-      "grep -q '$win ${def}%（$key 配置非法，按默认 ${def}% 生效）' '$SCRATCH/bad-status.out' && grep -q '强制分工中' '$SCRATCH/bad-status.out' && ! grep -q Traceback '$SCRATCH/bad-status.out'"
+      "grep -q '$win ${def}%（$key 配置非法，已回退默认值）' '$SCRATCH/bad-status.out' && grep -q '强制分工中' '$SCRATCH/bad-status.out' && ! grep -q Traceback '$SCRATCH/bad-status.out'"
     bash "$INSTALL" >/dev/null 2>"$SCRATCH/bad-install.err"; rc=$?
     check "${label}：安装器给可读错误且不改配置" \
       "[ $rc -ne 0 ] && grep -q '$key 必须是 0-100 的数字' '$SCRATCH/bad-install.err' && ! grep -q Traceback '$SCRATCH/bad-install.err' && cmp -s '$CFG' '$SCRATCH/bad-cfg.json'"
@@ -132,6 +132,12 @@ for key in reserve_5h reserve_7d reserve_floor_5h reserve_floor_7d; do
       "[ $rc -ne 0 ] && grep -q '必须是 0-100 的数字' '$SCRATCH/bad-cli.err' && ! grep -q Traceback '$SCRATCH/bad-cli.err' && cmp -s '$CFG' '$SCRATCH/before-cli.json'"
   done
 done
+# 下限非法且被保留额压低：标注不能报一个与生效值矛盾的数字
+cp "$SCRATCH/good-cfg.json" "$CFG"
+py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_5h"]=10;c["reserve_floor_5h"]="abc";json.dump(c,open(p,"w"))' "$CFG"
+bash "$INSTALL" --status >"$SCRATCH/bad-status.out" 2>&1
+check "下限非法被保留额压低：只显示生效值 10%，不报默认 15%" \
+  "grep -q '5h 10%（reserve_floor_5h 配置非法，已回退默认值）' '$SCRATCH/bad-status.out'"
 rm -f "$CLAUDE_HOME/model-guard/rate-limits.json"
 
 # 7. 卸载后 settings.json 与安装前等价，软提示块移除，配置保留
