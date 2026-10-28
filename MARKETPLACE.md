@@ -62,15 +62,31 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 }
 ```
 
+### agent-chrome
+
+```json
+{
+  "name": "agent-chrome",
+  "version": "1.0.0",
+  "description": "本机 AI 浏览器自动化的统一 Chrome 启动器：每账号一个 profile（站点-别名），正式版 Chrome 固定 CDP 端口 up/down，agent-browser / Playwright 只连端口；可从主 Chrome 只读引导 cookie",
+  "trigger": "/agent-chrome",
+  "keywords": ["Chrome", "CDP", "profile", "登录态", "agent-browser", "Playwright", "浏览器自动化"],
+  "compatibility": "Claude Code, Codex (macOS)",
+  "install_path": "agent-chrome/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### x-post
 
 ```json
 {
   "name": "x-post",
   "version": "1.0.0",
-  "description": "用本机 Chrome 已登录的 X 账号发帖或线程（可配图）：先预览截图，人审后 --post 发布并回帖页核对",
+  "description": "用 agent-chrome 的 x-main profile 登录态发 X 帖子或线程（可配图）：先预览截图，人审后 --post 发布并回帖页核对",
   "trigger": "/x-post",
-  "keywords": ["X", "Twitter", "发推", "发帖", "线程", "agent-browser", "Chrome cookie"],
+  "keywords": ["X", "Twitter", "发推", "发帖", "线程", "agent-browser", "agent-chrome"],
   "compatibility": "Claude Code",
   "install_path": "x-post/",
   "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
