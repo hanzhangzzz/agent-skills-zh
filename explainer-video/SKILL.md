@@ -11,7 +11,7 @@ license: MIT
 
 输入一句话题目，产出一支能直接发、让人想转发的知识短片。质量来自五样东西：**一个视觉隐喻**（不靠标签也看得懂）、**光**（一帧一个发光主体，质感来自光和真实素材）、**美术指导**（一种视觉语言，从风格库挑）、**镜头与声音**（几个长镜头、变速运镜、卡拍子、三层声音）、**导演评审**（拼图打分、15 秒样片、渲染前后的自动检查）。模板已经负责字幕、相机、转场、音效、混音和版面检查，你只写世界和镜头。
 
-`<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/directing.md`（导演方法：简报、treatment、两个方向的关键帧、声音、评审打分、15 秒样片）和 `references/worlds.md`（先读开头的“电影模式 / 讲解模式”对照表和“什么会让片子像复古 Flash”，再看美术指导卡、效果 → 技术表、真实素材、运镜）。电影模式的标准示例是 `assets/moon.example.js`（效果 `assets/moon.jpg`）。讲解模式另读 `references/explainer-mode.md`、`exemplar.md`、`visuals.md`。
+`<skill>` 指本 SKILL.md 所在目录。动手前读一遍 `references/directing.md`（导演方法：简报、treatment、两个方向的关键帧、声音、评审打分、15 秒样片）和 `references/worlds.md`（先读开头的“电影模式 / 讲解模式”对照表和“什么会让片子像复古 Flash”，再看美术指导卡、效果 → 技术表、真实素材、运镜）。电影模式的标准示例是 `assets/moon.example.js`（效果 `assets/moon.jpg`）；数据艺术 / 粒子流题材（信息、推荐、网络、社会现象）的标准例子是 `assets/cocoon/`（《信息茧房是怎么织成的》完整工程：横版、9:16 竖版、3:4 封面、为片子写的配乐，`world.js` 文件头有技法索引，效果 `assets/cocoon.jpg`）。讲解模式另读 `references/explainer-mode.md`、`exemplar.md`、`visuals.md`。
 
 省上下文的读法：`explainer.js` 和 `engine.js` 只读文件头注释（API 都在那里，各约 50 行），不要通读。`gallery.example.js` 有 57 KB，先 `grep -n "^/\* [0-9]" gallery.example.js` 看七个镜头的起始行，再用 `sed -n '<起>,<止>p'` 只读要用的那一段。
 
@@ -26,6 +26,8 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 ## 1. 简报与 treatment
 
 能和用户对话时，按 `directing.md` 第 1 节用一条消息问完再开工；一句话、无人值守时不问，用默认值，并在 `PLAN.md` 写明替用户做了哪些决定。
+
+**用户给了参考片时，参考片就是验收标准**，压过本 skill 的所有默认风格（`directing.md` 第 1b 节）：先抽帧并原尺寸裁切看细节，写进美术指导卡；之后每次给用户看画面前，用 `scripts/refcompare.py` 并排比一次。
 
 在工作目录写 `PLAN.md`。先按 `directing.md` 第 2 节写 treatment：三个候选结构和选择、一句话梗概与转折、1–2 部对标作品（学什么 / 不学什么）、一个只有这种媒介能做的动作。**这些写在打开任何示例代码之前**，否则会不自觉地照抄示例。然后回答下面几行：
 
@@ -52,7 +54,7 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 
 ## 1b. 证明画风
 
-按 `directing.md` 第 3 节，用真的绘图代码做两个方向，美术指导要真的不同，每个方向一张关键帧，最好就是招牌镜头。能对话就让用户选；无人值守就按第 6 节的评分表给两张打分，选高的，把分数写进 `PLAN.md`。选定后再往下做。
+按 `directing.md` 第 3 节，用真的绘图代码做两个方向，美术指导要真的不同，每个方向一张关键帧，最好就是招牌镜头。能对话就让用户选；无人值守就按第 6 节的评分表给两张打分，选高的，把分数写进 `PLAN.md`。选定后再往下做。静帧看不出流速和节奏：给用户看时附一段 30–45 s 的无声 demo（`--range a:b`，`--subframes 1`），给 mp4 路径。
 
 ## 2. 事实表
 
@@ -78,6 +80,9 @@ bash <skill>/scripts/init.sh <work>      # 检查 node / ffmpeg / python3，复�
 - 字幕一句 ≤ 24 字，停留 ≥ 字数 / 6 + 1 秒，全片 10–20 句；术语用 `「术语」` 包起来高亮。
 - 每镜一种光或物理现象，镜头少而长，镜头内要有运动（推、拉、环绕、跟随、焦点转移），镜头之间用媒介里的转场（光收暗再亮起、穿过主体、形态变换），不用默认叠化。
 - 用 `const B = EX.tempo(bpm)` 定拍子，镜头时长和高潮落在整拍上；至少一次 `hush` 安静后接全片最重要的声音。
+- **观众要能跟住一个元素**：0.1 s 间隔的两帧里，同一个元素认得出来、位移 ≤ 约 100 px。讲“逐渐形成”的题目，数量要有曲线（几条 → 洪流 → 特写放慢），因果一条一条看得见（`directing.md` 第 5b 节）。
+- **一个爆点**：全片选一个时刻（通常是尺度揭示）做足：子弹时间蓄力 → 冲击（回弹、冲击波、闪白、震屏）→ 释放 → 连锁点亮，声音同步（`directing.md` 第 8b 节）。
+- **转折后留 6–9 s 落点**：延续新状态、一句收束字幕、先压暗再出片名卡、音乐长尾。转折就结束会显得突然（第 8c 节）。
 
 ## 4. 写 shots.js
 
@@ -132,6 +137,9 @@ const B = EX.tempo(96)                          // B(n) = 第 n 拍的秒数；�
 - `EX.pop` 和 `EX.place` 都写 `transform`，同一个元素只用一个；要定位又要弹出，把 `spring(...)` 传给 `place` 的缩放参数。SVG 元素也能用：`place` 移动的是它的原点，所以形状围绕 (0, 0) 画。
 - SVG 的 `id`（渐变、clipPath）全页共享，加镜头前缀（`eg-grad`、`gl-clip`）。恢复元素原色时写回颜色值，不要写 `style.color = ''`，那会退回默认深蓝。
 
+- **特写里的信息要能读**：屏幕上 ≥ 24 px，内容用观众真会点的标题，不用编号；颜色承载语义（一个类目一个颜色），群像要一个个人可辨，不能连成网（`worlds.md` 的“数据艺术 / 粒子流”）。
+- **会变或会动的文字按视频帧定格**（数字、跟着元素走的标签）：取 `Math.floor(t * 30) / 30` 时刻的值和位置，否则 `--subframes` 运动模糊会把它叠成重影。
+
 **分批写，分批查**。每写完 2–3 章就跑一次第 5 步，修干净再写下一批。不要一次写完全片才第一次渲染。
 
 ## 5. 检查（每批都跑）
@@ -180,6 +188,8 @@ python3 <skill>/scripts/motion_check.py --video out/silent.mp4 --cues cues.json
 python3 <skill>/scripts/mix.py --video out/silent.mp4 --cues cues.json --out out/<name>.mp4
 ```
 
+**配乐**：默认合成的是循环底乐，只当占位，用户听不出它是配乐。成片照画面时间线写一首（`scripts/score_kit.py`；例子 `assets/cocoon/compose_score.py` 读 `cues.json` 拿事件时刻，运行 `PYTHONPATH=<skill>/scripts python3 compose_score.py cues.json out/score.wav`，需要 numpy），再用测量代替耳朵检查：`python3 <skill>/scripts/audio_check.py out/score.wav --out out/`（逐秒响度要符合设计的起伏，无 `HISS`/`CLIP`/`FLAT`），最后 `mix.py … --music out/score.wav`（`directing.md` 第 4b 节）。`mix.py` 会测量编码后的真峰值，超标自动重编码。
+
 `motion_check.py` 列出 ≥ 2 s 的静止段（`STILL`），逐个补持续运动（扫描线、光点流动 `dashFlow`、呼吸光晕 `pulse`、缓慢漂移），重渲后 `STILL` 为 0。渲染自动多进程：2 分钟的 2D 片约 2 分钟（`--subframes 3` 约 5 分钟），140 秒的 3D 片 `--subframes 2` 约 6 分钟（Apple 芯片实测）。
 
 ## 7. 验证与交付
@@ -189,11 +199,15 @@ ffprobe -v error -show_entries stream=codec_type,width,height:format=duration -o
 ffmpeg -v error -y -i out/<name>.mp4 -vf "fps=1/3,scale=480:-1,tile=6x9" -frames:v 1 out/contact.jpg   # 6×9 格 × 3 s = 162 s，装得下 lint 允许的最长片
 ```
 
-确认有视频流和音频流、1920×1080、时长与分镜一致、`--lint` 为 0。交付：
+确认有视频流和音频流、1920×1080、时长与分镜一致、`--lint` 为 0，`python3 <skill>/scripts/audio_check.py out/<name>.mp4 --mix` 无 `HISS`/`CLIP`（成片加 `--mix`：拟音和响度归一让成片天然平，`FLAT` 只对配乐轨有意义）。交付：
 
 - 成片路径和 `out/contact.jpg`
 - 一句话结构（主角 / 仪表 / 站点 / 回扣）和章节列表
 - 事实表中哪些是确数、哪些是量级或示意
 - 修改方式：改 `shots.js` 后重跑第 5、6 步
 
-配乐由脚本合成，没有版权问题；音频听感无法自动判断，请用户试听。对外发布需要用户授权。
+配乐由脚本合成，没有版权问题；音频听感无法自动判断，交付时给出 `audio_check.py` 的响度曲线，并请用户试听。对外发布需要用户授权。
+
+## 8. 其他画幅（竖版 9:16、3:4 封面）
+
+舞台固定 1920×1080，别的画幅要重新构图，不要缩放加黑边。把世界抽成 `world.js`（尺寸、相机、安全区由页面传入），横版和竖版页面共用；竖版页面直接用 `engine.js` 的 `LV.start({ width: 1080, height: 1920 })`。抽模块前后各渲几张横版静帧逐像素比对，差值为 0 才算没改坏。小红书 / 抖音：主体在中间 1080×1440，字幕在底部 22% 之上、右侧 150 px 以左，用 `scripts/safe_guides.py --preset xhs` 叠参考线检查。两版共用同一份 `cues.json` 和配乐。细节与例子：`worlds.md` 第 5 节、`assets/cocoon/vertical.*`、`cover.html`。
