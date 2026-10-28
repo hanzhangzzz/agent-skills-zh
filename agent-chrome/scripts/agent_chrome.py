@@ -140,15 +140,20 @@ def port_busy(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def helper(args, stdin=None, timeout=60):
-    """Run chrome_helper.mjs; needs Node >= 22 for the global WebSocket."""
+def node_bin():
+    """chrome_helper.mjs needs Node >= 22 for the global WebSocket."""
     node = shutil.which("node")
     if not node:
         raise Fail("缺少 node（需要 >= 22），装好后重试")
-    major = int(subprocess.run([node, "--version"], capture_output=True, text=True).stdout.strip().lstrip("v").split(".")[0])
-    if major < 22:
-        raise Fail(f"node 版本过低（v{major}），需要 >= 22")
-    return subprocess.run([node, HELPER, *args], input=stdin, capture_output=True, text=True, timeout=timeout)
+    ver = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=10).stdout.strip()
+    major = ver.lstrip("v").split(".")[0]
+    if not major.isdigit() or int(major) < 22:
+        raise Fail(f"node 版本过低或无法识别（{ver or '无输出'}），需要 >= 22")
+    return node
+
+
+def helper(args, stdin=None, timeout=60):
+    return subprocess.run([node_bin(), HELPER, *args], input=stdin, capture_output=True, text=True, timeout=timeout)
 
 
 # ---------- commands ----------
@@ -252,6 +257,8 @@ def up(reg, target, headless=True, url=None):
         raise Fail(f"端口 {port} 已被其他进程监听，{name} 无法启动")
     if not os.path.exists(CHROME):
         raise Fail(f"找不到正式版 Chrome: {CHROME}")
+    if not headless:
+        node_bin()  # the headed window is opened through the helper; check before Chrome is started
     os.makedirs(udd, mode=0o700, exist_ok=True)
     args = [f"--user-data-dir={udd}", f"--profile-directory={p.get('profile_directory', 'Default')}",
             f"--remote-debugging-port={port}", "--no-first-run",
@@ -305,9 +312,9 @@ def down(reg, target, force=False):
     graceful = False
     v = version(p["port"])
     if v:  # Browser.close flushes the cookie store; SIGTERM drops the last ~30s of cookie changes
-        try:  # a missing/old node only costs the graceful path; down must still stop the browser
+        try:  # any helper failure only costs the graceful path; down must still stop the browser
             ok = helper(["close", "--ws", v["webSocketDebuggerUrl"]], timeout=15).returncode == 0
-        except Fail as e:
+        except (Fail, subprocess.SubprocessError, OSError) as e:
             ok = False
             print(f"agent_chrome: {e}", file=sys.stderr)
         deadline = time.time() + 10

@@ -59,4 +59,15 @@ python3 "$AC" up test-tmp --headless >/dev/null
 err=$(PATH=/usr/bin:/bin python3 "$AC" down test-tmp 2>&1); rc=$?
 check "缺 node 时 down 仍用 SIGTERM 关掉" "[ $rc -eq 0 ] && echo '$err' | grep -q 'SIGTERM' && ! python3 '$AC' status test-tmp | grep -q '\"running\": true'"
 
+# A helper that hangs (DevTools never answers Browser.close) must not skip the SIGTERM fallback either.
+FAKE="$AGENT_CHROME_ROOT/fakenode"; mkdir -p "$FAKE"
+printf '#!/bin/sh\n[ "$1" = "--version" ] && { echo v22.0.0; exit 0; }\nsleep 60\n' > "$FAKE/node"; chmod +x "$FAKE/node"
+python3 "$AC" up test-tmp --headless >/dev/null
+err=$(PATH="$FAKE:/usr/bin:/bin" python3 "$AC" down test-tmp 2>&1); rc=$?
+check "helper 卡住时 down 仍用 SIGTERM 关掉" "[ $rc -eq 0 ] && echo '$err' | grep -q 'SIGTERM' && ! python3 '$AC' status test-tmp | grep -q '\"running\": true'"
+
+# Headed up needs node for the window: without it, fail before Chrome is started instead of leaving one behind.
+err=$(PATH=/usr/bin:/bin python3 "$AC" up test-tmp 2>&1); rc=$?
+check "缺 node 时有头 up 先失败、不留 Chrome" "[ $rc -ne 0 ] && echo '$err' | grep -q node && ! python3 '$AC' status test-tmp | grep -q '\"running\": true'"
+
 if [ "$fails" -eq 0 ]; then echo "ALL PASS"; else echo "$fails FAILED"; exit 1; fi

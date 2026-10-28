@@ -36,7 +36,7 @@ python3 "$AC" seed x-main --from-main --domains x.com,twitter.com
 bash "$(dirname "$AC")/test_agent_chrome.sh"        # 改脚本后跑，临时根目录，全 headless
 ```
 
-失败时退出码非 0，stderr 一句中文原因。目录被别的 Chrome 占着（端口不对）时只报 pid，不杀。
+失败时退出码非 0，stderr 一句中文原因。`down` 例外：Browser.close 走不通（缺 node、helper 超时）时降级为 SIGTERM，仍关掉浏览器，stderr 提示最近的 cookie 改动可能没落盘，退出码 0。目录被别的 Chrome 占着（端口不对）时只报 pid，不杀。
 
 ## 接法
 
