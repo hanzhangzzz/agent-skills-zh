@@ -20,9 +20,9 @@ license: MIT
 | `scripts/install.sh` | 安装、更新、现状、自检、卸载；幂等，改 settings.json 前备份 |
 | `~/.claude/model-guard.json` | 贵模型/便宜模型列表、保留额与保留线下限、Codex 便宜模型与工具名清单、被包住的原 statusLine |
 
-触发线随时间走：对 5h、7d 窗口各算 `remaining = clamp(距重置秒数 / 窗口秒数, 0, 1)`，保留线 `= max(保留额 × remaining, min(下限, 保留额))`，余量 `100 - 已用%` 小于保留线即越线，任一窗口越线就进入强制分工。下限（`reserve_floor_5h` / `reserve_floor_7d`，默认 15%）防止临近重置时保留线趋近 0：没有下限时 7d 已用 96% 还剩 1 小时，保留线只有约 0.3%，闸不触发，额度照样被烧光。下限不超过保留额，保留额设 0 仍等于关闭该窗口的闸。
+触发线随时间走：对 5h、7d 窗口各算 `remaining = clamp(距重置秒数 / 窗口秒数, 0, 1)`，保留线 `= max(保留额 × remaining, min(下限, 保留额))`，余量 `100 - 已用%` 小于保留线即越线，任一窗口越线就进入强制分工。下限（`reserve_floor_5h` / `reserve_floor_7d`，默认 15%）防止临近重置时保留线趋近 0：没有下限时 7d 已用 96% 还剩 1 小时，保留线只有约 0.3%，闸不触发，额度照样被烧光。实际生效的下限是 `min(下限, 保留额)`，`--status` 与软提示显示的也是这个值；保留额设 0 仍等于关闭该窗口的闸。
 
-Claude Code 越线后 `Read` 只放行带 limit≤200 且不带 pages 的读取；用 offset 分段连续读仍可读完整文件，这是有意保留的小口子，大段阅读应派 subagent。模型判定取 transcript 最后一条 assistant 消息（实测首个工具调用时本条消息已写入）；`/model` 切换后的第一次调用可能仍按上一条消息的模型判定。判定结果按 transcript 缓存在 `~/.claude/model-guard/model-cache/`（模型名 + 已扫到的偏移），之后每次只扫新追加的行，新行里有 assistant 消息就以最新的为准；文件变短或增量超过 8MB 时退回整段倒读。缓存防的是大 transcript 每次倒读超过 hook 的 5 秒超时（实测曾 5.2 秒）。
+Claude Code 越线后 `Read` 只放行带 limit≤200 且不带 pages 的读取；用 offset 分段连续读仍可读完整文件，这是有意保留的小口子，大段阅读应派 subagent。模型判定取 transcript 最后一条 assistant 消息（实测首个工具调用时本条消息已写入）；`/model` 切换后的第一次调用可能仍按上一条消息的模型判定。判定结果按 transcript 缓存在 `~/.claude/model-guard/model-cache/`（模型名 + 已扫到的偏移 + 偏移前 256 字节的指纹），之后每次只扫新追加的行，新行里有 assistant 消息就以最新的为准；文件变短、指纹对不上（被重写）、缓存损坏或增量超过 8MB 时退回整段倒读。缓存防的是大 transcript 每次倒读超过 hook 的 5 秒超时（实测曾 5.2 秒）。
 
 宿主按 hook 输入自动识别：带 `model` 字段的是 Codex，模型直接取该字段，用量取本 session rollout 里最后一条 `token_count` 的 `rate_limits`（`window_minutes`≤360 按 5h 口径，否则按 7d）；否则是 Claude Code，模型取 transcript 末尾 assistant 消息，用量取状态栏落盘文件。Codex 没有状态栏命令，不需要旁路。
 

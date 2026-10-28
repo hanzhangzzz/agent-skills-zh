@@ -150,28 +150,40 @@ def complete_end(f, size):
     return 0
 
 
+def tail_mark(f, end):
+    """偏移 end 之前 256 字节的指纹，用来识别 transcript 被原地重写（只追加时永远不变）。"""
+    start = max(0, end - 256)
+    f.seek(start)
+    return hashlib.sha1(f.read(end - start)).hexdigest()
+
+
 def last_model(path):
     """Claude Code transcript 最后一条 assistant 的 message.model。
 
     每次工具调用都倒读大 transcript 曾耗 5.2 秒（hook 超时 5 秒），所以按 transcript 路径缓存
-    {模型, 已扫到的偏移}：命中后只扫偏移之后新追加的行，新行里有 assistant 就以最新一条为准
-    （/model 切换立即生效），没有就沿用缓存。文件变短（被重写）或增量过大时退回整段倒读。"""
+    {模型, 已扫到的偏移, 偏移前 256 字节的指纹}：命中后只扫偏移之后新追加的行，新行里有 assistant
+    就以最新一条为准（/model 切换立即生效），没有就沿用缓存。文件变短、指纹对不上（被重写）、
+    缓存损坏或增量过大时退回整段倒读。"""
     try:
         size = os.path.getsize(path)
     except OSError:
         return None
     cache = model_cache_path(path)
+    model = end = None
     try:
         with open(cache, encoding="utf-8") as f:
             cached = json.load(f)
-        model, end = cached["model"], int(cached["end"])
-        if not (isinstance(model, str) and model and 0 <= end <= size and size - end <= MODEL_CACHE_MAX_DELTA):
-            raise ValueError
-    except (OSError, ValueError, KeyError, TypeError):
-        model = end = None
+        c_model, c_end, c_mark = cached["model"], int(cached["end"]), cached["mark"]
+        if isinstance(c_model, str) and c_model and 0 <= c_end <= size and size - c_end <= MODEL_CACHE_MAX_DELTA:
+            model, end = c_model, c_end
+    except Exception:  # 缓存是自己写的、坏了就当没有（含 end 为 Infinity 时的 OverflowError）
+        pass
     try:
         with open(path, "rb") as f:
             new_end = complete_end(f, size)
+            new_mark = tail_mark(f, new_end)
+            if model is not None and (new_end < end or tail_mark(f, end) != c_mark):
+                model = None  # 被重写过：偏移不再对应同一段内容
             if model is not None:
                 f.seek(end)
                 for raw in f.read(new_end - end).split(b"\n"):
@@ -192,7 +204,7 @@ def last_model(path):
             os.makedirs(os.path.dirname(cache), exist_ok=True)
             tmp = f"{cache}.{os.getpid()}.tmp"
             with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({"model": model, "end": new_end}, f)
+                json.dump({"model": model, "end": new_end, "mark": new_mark}, f)
             os.replace(tmp, cache)
         except OSError:
             pass  # 缓存写不进去只是慢，不影响判定
@@ -290,6 +302,12 @@ def codex_windows(path, now):
     return []
 
 
+def effective_floor(cfg, reserve_key):
+    """实际生效的下限 = min(配置下限, 保留额)。"""
+    floor_key = reserve_key.replace("reserve_", "reserve_floor_")
+    return min(float(cfg.get(floor_key, DEFAULTS[floor_key])), float(cfg.get(reserve_key, DEFAULTS[reserve_key])))
+
+
 def evaluate(windows, cfg, now):
     """返回每个窗口的评估：(label, u, 剩余秒, 保留额%, 下限%, 当前线%, 是否越线)。缺数据的窗口跳过。
 
@@ -304,8 +322,7 @@ def evaluate(windows, cfg, now):
         left = resets - now
         remaining = min(max(left / span, 0.0), 1.0)
         reserve = float(cfg.get(reserve_key, DEFAULTS[reserve_key]))
-        floor_key = reserve_key.replace("reserve_", "reserve_floor_")
-        floor = min(float(cfg.get(floor_key, DEFAULTS[floor_key])), reserve)
+        floor = effective_floor(cfg, reserve_key)
         line = max(reserve * remaining, floor)
         results.append((label, u, max(left, 0), reserve, floor, line, (100 - u) < line))
     return results

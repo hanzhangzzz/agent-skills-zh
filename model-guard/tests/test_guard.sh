@@ -145,6 +145,14 @@ printf '\n' >> "$CACHED"
 expect 0 "半行写完后被增量扫到（不因偏移切断而漏读）"   "$CACHED" Bash '{"command":"ls"}'
 for f in "$CLAUDE_HOME"/model-guard/model-cache/*; do echo garbage > "$f"; done
 expect 0 "缓存文件损坏：退回整段倒读，不崩（opus 放行）" "$CACHED" Bash '{"command":"ls"}'
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5-5","content":"AAAA"}}' > "$CACHED"
+expect 0 "等长重写前：opus 放行（写入缓存）"             "$CACHED" Bash '{"command":"ls"}'
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-fable-5-1","content":"BBB"}}' > "$CACHED"
+expect 2 "transcript 被等长重写为 fable：指纹不符退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"x"*500}})+"\n")' "$CACHED"
+expect 2 "重写后再变长：指纹仍按新内容命中，fable 拦"   "$CACHED" Bash '{"command":"ls"}'
+for f in "$CLAUDE_HOME"/model-guard/model-cache/*; do printf '%s' '{"model":"claude-opus-5-5","end":Infinity,"mark":"x"}' > "$f"; done
+expect 2 "缓存 end=Infinity：不抛异常放行，退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
 
 limits 65 $((5*3600 - 60)) 10 $D6
 expect 2 "5h 窗口开头（u=65%）拦"                    "$FABLE" Bash '{"command":"ls"}'

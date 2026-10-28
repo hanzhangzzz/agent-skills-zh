@@ -130,6 +130,10 @@ def read_text(path):
 
 
 # ── 软提示 ────────────────────────────────────────────────────────
+def pct(value):
+    return f"{value:g}"
+
+
 def render_hint(cfg):
     expensive = "、".join(cfg["expensive_models"])
     cheap = cfg["cheap_models"]
@@ -141,7 +145,7 @@ def render_hint(cfg):
 - 只做：理解需求、拆方案、查缺补漏、推理、审阅 subagent 结论、最终汇报。
 - 读大量代码/文档、写代码、写文档、跑测试、调研，一律派 subagent，并显式传 model。Claude Code：默认 opus，批量机械活用 sonnet，纯搜索、提取用 haiku，禁止 fork（fork 会继承贵模型）。Codex：spawn_agent 显式传 {'/'.join(cfg['codex_cheap_models'])} 之一，不传会继承贵模型。
 - 为什么：贵模型消耗套餐配额极快，一个 session 就能把 5 小时或 7 天额度烧光，所有 session 随之停摆。
-- 硬约束：5h 余量低于 {cfg['reserve_5h']}%、或 7d 余量低于 {cfg['reserve_7d']}% 时（保留线随窗口剩余时间线性递减，但不低于下限 5h {cfg['reserve_floor_5h']}% / 7d {cfg['reserve_floor_7d']}%，防止临近重置时把额度烧光），PreToolUse hook 会把这条分工变成硬约束：贵模型只能派 model={'/'.join(cheap)} 的 subagent、Read（limit≤200）和任务管理类工具，其余工具被拦。被拦时派 subagent、`/model opus` 或 `/compact`。Codex 同样由 PreToolUse hook 把关：越线后只能派显式指定便宜模型（{'/'.join(cfg['codex_cheap_models'])}）的子 agent、提问和计划。
+- 硬约束：5h 余量低于 {cfg['reserve_5h']}%、或 7d 余量低于 {cfg['reserve_7d']}% 时（保留线随窗口剩余时间线性递减，但不低于下限 5h {pct(mg.effective_floor(cfg, 'reserve_5h'))}% / 7d {pct(mg.effective_floor(cfg, 'reserve_7d'))}%，防止临近重置时把额度烧光），PreToolUse hook 会把这条分工变成硬约束：贵模型只能派 model={'/'.join(cheap)} 的 subagent、Read（limit≤200）和任务管理类工具，其余工具被拦。被拦时派 subagent、`/model opus` 或 `/compact`。Codex 同样由 PreToolUse hook 把关：越线后只能派显式指定便宜模型（{'/'.join(cfg['codex_cheap_models'])}）的子 agent、提问和计划。
 {END}"""
 
 
@@ -378,7 +382,8 @@ def status(_args):
         ("便宜模型", "、".join(cfg["cheap_models"])),
         ("Codex 便宜模型", "、".join(cfg["codex_cheap_models"])),
         ("保留额", f"5h {cfg['reserve_5h']}% / 7d {cfg['reserve_7d']}%"),
-        ("保留线下限", f"5h {cfg['reserve_floor_5h']}% / 7d {cfg['reserve_floor_7d']}%（不超过保留额）"),
+        ("保留线下限", f"5h {pct(mg.effective_floor(cfg, 'reserve_5h'))}% / 7d {pct(mg.effective_floor(cfg, 'reserve_7d'))}%"
+                      f"（实际生效值 = min(配置下限, 保留额)）"),
         ("PreToolUse hook", yes(hook_ok) + (f"（settings.json 非法：{settings_err}）" if settings_err else "")),
         ("状态栏旁路", yes(tap_ok) + (f"，原命令 {cfg['statusline_original'].get('command')}"
                                       if tap_ok and cfg.get("statusline_original") else "")),

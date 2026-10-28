@@ -87,6 +87,9 @@ check "--reserve-floor-7d 持久化、其它项沿用" \
   "py 'import json,sys;c=json.load(open(sys.argv[1]));assert c[\"reserve_floor_7d\"]==10 and c[\"reserve_floor_5h\"]==15 and c[\"reserve_7d\"]==60,c' '$CLAUDE_HOME/model-guard.json' && grep -q '7d 10%，' '$CODEX_HOME/AGENTS.md'"
 bash "$INSTALL" --reserve-floor-5h -1 >/dev/null 2>&1; rc=$?
 check "非法下限被拒且配置不变" "[ $rc -ne 0 ] && grep -q '\"reserve_floor_5h\": 15' '$CLAUDE_HOME/model-guard.json'"
+bash "$INSTALL" --reserve-5h 10 --reserve-floor-5h 50 >/dev/null
+check "下限高于保留额时现状表与软提示显示实际生效值 min(下限, 保留额)" \
+  "bash '$INSTALL' --status | grep -q '保留线下限  *5h 10%' && grep -q '不低于下限 5h 10% / 7d 10%' '$CODEX_HOME/AGENTS.md'"
 
 # 7. 卸载后 settings.json 与安装前等价，软提示块移除，配置保留
 setup uninstall
