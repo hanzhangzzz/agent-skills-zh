@@ -49,5 +49,12 @@ class ReviewPolicyTest(unittest.TestCase):
             b = local.sub(r"\1", (ROOT / dst).read_text(encoding="utf-8"))
             self.assertEqual(a, b, f"{dst} 与 {src} 不一致：本仓库是 skill 源，先改 {src} 再拷到 {dst}")
 
+    def test_templates_inject_branch_and_use_gate(self) -> None:
+        for template in (self.github, self.gitlab):
+            self.assertIn("HEAD_REF:", template)
+            self.assertIn("ci-review-verdict.sh", template)
+            self.assertNotIn("verdict=pass -->", template)
+
+
 if __name__ == "__main__":
     unittest.main()
