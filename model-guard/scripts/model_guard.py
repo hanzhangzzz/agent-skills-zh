@@ -82,8 +82,8 @@ def matches(model, names):
 
 
 # ── 当前模型 ──────────────────────────────────────────────────────
-def tail_entries(path, needle):
-    """倒序产出 JSONL 末尾含 needle 的行（已解析）。窗口逐级放大，避免整文件加载。"""
+def tail_lines(path, needle):
+    """倒序产出 JSONL 末尾含 needle 的行：(行起点偏移, 已解析的 dict)。窗口逐级放大，避免整文件加载。"""
     if not path:
         return
     try:
@@ -100,8 +100,18 @@ def tail_entries(path, needle):
             f.seek(offset)
             lines = f.read(end - offset).split(b"\n")
             # 非文件开头时第一段可能是被截断的行，留给下一轮更大的窗口
-            end = offset + len(lines.pop(0)) if offset else 0
-            for raw in reversed(lines):
+            pos = offset
+            if offset:
+                first = lines.pop(0)
+                end = offset + len(first)
+                pos = end + 1
+            else:
+                end = 0
+            starts = []
+            for raw in lines:
+                starts.append(pos)
+                pos += len(raw) + 1
+            for line_pos, raw in zip(reversed(starts), reversed(lines)):
                 if needle not in raw:
                     continue
                 try:
@@ -109,9 +119,15 @@ def tail_entries(path, needle):
                 except ValueError:
                     continue
                 if isinstance(entry, dict):
-                    yield entry
+                    yield line_pos, entry
             if not offset:
                 return
+
+
+def tail_entries(path, needle):
+    """倒序产出 JSONL 末尾含 needle 的行（已解析）。"""
+    for _, entry in tail_lines(path, needle):
+        yield entry
 
 
 def entry_model(entry):
@@ -123,12 +139,12 @@ def entry_model(entry):
 
 
 def scan_model(path):
-    """整段倒读：transcript 最后一条 assistant 的 message.model。"""
-    for entry in tail_entries(path, b'"assistant"'):
+    """整段倒读：transcript 最后一条 assistant 的 (行起点偏移, message.model)。"""
+    for pos, entry in tail_lines(path, b'"assistant"'):
         model = entry_model(entry)
         if model:
-            return model
-    return None
+            return pos, model
+    return None, None
 
 
 def model_cache_path(path):
@@ -150,64 +166,67 @@ def complete_end(f, size):
     return 0
 
 
-def tail_mark(f, end):
-    """偏移 end 之前 256 字节的指纹，用来识别 transcript 被原地重写（只追加时永远不变）。"""
-    start = max(0, end - 256)
-    f.seek(start)
-    return hashlib.sha1(f.read(end - start)).hexdigest()
-
-
 def last_model(path):
     """Claude Code transcript 最后一条 assistant 的 message.model。
 
     每次工具调用都倒读大 transcript 曾耗 5.2 秒（hook 超时 5 秒），所以按 transcript 路径缓存
-    {模型, 已扫到的偏移, 偏移前 256 字节的指纹}：命中后只扫偏移之后新追加的行，新行里有 assistant
-    就以最新一条为准（/model 切换立即生效），没有就沿用缓存。文件变短、指纹对不上（被重写）、
-    缓存损坏或增量过大时退回整段倒读。"""
+    {模型, 模型所在行起点 pos, 已扫到的完整行结尾 end, [pos, end) 的 sha1}。缓存的结论
+    「[0, end) 里最后一条带模型的 assistant 行在 pos」只依赖 [pos, end) 这段字节，所以命中时
+    重算这段的哈希，对得上才信任，任何重写（含等长重写）都退回整段倒读。之后只扫 end 之后
+    新追加的行，新行里有 assistant 就以最新一条为准（/model 切换立即生效）。
+    文件变短、缓存损坏或要读的区间超过 8MB 时同样退回整段倒读。"""
     try:
         size = os.path.getsize(path)
     except OSError:
         return None
     cache = model_cache_path(path)
-    model = end = None
+    cached = None
     try:
         with open(cache, encoding="utf-8") as f:
-            cached = json.load(f)
-        c_model, c_end, c_mark = cached["model"], int(cached["end"]), cached["mark"]
-        if isinstance(c_model, str) and c_model and 0 <= c_end <= size and size - c_end <= MODEL_CACHE_MAX_DELTA:
-            model, end = c_model, c_end
+            c = json.load(f)
+        c_model, c_pos, c_end, c_hash = c["model"], int(c["pos"]), int(c["end"]), str(c["hash"])
+        if (isinstance(c_model, str) and c_model and 0 <= c_pos < c_end <= size
+                and size - c_pos <= MODEL_CACHE_MAX_DELTA):
+            cached = (c_model, c_pos, c_end, c_hash)
     except Exception:  # 缓存是自己写的、坏了就当没有（含 end 为 Infinity 时的 OverflowError）
         pass
+    model = pos = None
     try:
         with open(path, "rb") as f:
             new_end = complete_end(f, size)
-            new_mark = tail_mark(f, new_end)
-            if model is not None and (new_end < end or tail_mark(f, end) != c_mark):
-                model = None  # 被重写过：偏移不再对应同一段内容
-            if model is not None:
-                f.seek(end)
-                for raw in f.read(new_end - end).split(b"\n"):
-                    if b'"assistant"' not in raw:
-                        continue
-                    try:
-                        entry = json.loads(raw)
-                    except ValueError:
-                        continue
-                    found = entry_model(entry) if isinstance(entry, dict) else None
-                    model = found or model
+            if cached and new_end >= cached[2]:
+                c_model, c_pos, c_end, c_hash = cached
+                f.seek(c_pos)
+                data = f.read(new_end - c_pos)
+                if hashlib.sha1(data[:c_end - c_pos]).hexdigest() == c_hash:
+                    model, pos = c_model, c_pos
+                    line_pos = c_end
+                    for raw in data[c_end - c_pos:].split(b"\n"):
+                        if b'"assistant"' in raw:
+                            try:
+                                entry = json.loads(raw)
+                            except ValueError:
+                                entry = None
+                            found = entry_model(entry) if isinstance(entry, dict) else None
+                            if found:
+                                model, pos = found, line_pos
+                        line_pos += len(raw) + 1
+            if model is None:
+                pos, model = scan_model(path)
+            if model is None or pos >= new_end:
+                return model
+            f.seek(pos)
+            digest = hashlib.sha1(f.read(new_end - pos)).hexdigest()
     except OSError:
         return None
-    if model is None:
-        model = scan_model(path)
-    if model:
-        try:
-            os.makedirs(os.path.dirname(cache), exist_ok=True)
-            tmp = f"{cache}.{os.getpid()}.tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({"model": model, "end": new_end, "mark": new_mark}, f)
-            os.replace(tmp, cache)
-        except OSError:
-            pass  # 缓存写不进去只是慢，不影响判定
+    try:
+        os.makedirs(os.path.dirname(cache), exist_ok=True)
+        tmp = f"{cache}.{os.getpid()}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"model": model, "pos": pos, "end": new_end, "hash": digest}, f)
+        os.replace(tmp, cache)
+    except OSError:
+        pass  # 缓存写不进去只是慢，不影响判定
     return model
 
 

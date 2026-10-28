@@ -148,11 +148,27 @@ expect 0 "缓存文件损坏：退回整段倒读，不崩（opus 放行）" "$C
 printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5-5","content":"AAAA"}}' > "$CACHED"
 expect 0 "等长重写前：opus 放行（写入缓存）"             "$CACHED" Bash '{"command":"ls"}'
 printf '%s\n' '{"type":"assistant","message":{"model":"claude-fable-5-1","content":"BBB"}}' > "$CACHED"
-expect 2 "transcript 被等长重写为 fable：指纹不符退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+expect 2 "transcript 被等长重写为 fable：哈希不符退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
 python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"x"*500}})+"\n")' "$CACHED"
-expect 2 "重写后再变长：指纹仍按新内容命中，fable 拦"   "$CACHED" Bash '{"command":"ls"}'
-for f in "$CLAUDE_HOME"/model-guard/model-cache/*; do printf '%s' '{"model":"claude-opus-5-5","end":Infinity,"mark":"x"}' > "$f"; done
+expect 2 "重写后再变长：缓存按新内容命中，fable 拦"   "$CACHED" Bash '{"command":"ls"}'
+for f in "$CLAUDE_HOME"/model-guard/model-cache/*; do printf '%s' '{"model":"claude-opus-5-5","pos":0,"end":Infinity,"hash":"x"}' > "$f"; done
 expect 2 "缓存 end=Infinity：不抛异常放行，退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+# 等长重写且模型行离文件尾很远（2000+ 字节，末尾行一字不动）：只看尾部指纹会漏，须按模型行到偏移整段校验
+python3 - "$CACHED" <<'PY'
+import json, sys
+with open(sys.argv[1], "w") as f:
+    f.write(json.dumps({"type": "assistant", "message": {"model": "claude-haiku-5-5", "content": "x" * 2000}}) + "\n")
+    f.write(json.dumps({"type": "user", "message": {"content": "y" * 50}}) + "\n")
+PY
+expect 0 "远端模型行：haiku 放行（写入缓存）"              "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import sys;p=sys.argv[1];d=open(p).read();open(p,"w").write(d.replace("claude-haiku-5-5","claude-fable-5-1"))' "$CACHED"
+expect 2 "远端模型行被等长重写为 fable：整段哈希不符，退回倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"z"*3000}})+"\n")' "$CACHED"
+expect 2 "之后追加非 assistant 行：缓存命中，仍判 fable 拦"   "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"assistant","message":{"model":"claude-sonnet-5-5","content":"c"}})+"\n"+json.dumps({"type":"user","message":{"content":"u"}})+"\n")' "$CACHED"
+expect 0 "增量里切到 sonnet、其后还有 user 行：取 sonnet 放行"  "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"w"}})+"\n")' "$CACHED"
+expect 0 "再追加 user 行：缓存的 sonnet 行偏移正确、哈希命中，放行" "$CACHED" Bash '{"command":"ls"}'
 
 limits 65 $((5*3600 - 60)) 10 $D6
 expect 2 "5h 窗口开头（u=65%）拦"                    "$FABLE" Bash '{"command":"ls"}'
