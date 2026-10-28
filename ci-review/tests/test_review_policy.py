@@ -25,6 +25,14 @@ class ReviewPolicyTest(unittest.TestCase):
         self.assertIn("持久", self.prompt)
         self.assertIn("NO-OP", self.prompt)
 
+    def test_findings_converge(self) -> None:
+        # 零发现门槛 + 每轮新增代码会让审查永远过不了：必须有分级、按类、后续轮收敛
+        self.assertIn("非阻断备注", self.prompt)
+        self.assertIn("要人为构造才触发", self.prompt)
+        self.assertIn("同类位置", self.prompt)
+        self.assertIn("上一轮没修好", self.prompt)
+        self.assertIn("后续轮收敛", self.prompt)
+
     def test_templates_inject_branch_and_use_gate(self) -> None:
         for template in (self.github, self.gitlab):
             self.assertIn("HEAD_REF:", template)
