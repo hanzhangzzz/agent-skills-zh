@@ -80,6 +80,13 @@ check "只改一项时其它配置沿用" \
   "py 'import json,sys;c=json.load(open(sys.argv[1]));assert c[\"expensive_models\"][-1]==\"gpt-pro\" and c[\"reserve_5h\"]==30 and c[\"reserve_7d\"]==60' '$CLAUDE_HOME/model-guard.json'"
 bash "$INSTALL" --reserve-5h 120 >/dev/null 2>&1; rc=$?
 check "非法保留额被拒且配置不变" "[ $rc -ne 0 ] && grep -q '\"reserve_5h\": 30' '$CLAUDE_HOME/model-guard.json'"
+check "默认写入保留线下限 15% 且软提示写明下限" \
+  "py 'import json,sys;c=json.load(open(sys.argv[1]));assert c[\"reserve_floor_5h\"]==15 and c[\"reserve_floor_7d\"]==15,c' '$CLAUDE_HOME/model-guard.json' && grep -q '不低于下限 5h 15% / 7d 15%' '$CODEX_HOME/AGENTS.md'"
+bash "$INSTALL" --reserve-floor-7d 10 >/dev/null
+check "--reserve-floor-7d 持久化、其它项沿用" \
+  "py 'import json,sys;c=json.load(open(sys.argv[1]));assert c[\"reserve_floor_7d\"]==10 and c[\"reserve_floor_5h\"]==15 and c[\"reserve_7d\"]==60,c' '$CLAUDE_HOME/model-guard.json' && grep -q '7d 10%，' '$CODEX_HOME/AGENTS.md'"
+bash "$INSTALL" --reserve-floor-5h -1 >/dev/null 2>&1; rc=$?
+check "非法下限被拒且配置不变" "[ $rc -ne 0 ] && grep -q '\"reserve_floor_5h\": 15' '$CLAUDE_HOME/model-guard.json'"
 
 # 7. 卸载后 settings.json 与安装前等价，软提示块移除，配置保留
 setup uninstall

@@ -9,6 +9,7 @@
 只用标准库。任何意外都放行（fail open）：闸坏了不能把所有 session 一起锁死。
 环境变量 CLAUDE_HOME 可覆盖 ~/.claude（测试用）。
 """
+import hashlib
 import json
 import os
 import subprocess
@@ -20,6 +21,10 @@ DEFAULTS = {
     "cheap_models": ["opus", "sonnet", "haiku"],
     "reserve_5h": 40,
     "reserve_7d": 50,
+    # 保留线下限：线性递减到窗口末尾会趋近 0，临近重置时闸形同虚设（实测 7d 已用 96%、保留线仅 0.37%）。
+    # 下限不超过保留额本身，保留额设 0 仍等于关闭该窗口的闸。
+    "reserve_floor_5h": 15,
+    "reserve_floor_7d": 15,
     # Codex 的模型名与工具名（实测 codex-cli 0.163.0 hook 里的 tool_name，命名空间直接拼接）
     "codex_cheap_models": ["sol", "luna", "terra", "reserve"],
     "codex_allowed_tools": [
@@ -34,6 +39,8 @@ DEFAULTS = {
 WINDOWS = (("five_hour", "5h", 18000, "reserve_5h"), ("seven_day", "7d", 604800, "reserve_7d"))
 SHORT_WINDOW_MINUTES = 360  # Codex 窗口不固定是 primary 还是 secondary，≤6 小时按 5h 口径
 STALE_SECONDS = 6 * 3600
+# transcript 增量超过此值就不做增量扫描，退回整段倒读（倒读本身最多读 8MB）
+MODEL_CACHE_MAX_DELTA = 8 << 20
 READ_LIMIT_MAX = 200
 # 强制分工期间仍放行的工具：问人、任务管理、计划、worktree、协作通信。
 # ToolSearch 只加载工具定义，不放行的话 EnterWorktree 这类延迟加载的白名单工具无法调用。
@@ -107,16 +114,89 @@ def tail_entries(path, needle):
                 return
 
 
-def last_model(path):
-    """Claude Code transcript 最后一条 assistant 的 message.model。"""
+def entry_model(entry):
+    message = entry.get("message")
+    if entry.get("type") != "assistant" or not isinstance(message, dict):
+        return None  # 畸形行跳过，继续往前找
+    model = message.get("model")
+    return model if isinstance(model, str) and model and model != "<synthetic>" else None
+
+
+def scan_model(path):
+    """整段倒读：transcript 最后一条 assistant 的 message.model。"""
     for entry in tail_entries(path, b'"assistant"'):
-        message = entry.get("message")
-        if entry.get("type") != "assistant" or not isinstance(message, dict):
-            continue  # 畸形行跳过，继续往前找
-        model = message.get("model")
-        if isinstance(model, str) and model and model != "<synthetic>":
+        model = entry_model(entry)
+        if model:
             return model
     return None
+
+
+def model_cache_path(path):
+    key = hashlib.sha1(os.path.realpath(path).encode("utf-8", "surrogateescape")).hexdigest()[:20]
+    return os.path.join(claude_home(), "model-guard", "model-cache", key + ".json")
+
+
+def complete_end(f, size):
+    """文件里最后一个完整行的结尾偏移（transcript 只追加，之后的增量从这里读起不会切断行）。"""
+    pos = size
+    while pos > 0:
+        step = min(pos, 64 << 10)
+        f.seek(pos - step)
+        chunk = f.read(step)
+        i = chunk.rfind(b"\n")
+        if i >= 0:
+            return pos - step + i + 1
+        pos -= step
+    return 0
+
+
+def last_model(path):
+    """Claude Code transcript 最后一条 assistant 的 message.model。
+
+    每次工具调用都倒读大 transcript 曾耗 5.2 秒（hook 超时 5 秒），所以按 transcript 路径缓存
+    {模型, 已扫到的偏移}：命中后只扫偏移之后新追加的行，新行里有 assistant 就以最新一条为准
+    （/model 切换立即生效），没有就沿用缓存。文件变短（被重写）或增量过大时退回整段倒读。"""
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return None
+    cache = model_cache_path(path)
+    try:
+        with open(cache, encoding="utf-8") as f:
+            cached = json.load(f)
+        model, end = cached["model"], int(cached["end"])
+        if not (isinstance(model, str) and model and 0 <= end <= size and size - end <= MODEL_CACHE_MAX_DELTA):
+            raise ValueError
+    except (OSError, ValueError, KeyError, TypeError):
+        model = end = None
+    try:
+        with open(path, "rb") as f:
+            new_end = complete_end(f, size)
+            if model is not None:
+                f.seek(end)
+                for raw in f.read(new_end - end).split(b"\n"):
+                    if b'"assistant"' not in raw:
+                        continue
+                    try:
+                        entry = json.loads(raw)
+                    except ValueError:
+                        continue
+                    found = entry_model(entry) if isinstance(entry, dict) else None
+                    model = found or model
+    except OSError:
+        return None
+    if model is None:
+        model = scan_model(path)
+    if model:
+        try:
+            os.makedirs(os.path.dirname(cache), exist_ok=True)
+            tmp = f"{cache}.{os.getpid()}.tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"model": model, "end": new_end}, f)
+            os.replace(tmp, cache)
+        except OSError:
+            pass  # 缓存写不进去只是慢，不影响判定
+    return model
 
 
 def current_model(event):
@@ -211,7 +291,10 @@ def codex_windows(path, now):
 
 
 def evaluate(windows, cfg, now):
-    """返回每个窗口的评估：(label, u, 剩余秒, 保留线%, 当前线%, 是否越线)。缺数据的窗口跳过。"""
+    """返回每个窗口的评估：(label, u, 剩余秒, 保留额%, 下限%, 当前线%, 是否越线)。缺数据的窗口跳过。
+
+    当前线 = max(保留额 × 剩余时间占比, min(下限, 保留额))：窗口前段按时间线性递减，
+    临近重置时不低于下限，避免最后几小时把额度烧光。"""
     results = []
     for label, span, reserve_key, window in windows:
         u = used_percent(window)
@@ -221,8 +304,10 @@ def evaluate(windows, cfg, now):
         left = resets - now
         remaining = min(max(left / span, 0.0), 1.0)
         reserve = float(cfg.get(reserve_key, DEFAULTS[reserve_key]))
-        line = reserve * remaining
-        results.append((label, u, max(left, 0), reserve, line, (100 - u) < line))
+        floor_key = reserve_key.replace("reserve_", "reserve_floor_")
+        floor = min(float(cfg.get(floor_key, DEFAULTS[floor_key])), reserve)
+        line = max(reserve * remaining, floor)
+        results.append((label, u, max(left, 0), reserve, floor, line, (100 - u) < line))
     return results
 
 
@@ -240,10 +325,10 @@ def fmt_duration(seconds):
 
 def describe(results):
     parts = []
-    for label, u, left, reserve, line, hit in results:
+    for label, u, left, reserve, floor, line, hit in results:
         state = "越线" if hit else "未越线"
         parts.append(f"{label} 已用 {u:.0f}%（{fmt_duration(left)}后重置，余量 {100 - u:.0f}% "
-                     f"对保留线 {reserve:.0f}%×剩余时间 = {line:.0f}%，{state}）")
+                     f"对保留线 max({reserve:.0f}%×剩余时间, 下限 {floor:.0f}%) = {line:.0f}%，{state}）")
     return "；".join(parts)
 
 

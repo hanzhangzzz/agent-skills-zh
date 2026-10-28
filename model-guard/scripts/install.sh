@@ -2,6 +2,7 @@
 # model-guard 安装入口：幂等，重跑即更新；改 settings.json 前自动备份。
 #
 #   bash install.sh [--models fable,astra] [--reserve-5h 40] [--reserve-7d 50]   安装/更新
+#                   [--reserve-floor-5h 15] [--reserve-floor-7d 15]   保留线下限
 #   bash install.sh --status      现状表（配置、hook、状态栏旁路、软提示、用量数据）
 #   bash install.sh --selftest    在临时目录伪造数据，验证拦截与放行真的生效
 #   bash install.sh --uninstall   移除 hook、还原状态栏、删除软提示块，保留配置文件
