@@ -130,6 +130,14 @@ def read_text(path):
 
 
 # ── 软提示 ────────────────────────────────────────────────────────
+def floor_text(cfg, reserve_key):
+    """实际生效的下限 min(配置下限, 保留额)；配置被手改成非数字时原样显示，不让 --status 崩掉。"""
+    try:
+        return f"{mg.effective_floor(cfg, reserve_key):g}"
+    except (TypeError, ValueError, OverflowError):  # 含超大整数转 float 的 OverflowError
+        return str(cfg.get(reserve_key.replace("reserve_", "reserve_floor_")))
+
+
 def render_hint(cfg):
     expensive = "、".join(cfg["expensive_models"])
     cheap = cfg["cheap_models"]
@@ -141,7 +149,7 @@ def render_hint(cfg):
 - 只做：理解需求、拆方案、查缺补漏、推理、审阅 subagent 结论、最终汇报。
 - 读大量代码/文档、写代码、写文档、跑测试、调研，一律派 subagent，并显式传 model。Claude Code：默认 opus，批量机械活用 sonnet，纯搜索、提取用 haiku，禁止 fork（fork 会继承贵模型）。Codex：spawn_agent 显式传 {'/'.join(cfg['codex_cheap_models'])} 之一，不传会继承贵模型。
 - 为什么：贵模型消耗套餐配额极快，一个 session 就能把 5 小时或 7 天额度烧光，所有 session 随之停摆。
-- 硬约束：5h 余量低于 {cfg['reserve_5h']}%、或 7d 余量低于 {cfg['reserve_7d']}% 时（保留线随窗口剩余时间线性递减），PreToolUse hook 会把这条分工变成硬约束：贵模型只能派 model={'/'.join(cheap)} 的 subagent、Read（limit≤200）和任务管理类工具，其余工具被拦。被拦时派 subagent、`/model opus` 或 `/compact`。Codex 同样由 PreToolUse hook 把关：越线后只能派显式指定便宜模型（{'/'.join(cfg['codex_cheap_models'])}）的子 agent、提问和计划。
+- 硬约束：5h 余量低于 {cfg['reserve_5h']}%、或 7d 余量低于 {cfg['reserve_7d']}% 时（保留线随窗口剩余时间线性递减，但不低于下限 5h {floor_text(cfg, 'reserve_5h')}% / 7d {floor_text(cfg, 'reserve_7d')}%，防止临近重置时把额度烧光），PreToolUse hook 会把这条分工变成硬约束：贵模型只能派 model={'/'.join(cheap)} 的 subagent、Read（limit≤200）和任务管理类工具，其余工具被拦。被拦时派 subagent、`/model opus` 或 `/compact`。Codex 同样由 PreToolUse hook 把关：越线后只能派显式指定便宜模型（{'/'.join(cfg['codex_cheap_models'])}）的子 agent、提问和计划。
 {END}"""
 
 
@@ -281,11 +289,21 @@ def build_config(args):
         cfg["reserve_5h"] = args.reserve_5h
     if args.reserve_7d is not None:
         cfg["reserve_7d"] = args.reserve_7d
+    for key in ("reserve_floor_5h", "reserve_floor_7d"):
+        if getattr(args, key) is not None:
+            cfg[key] = getattr(args, key)
     if not cfg["expensive_models"]:
         sys.exit("❌ 贵模型列表不能为空")
-    for key in ("reserve_5h", "reserve_7d"):
-        if not 0 <= cfg[key] <= 100:
-            sys.exit(f"❌ {key} 必须在 0-100 之间")
+    for key in ("reserve_5h", "reserve_7d", "reserve_floor_5h", "reserve_floor_7d"):
+        value = cfg[key]
+        ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        try:
+            ok = ok and 0 <= float(value) <= 100
+        except OverflowError:
+            ok = False
+        if not ok:
+            flag = "--" + key.replace("_", "-")
+            sys.exit(f"❌ {key} 必须是 0-100 的数字（当前 {str(value)[:20]!r}），用 {flag} 重新指定")
     cfg["version"] = 1
     return cfg
 
@@ -375,6 +393,8 @@ def status(_args):
         ("便宜模型", "、".join(cfg["cheap_models"])),
         ("Codex 便宜模型", "、".join(cfg["codex_cheap_models"])),
         ("保留额", f"5h {cfg['reserve_5h']}% / 7d {cfg['reserve_7d']}%"),
+        ("保留线下限", f"5h {floor_text(cfg, 'reserve_5h')}% / 7d {floor_text(cfg, 'reserve_7d')}%"
+                      f"（实际生效值 = min(配置下限, 保留额)）"),
         ("PreToolUse hook", yes(hook_ok) + (f"（settings.json 非法：{settings_err}）" if settings_err else "")),
         ("状态栏旁路", yes(tap_ok) + (f"，原命令 {cfg['statusline_original'].get('command')}"
                                       if tap_ok and cfg.get("statusline_original") else "")),
@@ -490,12 +510,14 @@ def main():
     ap.add_argument("--models", help="贵模型列表，逗号分隔，如 fable,astra")
     ap.add_argument("--reserve-5h", type=float, dest="reserve_5h")
     ap.add_argument("--reserve-7d", type=float, dest="reserve_7d")
+    ap.add_argument("--reserve-floor-5h", type=float, dest="reserve_floor_5h")
+    ap.add_argument("--reserve-floor-7d", type=float, dest="reserve_floor_7d")
     group = ap.add_mutually_exclusive_group()
     group.add_argument("--status", action="store_true")
     group.add_argument("--selftest", action="store_true")
     group.add_argument("--uninstall", action="store_true")
     args = ap.parse_args()
-    for key in ("reserve_5h", "reserve_7d"):
+    for key in ("reserve_5h", "reserve_7d", "reserve_floor_5h", "reserve_floor_7d"):
         value = getattr(args, key)
         if value is not None and value == int(value):
             setattr(args, key, int(value))

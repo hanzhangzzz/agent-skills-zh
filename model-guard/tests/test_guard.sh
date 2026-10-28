@@ -103,8 +103,89 @@ expect 0 "用量数据缺失放行（fail open）"             "$FABLE" Bash '{"
 limits 99 $H5 99 $D6 $((7*3600))
 expect 0 "用量数据过期（7 小时前）放行"               "$FABLE" Bash '{"command":"ls"}'
 
+limits 80 600 10 $D6
+expect 0 "5h 窗口尾端（剩 10 分钟、u=80%，余量 20% 高于下限 15%）放行" "$FABLE" Bash '{"command":"ls"}'
+
 limits 95 600 10 $D6
-expect 0 "5h 窗口尾端（剩 10 分钟、u=95%）放行"       "$FABLE" Bash '{"command":"ls"}'
+expect 2 "5h 窗口尾端（剩 10 分钟、u=95%）被下限 15% 拦"  "$FABLE" Bash '{"command":"ls"}'
+grep -q "下限 15%" "$SCRATCH/stderr" && { echo "✓ 拒绝原因写明下限"; PASS=$((PASS+1)); } || { echo "✗ 拒绝原因缺下限"; cat "$SCRATCH/stderr"; FAIL=$((FAIL+1)); }
+
+limits 10 $H5 96 3600
+expect 2 "7d 已用 96%、剩 1 小时 → 下限拦（线性线仅 0.3%）" "$FABLE" Bash '{"command":"ls"}'
+limits 10 $H5 50 3600
+expect 0 "7d 已用 50%、剩 1 小时 → 放行"               "$FABLE" Bash '{"command":"ls"}'
+
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.update(json.loads(sys.argv[2]));[c.pop(k) for k in sys.argv[3:]];json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" '{"reserve_7d":0,"reserve_floor_7d":15}'
+limits 10 $H5 99 3600
+expect 0 "reserve_7d=0 时下限不生效（下限不超过保留额，等于关闭 7d 闸）" "$FABLE" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.update(json.loads(sys.argv[2]));[c.pop(k) for k in sys.argv[3:]];json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" '{"reserve_7d":50,"reserve_floor_7d":5}'
+limits 10 $H5 90 3600
+expect 0 "reserve_floor_7d=5 可配：7d 已用 90% 剩 1 小时放行"  "$FABLE" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.update(json.loads(sys.argv[2]));[c.pop(k) for k in sys.argv[3:]];json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" '{}' reserve_floor_7d
+limits 10 $H5 90 3600
+expect 2 "配置缺下限键时用默认 15%：7d 已用 90% 剩 1 小时拦"   "$FABLE" Bash '{"command":"ls"}'
+for bad in '"abc"' "$(python3 -c 'print("9"*400)')" '-5' '500'; do
+  python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_floor_7d"]=json.loads(sys.argv[2]);json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" "$bad"
+  expect 2 "配置下限写坏（${bad:0:12}）时回退默认 15%，闸不失效" "$FABLE" Bash '{"command":"ls"}'
+done
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c.pop("reserve_floor_7d");json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
+for bad in '"abc"' "$(python3 -c 'print("9"*400)')" '-5'; do
+  python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_7d"]=json.loads(sys.argv[2]);json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json" "$bad"
+  expect 2 "配置保留额写坏（${bad:0:12}）时回退默认值，闸不失效" "$FABLE" Bash '{"command":"ls"}'
+done
+python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_7d"]=50;json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
+
+# 模型名缓存：命中后只扫新增行；/model 切换立即生效；文件被重写变短时退回整段倒读
+CACHED="$SCRATCH/cached.jsonl"; transcript "$CACHED" claude-fable-5-1
+limits 75 $H5 10 $D6
+expect 2 "缓存冷启动：判定为 fable 并拦"              "$CACHED" Bash '{"command":"ls"}'
+[ -n "$(ls "$CLAUDE_HOME/model-guard/model-cache/" 2>/dev/null)" ] \
+  && { echo "✓ 已写入模型名缓存"; PASS=$((PASS+1)); } || { echo "✗ 未写入模型名缓存"; FAIL=$((FAIL+1)); }
+python3 -c 'import sys;open(sys.argv[1],"a").write(sys.argv[2]+"\n")' "$CACHED" '{"type":"user","message":{"content":"q"}}'
+expect 2 "缓存命中、新增行无 assistant：沿用 fable 拦"  "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import sys;open(sys.argv[1],"a").write(sys.argv[2]+"\n")' "$CACHED" '{"type":"assistant","message":{"model":"claude-opus-5-5"}}'
+expect 0 "/model 切到 opus 后下一次调用即放行（增量扫到新模型）" "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import sys;open(sys.argv[1],"a").write(sys.argv[2]+"\n")' "$CACHED" '{"type":"assistant","message":{"model":"<synthetic>"}}'
+expect 0 "新增 <synthetic> 不覆盖缓存的 opus"           "$CACHED" Bash '{"command":"ls"}'
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-fable-5-1"}}' > "$CACHED"
+expect 2 "transcript 被重写变短：退回整段倒读判 fable" "$CACHED" Bash '{"command":"ls"}'
+printf '%s' '{"type":"assistant","message":{"model":"claude-opus-5-5"}}' >> "$CACHED"
+expect 2 "末尾半行（未写完）不参与判定"                "$CACHED" Bash '{"command":"ls"}'
+printf '\n' >> "$CACHED"
+expect 0 "半行写完后被增量扫到（不因偏移切断而漏读）"   "$CACHED" Bash '{"command":"ls"}'
+for f in "$CLAUDE_HOME"/model-guard/model-cache/*; do echo garbage > "$f"; done
+expect 0 "缓存文件损坏：退回整段倒读，不崩（opus 放行）" "$CACHED" Bash '{"command":"ls"}'
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5-5","content":"AAAA"}}' > "$CACHED"
+expect 0 "等长重写前：opus 放行（写入缓存）"             "$CACHED" Bash '{"command":"ls"}'
+printf '%s\n' '{"type":"assistant","message":{"model":"claude-fable-5-1","content":"BBB"}}' > "$CACHED"
+expect 2 "transcript 被等长重写为 fable：哈希不符退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"x"*500}})+"\n")' "$CACHED"
+expect 2 "重写后再变长：缓存按新内容命中，fable 拦"   "$CACHED" Bash '{"command":"ls"}'
+for f in "$CLAUDE_HOME"/model-guard/model-cache/*; do printf '%s' '{"model":"claude-opus-5-5","pos":0,"end":Infinity,"hash":"x"}' > "$f"; done
+expect 2 "缓存 end=Infinity：不抛异常放行，退回整段倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+# 等长重写且模型行离文件尾很远（2000+ 字节，末尾行一字不动）：只看尾部指纹会漏，须按模型行到偏移整段校验
+python3 - "$CACHED" <<'PY'
+import json, sys
+with open(sys.argv[1], "w") as f:
+    f.write(json.dumps({"type": "assistant", "message": {"model": "claude-haiku-5-5", "content": "x" * 2000}}) + "\n")
+    f.write(json.dumps({"type": "user", "message": {"content": "y" * 50}}) + "\n")
+PY
+expect 0 "远端模型行：haiku 放行（写入缓存）"              "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import sys;p=sys.argv[1];d=open(p).read();open(p,"w").write(d.replace("claude-haiku-5-5","claude-fable-5-1"))' "$CACHED"
+expect 2 "远端模型行被等长重写为 fable：整段哈希不符，退回倒读并拦" "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"z"*3000}})+"\n")' "$CACHED"
+expect 2 "之后追加非 assistant 行：缓存命中，仍判 fable 拦"   "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"assistant","message":{"model":"claude-sonnet-5-5","content":"c"}})+"\n"+json.dumps({"type":"user","message":{"content":"u"}})+"\n")' "$CACHED"
+expect 0 "增量里切到 sonnet、其后还有 user 行：取 sonnet 放行"  "$CACHED" Bash '{"command":"ls"}'
+python3 -c 'import json,sys;open(sys.argv[1],"a").write(json.dumps({"type":"user","message":{"content":"w"}})+"\n")' "$CACHED"
+expect 0 "再追加 user 行：缓存的 sonnet 行偏移正确、哈希命中，放行" "$CACHED" Bash '{"command":"ls"}'
+# 冷路径与热路径同一口径：末尾没写换行的行即使是完整 JSON 也不采信
+rm -rf "$CLAUDE_HOME/model-guard/model-cache"
+printf '%s\n%s' '{"type":"assistant","message":{"model":"claude-opus-5-5"}}' '{"type":"assistant","message":{"model":"claude-fable-5-1"}}' > "$CACHED"
+expect 0 "冷缓存：末尾无换行的完整 JSON 行（fable）不采信，按上一行 opus 放行" "$CACHED" Bash '{"command":"ls"}'
+expect 0 "热缓存：同一文件口径一致，仍放行"                          "$CACHED" Bash '{"command":"ls"}'
+printf '\n' >> "$CACHED"
+expect 2 "换行写入后 fable 行生效并拦"                               "$CACHED" Bash '{"command":"ls"}'
 
 limits 65 $((5*3600 - 60)) 10 $D6
 expect 2 "5h 窗口开头（u=65%）拦"                    "$FABLE" Bash '{"command":"ls"}'
@@ -120,9 +201,9 @@ expect 0 "只有 utilization 字段（非实测字段）视为无数据放行"  
 limits 1 $H5 1 $D6
 expect 0 "used_percentage=1 是 1%，不被当成 100%"      "$FABLE" Bash '{"command":"ls"}'
 
-python3 -c 'import json,sys,time;n=time.time();json.dump({"five_hour":{"used_percentage":95,"resets_at":int((n+600)*1000)},"saved_at":int(n)},open(sys.argv[1],"w"))' \
+python3 -c 'import json,sys,time;n=time.time();json.dump({"five_hour":{"used_percentage":80,"resets_at":int((n+600)*1000)},"saved_at":int(n)},open(sys.argv[1],"w"))' \
   "$CLAUDE_HOME/model-guard/rate-limits.json"
-expect 0 "resets_at 为毫秒时按秒换算（窗口尾端 u=95% 放行）" "$FABLE" Bash '{"command":"ls"}'
+expect 0 "resets_at 为毫秒时按秒换算（窗口尾端 u=80% 放行）" "$FABLE" Bash '{"command":"ls"}'
 
 limits 75 $H5 10 $D6
 expect 0 "越线 TaskStop 放行（止损工具）"               "$FABLE" TaskStop '{"task_id":"x"}'
