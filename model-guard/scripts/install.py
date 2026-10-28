@@ -134,7 +134,7 @@ def floor_text(cfg, reserve_key):
     """实际生效的下限 min(配置下限, 保留额)；配置被手改成非数字时原样显示，不让 --status 崩掉。"""
     try:
         return f"{mg.effective_floor(cfg, reserve_key):g}"
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # 含超大整数转 float 的 OverflowError
         return str(cfg.get(reserve_key.replace("reserve_", "reserve_floor_")))
 
 

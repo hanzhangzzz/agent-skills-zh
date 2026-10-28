@@ -138,9 +138,12 @@ def entry_model(entry):
     return model if isinstance(model, str) and model and model != "<synthetic>" else None
 
 
-def scan_model(path):
-    """整段倒读：transcript 最后一条 assistant 的 (行起点偏移, message.model)。"""
+def scan_model(path, before=None):
+    """整段倒读：transcript 最后一条 assistant 的 (行起点偏移, message.model)。
+    before 给定时只认起点在它之前的行（即带换行的完整行），与缓存增量扫描口径一致。"""
     for pos, entry in tail_lines(path, b'"assistant"'):
+        if before is not None and pos >= before:
+            continue
         model = entry_model(entry)
         if model:
             return pos, model
@@ -190,7 +193,7 @@ def last_model(path):
             cached = (c_model, c_pos, c_end, c_hash)
     except Exception:  # 缓存是自己写的、坏了就当没有（含 end 为 Infinity 时的 OverflowError）
         pass
-    model = pos = None
+    model = pos = digest = None
     try:
         with open(path, "rb") as f:
             new_end = complete_end(f, size)
@@ -198,7 +201,8 @@ def last_model(path):
                 c_model, c_pos, c_end, c_hash = cached
                 f.seek(c_pos)
                 data = f.read(new_end - c_pos)
-                if hashlib.sha1(data[:c_end - c_pos]).hexdigest() == c_hash:
+                h = hashlib.sha1(data[:c_end - c_pos])
+                if h.hexdigest() == c_hash:
                     model, pos = c_model, c_pos
                     line_pos = c_end
                     for raw in data[c_end - c_pos:].split(b"\n"):
@@ -211,12 +215,18 @@ def last_model(path):
                             if found:
                                 model, pos = found, line_pos
                         line_pos += len(raw) + 1
+                    if pos == c_pos:  # 模型行没变：在校验用的哈希上续算增量，不重读整段
+                        h.update(data[c_end - c_pos:])
+                        digest = h.hexdigest()
+                    else:
+                        digest = hashlib.sha1(data[pos - c_pos:]).hexdigest()
             if model is None:
-                pos, model = scan_model(path)
+                pos, model = scan_model(path, new_end)
             if model is None or pos >= new_end:
                 return model
-            f.seek(pos)
-            digest = hashlib.sha1(f.read(new_end - pos)).hexdigest()
+            if digest is None:
+                f.seek(pos)
+                digest = hashlib.sha1(f.read(new_end - pos)).hexdigest()
     except OSError:
         return None
     try:
