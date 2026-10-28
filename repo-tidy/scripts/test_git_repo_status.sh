@@ -50,10 +50,34 @@ g "$WORK/std" commit -q --allow-empty -m wip
 run "ahead 1：无归位建议" "$WORK/std" 'ahead 1 / behind 0' '!归位'
 g "$WORK/std" push -q origin master
 
-# T4 behind 1（wip 已上远端，本地回退一格 → 远端领先 1）
+# T4 behind 1（wip 已上远端，本地回退一格 → 远端领先 1）：主检出在 master 且干净 → 自动快进
 g "$WORK/std" reset -q --hard HEAD~1
 g "$WORK/std" fetch -q origin
-run "behind 1：有归位建议" "$WORK/std" 'behind 1' '归位'
+run "behind 1 干净主检出：自动快进、无归位建议" "$WORK/std" '已自动快进到 origin/master（\+1）' 'behind 0' '!归位'
+
+# T4b 已跟踪文件有改动：不动工作区，只报告落后
+g "$WORK/std" reset -q --hard HEAD~1
+echo dirty > "$WORK/std/tracked.txt"; g "$WORK/std" add tracked.txt
+run "behind 1 但已跟踪改动：不自动拉、有归位建议" "$WORK/std" 'behind 1' '归位' '!自动快进'
+g "$WORK/std" reset -q --hard origin/master
+g "$WORK/std" reset -q --hard HEAD~1
+
+# T4c 只有未跟踪文件：照常快进
+echo u > "$WORK/std/untracked.txt"
+run "behind 1 仅未跟踪文件：照常快进" "$WORK/std" '已自动快进到 origin/master（\+1）'
+rm -f "$WORK/std/untracked.txt"
+
+# T4d 远端挂起：限时放弃，不拖垮 hook（10s timeout）
+mkrepo "$WORK/slow" master
+git -C "$WORK/slow" remote add origin "ssh://unreachable.invalid/x.git"
+git -C "$WORK/slow" update-ref refs/remotes/origin/master HEAD
+t0=$(date +%s)
+out=$(cd "$WORK/slow" && GIT_SSH_COMMAND="sleep 30 #" bash "$HOOK" 2>/dev/null); elapsed=$(( $(date +%s) - t0 ))
+if printf '%s' "$out" | grep -q '自动对齐失败（超时' && [ "$elapsed" -lt 9 ]; then
+  echo "✓ 远端挂起：${elapsed}s 内超时放弃并报告"; pass=$((pass+1))
+else
+  echo "✗ 远端挂起：耗时 ${elapsed}s 实得: ${out:0:120}"; fail=$((fail+1))
+fi
 
 # T5 工作区脏
 g "$WORK/std" reset -q --hard origin/master
@@ -62,7 +86,7 @@ run "工作区 2 处改动（含未跟踪）" "$WORK/std" '工作区改动: 2'
 
 # T6 feature 分支
 g "$WORK/std" checkout -q -b feature
-run "feature 分支：有归位建议" "$WORK/std" '分支: feature' '归位'
+run "feature 分支：有归位建议、不自动拉" "$WORK/std" '分支: feature' '归位' '!自动快进'
 
 # T7 trunk 流派仓库（无 origin/master|main）
 mkrepo "$WORK/trunk" trunk
@@ -84,6 +108,11 @@ run "detached HEAD：分支显示 HEAD 且有归位建议" "$WORK/std" '分支: 
 g "$WORK/std" checkout -q feature
 g "$WORK/std" worktree add -q -b wt2 "$WORK/wt"
 run "linked worktree 正常显示" "$WORK/wt" '\[repo-status\]' '分支: wt2'
+
+# T12 linked worktree 检出 master 且落后：不是主检出，不得自动拉
+g "$WORK/std" worktree add -q "$WORK/wtm" master
+g "$WORK/wtm" reset -q --hard HEAD~1
+run "linked worktree 在 master 落后：不自动拉" "$WORK/wtm" '分支: master' 'behind 1' '!自动快进'
 
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]
