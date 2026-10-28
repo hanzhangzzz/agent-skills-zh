@@ -70,4 +70,9 @@ check "helper 卡住时 down 仍用 SIGTERM 关掉" "[ $rc -eq 0 ] && echo '$err
 err=$(PATH=/usr/bin:/bin python3 "$AC" up test-tmp 2>&1); rc=$?
 check "缺 node 时有头 up 先失败、不留 Chrome" "[ $rc -ne 0 ] && echo '$err' | grep -q node && ! python3 '$AC' status test-tmp | grep -q '\"running\": true'"
 
+# Headed up whose window cannot be opened (helper fails) must stop the Chrome it just started.
+printf '#!/bin/sh\n[ "$1" = "--version" ] && { echo v22.0.0; exit 0; }\necho cannot connect >&2; exit 1\n' > "$FAKE/node"
+err=$(PATH="$FAKE:/usr/bin:/bin" python3 "$AC" up test-tmp 2>&1); rc=$?
+check "有头 up 开窗失败时关掉刚起的 Chrome" "[ $rc -ne 0 ] && echo '$err' | grep -q '开窗口失败' && ! python3 '$AC' status test-tmp | grep -q '\"running\": true'"
+
 if [ "$fails" -eq 0 ]; then echo "ALL PASS"; else echo "$fails FAILED"; exit 1; fi

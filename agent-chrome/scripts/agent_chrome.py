@@ -229,7 +229,10 @@ def cmd_resolve(reg, a):
 
 
 def open_window(ws, url):
-    r = helper(["window", "--ws", ws, "--url", url or "about:blank"])
+    try:
+        r = helper(["window", "--ws", ws, "--url", url or "about:blank"])
+    except (subprocess.SubprocessError, OSError) as e:
+        raise Fail(f"开窗口失败: {e}")
     if r.returncode != 0:
         raise Fail(f"开窗口失败: {r.stderr.strip()}")
 
@@ -273,17 +276,24 @@ def up(reg, target, headless=True, url=None):
     else:
         # Any window Chrome opens itself steals focus, even with `open -g`; start windowless, then add one via CDP.
         subprocess.run(["open", "-g", "-n", "-a", CHROME_APP, "--args", "--no-startup-window", *args], check=True)
-    deadline = time.time() + 20
-    while time.time() < deadline:
-        v = version(port)
-        if v:
-            pid, _ = main_proc(udd)
-            if not headless:
-                open_window(v["webSocketDebuggerUrl"], url)
-            return {"profile": name, "dir": udd, "port": port, "ws": v["webSocketDebuggerUrl"], "pid": pid,
-                    "headless": headless, "reused": False}
-        time.sleep(0.3)
-    raise Fail(f"{name} 启动后 20s 内端口 {port} 不可达")
+    try:
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            v = version(port)
+            if v:
+                pid, _ = main_proc(udd)
+                if not headless:
+                    open_window(v["webSocketDebuggerUrl"], url)
+                return {"profile": name, "dir": udd, "port": port, "ws": v["webSocketDebuggerUrl"], "pid": pid,
+                        "headless": headless, "reused": False}
+            time.sleep(0.3)
+        raise Fail(f"{name} 启动后 20s 内端口 {port} 不可达")
+    except Fail:  # never leave a half-started Chrome holding the profile
+        try:
+            down(reg, name, force=True)
+        except Fail:
+            pass
+        raise
 
 
 def headless_ua():
