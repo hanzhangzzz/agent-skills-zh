@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<title>信息茧房 · 竖版 9:16</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<!-- The 9:16 cut for Xiaohongshu. Same world (world.js), same timeline and sound as the landscape film; only the
+     frame, camera and layout differ. Card area = the middle 1080×1440 (y 240–1680): subject and big type stay inside;
+     captions stay above the bottom 22 % (y < 1498) and left of the right 150 px (the like / comment buttons). -->
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  #stage{position:absolute;width:1080px;height:1920px;overflow:hidden;transform-origin:0 0;background:#060607;
+    font-family:'Noto Sans SC',sans-serif;color:#E9EBEF}
+  #vroot{position:absolute;inset:0}
+  #cv{position:absolute;left:0;top:0;width:1080px;height:1920px}
+  #vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 62% at 50% 50%,transparent 58%,rgba(0,0,0,.5) 100%)}
+  #cap{position:absolute;left:60px;width:870px;bottom:450px;text-align:center;font:400 42px/1.45 'Noto Sans SC',sans-serif;letter-spacing:.06em;
+    text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 22px rgba(0,0,0,.75)}
+  #cap em{font-style:normal;color:#8FE3C4;margin:0 .1em}
+  .fb-label{position:absolute;font:500 26px/1.3 'JetBrains Mono','Noto Sans SC',monospace;letter-spacing:.12em;color:#8A8D94;white-space:nowrap;text-shadow:0 0 14px #000,0 0 4px #000}
+  .fb-label b{color:#E9EBEF;font-weight:600}
+  .fb-big{position:absolute;font:200 176px/1 'Inter Tight',sans-serif;color:#E9EBEF;letter-spacing:-.02em;white-space:nowrap;text-shadow:0 0 30px #000,0 0 8px #000}
+  .fb-big small{font:500 44px 'Noto Sans SC',sans-serif;color:#8A8D94;letter-spacing:.1em;margin:0 .3em}
+  .fb-title{position:absolute;font:900 128px/1.15 'Noto Sans SC',sans-serif;letter-spacing:.16em;color:#E9EBEF;text-align:center;text-shadow:0 0 40px #000,0 0 90px #000}
+</style>
+</head>
+<body>
+<div id="stage"><div id="vroot">
+  <canvas id="cv" width="1080" height="1920"></canvas>
+  <div id="vig"></div>
+  <div class="fb-label" id="fl-l" style="left:60px;width:870px;top:300px;text-align:center"><b>70%+</b> YouTube 观看时长来自推荐 · 2018</div>
+  <div class="fb-big" id="lp-d" style="left:90px;top:300px"><small>第</small><span>1</span><small>天</small></div>
+  <div class="fb-label" id="lp-s" style="left:98px;top:492px">示意</div>
+  <div class="fb-big" id="cc-n" style="left:90px;top:300px">≈95%</div>
+  <div class="fb-label" id="cc-s" style="left:98px;top:492px">来自你点过赞的那几类 · 示意</div>
+  <div class="fb-title" id="mn-t" style="left:60px;width:870px;top:420px">信息茧房</div>
+  <div class="fb-label" id="mn-s" style="left:60px;width:870px;top:590px;text-align:center">INFORMATION COCOONS · SUNSTEIN · 2006</div>
+  <div class="fb-title" id="en-t" style="left:60px;width:870px;top:640px;font-size:112px">信息茧房<br>是怎么织成的</div>
+  <div class="fb-label" id="en-s" style="left:60px;width:870px;top:930px;text-align:center">SUNSTEIN 2006 · 数字为示意</div>
+  <div id="cap"></div>
+</div></div>
+<script>
+  /* must be set before world.js loads: the frame, the caption band, where the line tags may go, the opening direction */
+  window.FB_VIEW = { W: 1080, H: 1920, vertical: true, early: -Math.PI / 2, dim: [1290, 1560], tag: [280, 1240], tagX: 1080 - 150 - 380,
+    tagFont: 30, tagEvery: 1, tagFlip: true, crowd: [70, 920, 300, 1380], title: [60, 930, 380, 700] };
+  window.__post = { grain: 5 };
+</script>
+<script src="engine.js"></script>
+<script type="module" src="vertical.js"></script>
+</body>
+</html>
