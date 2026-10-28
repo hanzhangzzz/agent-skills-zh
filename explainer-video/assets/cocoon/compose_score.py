@@ -3,7 +3,8 @@ It follows the picture instead of looping: single piano notes on the first lines
 the gate is slow motion (sparse piano over a low drone) → the loop builds one layer every bar (积少成多) →
 the cocoon holds a tense pedal, drops out for the hush → riser → impact on the pull-back (full chord) and a cascade
 of bright notes for the lighting wave → the crack turns minor to major → the closing resolves with a long tail.
-Event times come from cues.json (render.mjs --cues-out) and from the same timeline constants as world.js.
+Event times come from cues.json (render.mjs --cues-out): "events" (the page's window.__events: impact, crack,
+firstHits) when present, else the same timeline constants as world.js.
 
 Usage:  PYTHONPATH=<skill>/scripts python3 compose_score.py cues.json out/score.wav
 Check:  python3 <skill>/scripts/audio_check.py out/score.wav --out out/      (the per-second curve must follow the plan)
@@ -29,6 +30,9 @@ CRACK = T4 + 10.2
 TITLE = T5 + 5.4
 
 cues = json.load(open(sys.argv[1]))
+events = cues.get("events", {}) if isinstance(cues, dict) else {}
+IMPACT = events.get("impact", IMPACT)
+CRACK = events.get("crack", CRACK)
 cues = cues if isinstance(cues, list) else cues.get("cues", [])
 TICKS = [c["t"] for c in cues if c.get("sfx") == "tick" and c["t"] < 4]
 BLIPS = [c["t"] for c in cues if c.get("sfx") == "blip"]

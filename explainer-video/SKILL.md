@@ -127,6 +127,7 @@ const B = EX.tempo(96)                          // B(n) = 第 n 拍的秒数；�
 - 仪表单位写 `s / ms / min / h / 天 / 年` 时，右上角自动显示“慢放 ×N”或“快进 ×N”；距离、层数这类非时间仪表不显示倍数。不想要倍数写 `rate: null`。
 - 章节颜色依次取 `EX.C.blue / purple / pink / cyan / green / orange / red / indigo`，相邻章节不同色。
 - 电影模式的质感来自 `light.js`（`import './light.js'` 后用 `LIGHT.glow / bokeh / trail / flow / haze / sphere / shader`，用法见文件头和 `moon.example.js`），写实物体用真实素材（`worlds.md` 的“真实素材”：NASA、Poly Haven、博物馆开放数据），并写 `CREDITS.md`。
+- 流 / 粒子 / 级联类题材（信息流、推荐、谣言传播、感染）用 `flow.js`（`import { makePool, makeSampler, makeStroker, makeClock, makeCascade } from './flow.js'`）：`makePool` 可变速率出生的粒子、`makeSampler` 按方向分布采样、`makeStroker` 同色线段合成一次 stroke、`makeClock` 子弹时间世界时钟、`makeCascade` 树状级联传播；用法与坑见文件头，不要从零重写。
 - 只用美术指导卡里的颜色、字体和材质。下面的粉彩组件只属于粉彩信息图世界，其他世界不要用白卡和胶囊；数据标注写成大号数字 + 细线 + 等宽小标签。
 - 组件现成可用：`.card`（加 `.ring` 和 `--c` 描边）、`.tag`、`.tok`（含 `.id` 编号）、`.node > .ic`、`.bar`、`.t-hero / .t-h2 / .t-h3 / .t-body / .t-label`、`.code`、`.grad-text`、`svg.wire`；图标用 `ICON.名称`，不用 emoji。现有：`phone laptop server database cloud tower wifi router globe lock unlock key shield user users chip cpu doc chat search gear bolt clock check x arrow card qr bank store sun leaf drop heart eye brain layers box truck bell code sprout tree cup fire thermo ship plane factory pin mountain cart scale star atom dna cell battery money camera calendar`；缺的照 `icons.js` 的格式自己画（24×24、描边 2、1–4 条路径）。
 - 运动：`EX.pop`（弹簧落定）、`EX.fadeUp`、`EX.place`（按中心定位）、`EX.drawPath`（路径生长）、`EX.num`（计数）、`EX.type`（打字），以及 `engine.js` 的 `spring springTrack expoOut cubic prog lerp clamp rng pulse dashFlow splitChars riseChars`。
@@ -195,6 +196,9 @@ node <skill>/scripts/render.mjs --html index.html --cues-out cues.json      # �
 python3 <skill>/scripts/motion_check.py --video out/silent.mp4 --cues cues.json
 python3 <skill>/scripts/mix.py --video out/silent.mp4 --cues cues.json --out out/<name>.mp4
 ```
+
+`--cues-out` 的自动音效规则：每章第一镜加 whoosh、`fly` 转场加 whoosh、其他叠化加 tick，再加各镜头自己的 `sfx`。写了配乐时，在 `EX.run({ autoCues: false })` 关掉自动的 whoosh/tick（各镜头自己的 `sfx` 不受影响），或把换章 whoosh 换成自己的音：自动 whoosh 会撞上配乐低谷，成片 `audio_check` 报 `HISS`。
+配乐要用画面事件时刻（冲击、裂缝、首批元素到达……）时，页面在 `EX.run` 之前设 `window.__events = { impact: …, crack: … }`（JSON 可序列化对象），`--cues-out` 原样写进 `cues.json` 的 `events` 字段，配乐脚本直接读（例子：`assets/cocoon/shots.js` 与 `compose_score.py`）。不要另造导出流程。
 
 **配乐**：默认合成的是循环底乐，只当占位，用户听不出它是配乐。成片照画面时间线写一首（`scripts/score_kit.py`；例子 `assets/cocoon/compose_score.py` 读 `cues.json` 拿事件时刻，运行 `PYTHONPATH=<skill>/scripts python3 compose_score.py cues.json out/score.wav`，需要 numpy），再用测量代替耳朵检查：`python3 <skill>/scripts/audio_check.py out/score.wav --out out/`（逐秒响度要符合设计的起伏，无 `HISS`/`CLIP`/`FLAT`），最后 `mix.py … --music out/score.wav`（`directing.md` 第 4b 节）。`mix.py` 会测量编码后的真峰值，超标自动重编码。
 

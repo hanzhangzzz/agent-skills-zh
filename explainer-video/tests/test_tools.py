@@ -112,6 +112,21 @@ class RefCompare(unittest.TestCase):
         self.assertIn("720x900", r.stdout)
         self.assertIn("1920x1080", r.stdout)
 
+    def test_crop_and_density(self):
+        ref = os.path.join(TMP, "ref2.mp4")
+        ours = os.path.join(TMP, "ours2.mp4")
+        ff("-f", "lavfi", "-i", "testsrc=s=720x900:d=3:r=10", "-pix_fmt", "yuv420p", ref)
+        ff("-f", "lavfi", "-i", "testsrc=s=1920x1080:d=3:r=10", "-pix_fmt", "yuv420p", ours)
+        out = os.path.join(TMP, "sub2", "cmp.jpg")
+        r = py("refcompare.py", "--ref", ref, "--ours-video", ours, "--n", "3", "--ref-crop", "300x200+50+100",
+               "--our-crop", "500x300+200+100", "--out", out)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("300x200+50+100", r.stdout)
+        self.assertIn("500x300+200+100", r.stdout)
+        self.assertEqual(r.stdout.count("条亮线"), 2)
+        bad = py("refcompare.py", "--ref", ref, "--ours-video", ours, "--ref-crop", "9999x10+0+0", "--out", out)
+        self.assertNotEqual(bad.returncode, 0)
+
 
 class ScoreKit(unittest.TestCase):
     def test_render(self):

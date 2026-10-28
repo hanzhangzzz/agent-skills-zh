@@ -42,6 +42,7 @@ run "launch-video sync check" python3 launch-video/tests/test_check_sync.py
 run "launch-video motion check" python3 launch-video/tests/test_motion_check.py
 run "explainer-video motion check" python3 explainer-video/tests/test_motion_check.py
 run "explainer-video pacing audit" node explainer-video/tests/test_audit.mjs
+run "explainer-video flow" node explainer-video/tests/test_flow.mjs
 run "explainer-video audio" python3 explainer-video/tests/test_audio.py
 run "explainer-video tools" python3 explainer-video/tests/test_tools.py
 run "scanned-book-ocr" python3 -m unittest discover -s scanned-book-ocr/scripts -p 'test_*.py'

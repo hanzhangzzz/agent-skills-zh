@@ -219,7 +219,8 @@ try {
     const v = await page.evaluate((src) => { try { return JSON.stringify((0, eval)(src)); } catch (e) { return 'ERROR ' + e; } }, String(args.eval));
     console.log(`t=${tt}: ${v}`);
   } else if (args['cues-out']) {
-    const cues = await page.evaluate(() => ({ ...window.__cues, scenes: (window.__shots || []).map((s) => s.start) }));
+    const cues = await page.evaluate(() => ({ ...window.__cues, scenes: (window.__shots || []).map((s) => s.start),
+      ...(window.__events !== undefined ? { events: JSON.parse(JSON.stringify(window.__events)) } : {}) }));
     if (!cues) throw new Error('page has no window.__cues');
     writeFileSync(resolve(args['cues-out']), JSON.stringify(cues, null, 1));
     console.log(`✓ ${cues.cues.length} cues → ${args['cues-out']}`);

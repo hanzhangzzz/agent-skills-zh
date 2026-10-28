@@ -2,7 +2,7 @@
    bullet-time climax — lives in world.js and is shared with the 9:16 cut (vertical.js). This file only adds the EX
    chapters, captions, sound cues and the DOM labels. */
 import './light.js';
-import { B, DUR, T1, T2, T3, T4, T5, T6, ACC, INK, INK2, BG, STRAY, CRACK, drawWorld, FIRST_HITS, DAY, fade, worldOpacity, CAPS } from './world.js';
+import { B, DUR, T1, T2, T3, T4, T5, T6, IMPACT, ACC, INK, INK2, BG, STRAY, CRACK, drawWorld, FIRST_HITS, DAY, fade, worldOpacity, CAPS } from './world.js';
 EX.tempo(96);
 
 EX.chapter('gate', { name: '闸门', color: ACC });
@@ -84,5 +84,8 @@ EX.shot({
   init(el) { this.t = el.querySelector('#en-t'); this.s = el.querySelector('#en-s'); },
   render(el, u, d) { fade(this.t, u, 5.4, 6.3, d + 1, d + 2); fade(this.s, u, 5.8, 6.7, d + 1, d + 2); },
 });
+
+/* picture events for the score: render.mjs --cues-out copies this into cues.json "events"; compose_score.py reads it */
+window.__events = { impact: IMPACT, crack: CRACK.t, stray: STRAY.t, firstHits: FIRST_HITS };
 
 EX.run({ theme: 'dark', chrome: 'cinema', post: { vignette: .35, grain: 5 }, composition: 'cinema', mood: 'pulse', rate: null, bgm_gain: .85, amb_gain: .6 });

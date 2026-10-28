@@ -21,6 +21,15 @@
 2. 把看到的写进美术指导卡：线宽与密度（多少条、几 px）、有无辉光、主体占画面多大、是否裁切、文字是装饰还是信息、调色。
 3. 每次给用户看画面之前，并排比一次：`python3 <skill>/scripts/refcompare.py --ref 参考.mp4 --ours-video out/demo.mp4 --out out/ref-compare.jpg`（第三行是两边的原尺寸裁切）。密度、渲染（辉光/锐利）、构图、细节层四项都对上了才发。
 
+**参考片竖屏、成片横屏**时，整帧并排只能比观感，比不了细节。比同一物理尺度下的量：线宽（px）、文字高度（px）、每 100 px 里的线数。用 `--ref-crop` / `--our-crop`（`WxH+X+Y`，原尺寸像素，不缩放）各自选一块有代表性的区域（例如都选环带的一段），脚本打印两边裁切区和每 100 px 的亮线数粗略密度：
+
+```bash
+python3 <skill>/scripts/refcompare.py --ref 参考.mp4 --ours-video out/demo.mp4 \
+  --ref-crop 400x300+160+300 --our-crop 700x300+600+400 --out out/ref-compare.jpg
+```
+
+两边密度差 > 30% 就调密度（线数、粒子数、线宽），再比。
+
 ## 2. Treatment（写进 PLAN.md，在看示例代码之前写）
 
 1. **三个候选结构**，每个写几行：一条旅程、前后对比、倒计时、一份清单最后翻转……写出选了哪个、为什么。对一个题目的第一反应通常是套路，开场画面、结尾和配乐的走向都从题目本身想。
@@ -70,6 +79,10 @@ node <skill>/scripts/render.mjs --html index.html --stills <t>      # 每个方�
 | 希望 / 结尾 | 小调转大调，下行旋律，片名处一个长尾和弦 |
 
 **不能听也要验**：模型听不到声音，用测量代替耳朵：`python3 <skill>/scripts/audio_check.py out/score.wav --out out/`。逐秒响度曲线要和上表的起伏一致（冲击处最响、hush 处最低、开场单音段明显更安静），频谱图里不能有大块的宽带噪声（`HISS`：全频白噪声 riser、嘶嘶的环境底都会报），不能削波。混音用 `mix.py --music out/score.wav`，成片再跑一次 `audio_check.py 成片.mp4 --mix`（成片里拟音持续、又经响度归一，最响段只比中位数高 2–3 dB 是常态，所以成片不查 `FLAT`，只查 `HISS`/`CLIP`）；横竖两版共用同一份 `cues.json` 和配乐，音画天然同步。交付时写明“听感未经人工试听”。
+
+成片 `HISS` 出现在换章时刻（如 25 s、48 s 附近）时，先查框架自动加的换章 whoosh，不要先调环境声（`amb_gain` 数字不变就说明不是它）：`EX.run({ autoCues: false })` 关掉自动音效，或在配乐里给该时刻垫和弦。
+
+**画面事件 → 配乐的标准通道**：配乐要冲击、裂缝、首批元素到达这类时刻时，页面设 `window.__events = { impact, crack, … }`（`EX.run` 之前），`render.mjs --cues-out cues.json` 把它原样写进 `cues.json` 的 `events`；配乐脚本读 `cues["events"]`（`assets/cocoon/compose_score.py` 优先读它，没有才回退到常量）。参数改了就重跑 `--cues-out` 和配乐，不用手改时刻。
 
 ## 5. 节奏与镜头
 
@@ -173,3 +186,6 @@ node <skill>/scripts/render.mjs --html index.html --range 0:15 --subframes 2    
 - 尺度揭示后的群像连成一张网，像大脑，看不出是一个个人（同上）。
 - 会动或会变的文字在运动模糊下重影（天数、跟着线走的标签）：文字按视频帧定格。
 - 转折后立刻结束；配乐是循环底，听不出是配乐（第 8c、4b 节）。
+- 自己写级联 / 粒子时把 Float32Array 里的值和 double 比较：几乎恒真或恒假（级联一步都没扩散，只有一个红点）。比较前统一类型（`Math.fround`）或用 Float64Array（`assets/flow.js` 文件头）。
+- 多个子系统共用一个 `rng(seed)`：改一个参数，整条随机序列移位，关键节点和配乐时刻全变。每个子系统用自己的 `rng(seed)`，并通过 `window.__events` 导出关键时刻。
+- 配乐写好后成片换章处出 `HISS`：框架自动的换章 whoosh 撞上配乐低谷（第 4b 节），用 `autoCues: false`。

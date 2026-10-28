@@ -46,6 +46,9 @@
                                                 a three.js scene that holds the main subject (subject: true, so it counts).
                                                 Read EX.cam(t) to follow the camera.
    EX.run({ meter: { label, unit, decimals, max, ticks, seconds? }, rate: null to hide, mood, bgm_gain, amb_gain,
+            autoCues: false,   (default true) turns off the automatic chapter whoosh / dissolve tick / fly whoosh;
+                               each shot's own sfx stay. Turn it off when you write a score (the auto whoosh lands in
+                               score troughs and audio_check reports HISS)
             theme: 'dark', chrome: 'cinema', post: { vignette: .4, grain: 6 }, composition: 'cinema' })
      chrome 'pill' (default, glass pills) | 'cinema' (no boxes: a thin top timeline, small chapter label,
             unboxed caption — for art-directed films); post.vignette 0–1 darkens the corners;
@@ -347,7 +350,8 @@
     const cues = [];
     shots.forEach((s, i) => {
       const prev = shots[i - 1];
-      if (i > 0 && s.chapter && (!prev || prev.chapter !== s.chapter)) cues.push({ t: +s.start.toFixed(3), sfx: 'whoosh', gain: .45 });
+      if (cfg.autoCues === false) { /* only the shot's own sfx below */ }
+      else if (i > 0 && s.chapter && (!prev || prev.chapter !== s.chapter)) cues.push({ t: +s.start.toFixed(3), sfx: 'whoosh', gain: .45 });
       else if (i > 0 && s.enter === 'fly') cues.push({ t: +s.start.toFixed(3), sfx: 'whoosh', gain: .3 });
       else if (i > 0 && s.enter !== 'cut') cues.push({ t: +s.start.toFixed(3), sfx: 'tick', gain: .25 });
       s.sfx.forEach(([a, name, g]) => cues.push({ t: +(s.start + a).toFixed(3), sfx: name, gain: g ?? .5 }));
