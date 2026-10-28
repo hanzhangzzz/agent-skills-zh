@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 CACHE_PATH = Path.home() / '.claude' / 'repo-map-cache.json'
+CONFIG_PATH = Path.home() / '.claude' / 'repo-map.config.json'
 LOG_PATH = Path.home() / '.claude' / 'logs' / 'repo-map-hook.jsonl'
 MIN_ALIAS_LEN = 3
 MAX_HITS = 5
@@ -56,13 +57,26 @@ def stale_mark(r):
     return ''
 
 
-def match_repos(prompt, cwd, repos):
+def load_stopwords():
+    """config 的 alias_stopwords：常用词撞上仓库别名（如 config、tools）时不自动注入。
+
+    只影响 hook 自动注入；显式 resolve 不受影响。配置损坏不吞，抛给 main 记日志。
+    """
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text())
+    except FileNotFoundError:
+        return frozenset()
+    return frozenset(w.lower() for w in cfg.get('alias_stopwords', []))
+
+
+def match_repos(prompt, cwd, repos, stopwords=frozenset()):
     low = prompt.lower()
     hits = []
     for r in repos.values():
         if cwd == r['path'] or cwd.startswith(r['path'] + '/'):
             continue  # 当前所在仓库自身不注入
-        aliases = (a for a in r['aliases'] if len(a) >= MIN_ALIAS_LEN)
+        aliases = (a for a in r['aliases']
+                   if len(a) >= MIN_ALIAS_LEN and a not in stopwords)
         if any(re.search(BOUNDARY_L + re.escape(a) + BOUNDARY_R, low)
                for a in aliases):
             hits.append(r)
@@ -76,7 +90,7 @@ def main():
     if not prompt or not CACHE_PATH.exists():
         return
     repos = json.loads(CACHE_PATH.read_text()).get('repos', {})
-    hits = match_repos(prompt, cwd, repos)
+    hits = match_repos(prompt, cwd, repos, load_stopwords())
     if not hits:
         return
     lines = '\n'.join(

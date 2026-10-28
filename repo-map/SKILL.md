@@ -51,6 +51,7 @@ description: |
  "self_emails": ["a@x.com", "you@users.noreply.github.com"],
  "trusted_hosts": ["gitlab.your-org.com"]}
 ```
+- `alias_stopwords`（可选，首次安装不写）：用户反馈某个常用词反复误注入时再加，例如目录名叫 `config`、`tools` 的仓库写 `"alias_stopwords": ["config", "tools"]`。列进来的别名不再触发 hook 自动注入，`resolve` 显式查询照常可用；加之前向用户说明这些仓库此后只能靠其他别名或 `resolve` 找到。
 - 角色判定证据链：有本人 commit → 自研·可写；无 remote → 本地·可写（不存在上游，谈不上第三方）；host 可信 → 协作·可写；其余 → 第三方·只读。
 
 ### 4. 首次全量扫描
@@ -79,7 +80,7 @@ python3 <skill目录>/scripts/repo_map.py schedule status   # exit 3 = 未开启
 > - **开启·每天一次**：`schedule on 86400`。新仓库最长隔一天才进地图。
 > - **不开启**：靠 `resolve`/`list` 被动同步；新建仓库后需手动跑一次 `list`。
 
-选择开启则执行 `schedule on [间隔秒]`，它会写 `~/Library/LaunchAgents/com.claude-code.repo-map-sync.plist` 并 `launchctl bootstrap` 加载（`RunAtLoad` 注册即跑一次，可立刻验证）。plist 里的解释器固定为 `/usr/bin/python3`——launchd 不继承 shell PATH，更不跑 pyenv 初始化，写 `python3` 必然找不到。
+选择开启则执行 `schedule on [间隔秒]`，它会写 `~/Library/LaunchAgents/com.claude-code.repo-map-sync.plist` 并 `launchctl bootstrap` 加载（`RunAtLoad` 注册即跑一次，可立刻验证）。plist 里的解释器写执行 `schedule on` 的那个解释器的绝对路径：launchd 不继承 shell PATH、不跑 pyenv 初始化，写 `python3` 找不到；系统自带的 `/usr/bin/python3` 在 launchd 下会被 TCC 拒绝读 ~/Desktop、~/Documents（日志报 `Operation not permitted`），所以要用 pyenv 或 Homebrew 的 python3 执行 `schedule on`。
 
 仅 macOS。非 darwin 平台 `schedule` 会明确报错并提示改用 cron 调 `sync` 子命令，不做静默降级。
 

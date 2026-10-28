@@ -13,11 +13,50 @@ done
 dirty=$(git --no-optional-locks status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 line="[repo-status] $(basename "$top") | 分支: $branch | 工作区改动: $dirty"
 
+# ── 主检出自动对齐：「主检出恒定停在最新 master」由机制保证，不靠模型自觉 ──
+# 条件：主检出（非 linked worktree）+ 在 master/main + 已跟踪文件无改动。
+# 未跟踪文件不拦：快进若会覆盖未跟踪文件，--ff-only 自己会拒绝。
+# 开销：远端可达时通常 1-2s；远端挂起（如 VPN 断开）时每个 session 开局固定多等 PULL_TIMEOUT 秒。
+# hook timeout 10s：超时杀整个进程组（含 fetch/ssh 子进程，否则孤儿进程握着输出管道，
+# hook 照样卡死），再退回按上次 fetch 的 origin/<默认分支> 本地快进；失败只报告，不阻断开局。
+PULL_TIMEOUT=3
+sync_note=""
+abs_dir() { (cd "$1" 2>/dev/null && pwd -P); }  # 子目录里 --git-dir 是绝对路径、--git-common-dir 是相对路径
+if [ -n "$master" ] && [ "$branch" = "$master" ] \
+   && [ "$(abs_dir "$(git rev-parse --git-dir 2>/dev/null)")" = "$(abs_dir "$(git rev-parse --git-common-dir 2>/dev/null)")" ] \
+   && [ -z "$(git --no-optional-locks status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  before=$(git rev-parse HEAD 2>/dev/null)
+  if err=$(GIT_TERMINAL_PROMPT=0 perl -e '
+        $t = shift; $p = fork;
+        if (!$p) { setpgrp(0, 0); exec @ARGV; exit 127 }
+        $SIG{ALRM} = sub { kill "KILL", -$p; exit 142 };
+        alarm $t; waitpid($p, 0); exit($? >> 8)' \
+        "$PULL_TIMEOUT" git pull -q --ff-only origin "$master" </dev/null 2>&1); then
+    n=$(git rev-list --count "$before..HEAD" 2>/dev/null || echo 0)
+    [ "${n:-0}" -gt 0 ] 2>/dev/null && sync_note=" | 已自动快进到 origin/${master}（+${n}）"
+  else
+    rc=$?
+    if [ "$rc" -eq 142 ]; then
+      reason="超时 ${PULL_TIMEOUT}s"
+    else  # git 把关键信息放在第一条 fatal/error 行，后面是建议性残句
+      reason=$(printf '%s\n' "$err" | grep -m1 -E '^(fatal|error):' | sed -E 's/^(fatal|error): //' | cut -c1-160)
+      [ -n "$reason" ] || reason=$(printf '%s\n' "$err" | head -1 | cut -c1-160)
+    fi
+    git merge -q --ff-only "origin/$master" </dev/null >/dev/null 2>&1
+    n=$(git rev-list --count "$before..HEAD" 2>/dev/null || echo 0)
+    if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
+      sync_note=" | 拉取失败（${reason:-exit $rc}），已按上次 fetch 快进（+${n}）"
+    else
+      sync_note=" | 自动对齐失败（${reason:-exit $rc}），工作区未动"
+    fi
+  fi
+fi
+
 if [ -n "$master" ]; then
   counts=$(git rev-list --left-right --count "origin/$master...HEAD" 2>/dev/null)
   behind=$(echo "$counts" | awk '{print $1}')
   ahead=$(echo "$counts" | awk '{print $2}')
-  line="$line | vs origin/$master: ahead ${ahead:-?} / behind ${behind:-?}（基于上次 fetch）"
+  line="$line | vs origin/$master: ahead ${ahead:-?} / behind ${behind:-?}（基于上次 fetch）$sync_note"
 fi
 
 if [ -n "$master" ] && { [ "$branch" != "$master" ] || [ "${behind:-0}" -gt 0 ] 2>/dev/null; }; then

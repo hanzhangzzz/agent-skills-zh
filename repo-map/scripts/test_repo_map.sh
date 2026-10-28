@@ -95,6 +95,17 @@ assert "边界: beta-v2 场景不误注入 beta 条目" "$out" '!→ .*'"$CODE"'
 out=$(printf '{"prompt":"看下 beta 的文档","cwd":"'$WORK'"}' | python3 "$PH" 2>&1)
 assert "边界: beta 不命中 beta-v2" "$out" '!beta-v2'
 
+# 停用词：别名列入 alias_stopwords 后不再自动注入，resolve 照常
+cp "$HOME/.claude/repo-map.config.json" "$WORK/config.bak"
+cat > "$HOME/.claude/repo-map.config.json" <<EOF
+{"scan_roots": ["$CODE"], "self_emails": ["t@t"], "trusted_hosts": ["gitlab.t"], "alias_stopwords": ["Alpha"]}
+EOF
+out=$(printf '{"prompt":"跟 alpha 对接，顺便看 gamma","cwd":"'$WORK'"}' | python3 "$PH" 2>&1)
+assert "停用词: alpha 不注入、gamma 照常" "$out" "gamma" "!$CODE/alpha"
+out=$(python3 "$RM" resolve alpha 2>&1)
+assert "停用词不影响 resolve" "$out" "$CODE/alpha"
+mv "$WORK/config.bak" "$HOME/.claude/repo-map.config.json"
+
 # T9 hook：无缓存/坏输入静默
 mv "$HOME/.claude/repo-map-cache.json" "$WORK/cache.bak"
 out=$(printf '{"prompt":"跟 alpha 对接","cwd":"'$WORK'"}' | python3 "$PH" 2>&1)
