@@ -90,24 +90,54 @@ check "非法下限被拒且配置不变" "[ $rc -ne 0 ] && grep -q '\"reserve_f
 bash "$INSTALL" --reserve-5h 10 --reserve-floor-5h 50 >/dev/null
 check "下限高于保留额时现状表与软提示显示实际生效值 min(下限, 保留额)" \
   "bash '$INSTALL' --status | grep -q '保留线下限  *5h 10%' && grep -q '不低于下限 5h 10% / 7d 10%' '$CODEX_HOME/AGENTS.md'"
-py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_floor_5h"]="abc";json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
-mkdir -p "$CLAUDE_HOME/model-guard"; py 'import json,sys,time;n=int(time.time());json.dump({"five_hour":{"used_percentage":50,"resets_at":n+3600},"seven_day":{"used_percentage":50,"resets_at":n+86400},"saved_at":n},open(sys.argv[1],"w"))' "$CLAUDE_HOME/model-guard/rate-limits.json"
-check "配置下限被手改成非数字时（有用量数据）--status 不崩、按默认下限显示并判定" \
-  "bash '$INSTALL' --status 2>&1 | grep -q '保留线下限  *5h 10%' && bash '$INSTALL' --status 2>&1 | grep -q '下限 10%' && bash '$INSTALL' --status 2>&1 | grep -q '结论：' && ! bash '$INSTALL' --status 2>&1 | grep -q Traceback"
-py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_floor_5h"]=int("9"*400);json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
-check "配置下限被写成超大整数时（有用量数据）--status 同样不崩" \
-  "bash '$INSTALL' --status 2>&1 | grep -q '下限 10%' && bash '$INSTALL' --status 2>&1 | grep -q '结论：' && ! bash '$INSTALL' --status 2>&1 | grep -q Traceback"
-rm -f "$CLAUDE_HOME/model-guard/rate-limits.json"
-py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_floor_5h"]=15;json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
-py 'import json,sys,time;n=int(time.time());json.dump({"five_hour":{"used_percentage":50,"resets_at":n+3600},"seven_day":{"used_percentage":50,"resets_at":n+86400},"saved_at":n},open(sys.argv[1],"w"))' "$CLAUDE_HOME/model-guard/rate-limits.json"
-py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_7d"]="abc";json.dump(c,open(p,"w"))' "$CLAUDE_HOME/model-guard.json"
-check "配置保留额写坏时（有用量数据）--status 不崩" \
-  "bash '$INSTALL' --status 2>&1 | grep -q '结论：' && ! bash '$INSTALL' --status 2>&1 | grep -q Traceback"
-bash "$INSTALL" >/dev/null 2>"$SCRATCH/bad-install.err"; rc=$?
-check "配置写坏时安装器给出可读提示而非 traceback" \
-  "[ $rc -ne 0 ] && grep -q 'reserve_7d 必须是 0-100 的数字' '$SCRATCH/bad-install.err' && ! grep -q Traceback '$SCRATCH/bad-install.err'"
-bash "$INSTALL" --reserve-7d 60 >/dev/null 2>&1; rc=$?
-check "用对应参数重新指定即可修回（安装器不被坏配置锁死）" "[ $rc -eq 0 ] && grep -q '\"reserve_7d\": 60' '$CLAUDE_HOME/model-guard.json'"
+
+# 6b. 百分比配置类别测试：每个配置键 × 每种坏值，运行时、--status、安装器走同一个校验口径
+setup badcfg
+bash "$INSTALL" >/dev/null
+GUARD="$DIR/../scripts/guard.sh"
+FT="$H/fable.jsonl"; printf '%s\n' '{"type":"assistant","message":{"model":"claude-fable-5-1"}}' > "$FT"
+EV=$(py 'import json,sys;print(json.dumps({"session_id":"s","transcript_path":sys.argv[1],"cwd":"/tmp","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}))' "$FT")
+mkdir -p "$CLAUDE_HOME/model-guard"; CFG="$CLAUDE_HOME/model-guard.json"; cp "$CFG" "$SCRATCH/good-cfg.json"
+BIG=$(py 'print("9"*400)')
+for key in reserve_5h reserve_7d reserve_floor_5h reserve_floor_7d; do
+  # 该窗口已用 96%、临近重置，另一窗口远在线下：默认配置下靠下限拦住，坏值若被当成 0 就会关闸
+  case $key in
+    *5h) win=5h; u5=96; l5=600; u7=10; l7=$((6*86400)) ;;
+    *)   win=7d; u5=10; l5=$((4*3600)); u7=96; l7=3600 ;;
+  esac
+  case $key in reserve_5h) def=40 ;; reserve_7d) def=50 ;; *) def=15 ;; esac
+  for bad in false true '"0"' '"abc"' null "$BIG" -5 500; do
+    cp "$SCRATCH/good-cfg.json" "$CFG"
+    py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c[sys.argv[2]]=json.loads(sys.argv[3]);json.dump(c,open(p,"w"))' "$CFG" "$key" "$bad"
+    cp "$CFG" "$SCRATCH/bad-cfg.json"
+    py 'import json,sys,time;n=int(time.time());u5,l5,u7,l7=map(int,sys.argv[2:]);json.dump({"five_hour":{"used_percentage":u5,"resets_at":n+l5},"seven_day":{"used_percentage":u7,"resets_at":n+l7},"saved_at":n},open(sys.argv[1],"w"))' \
+      "$CLAUDE_HOME/model-guard/rate-limits.json" $u5 $l5 $u7 $l7
+    label="$key=${bad:0:8}"
+    printf '%s' "$EV" | "$GUARD" 2>/dev/null; rc=$?
+    check "${label}：运行时按默认 ${def}% 生效，闸不失效" "[ $rc = 2 ]"
+    bash "$INSTALL" --status >"$SCRATCH/bad-status.out" 2>&1
+    check "${label}：--status 显示生效值并标注非法、判定与运行时一致" \
+      "grep -q '$win ${def}%（$key 配置非法，已回退默认值）' '$SCRATCH/bad-status.out' && grep -q '强制分工中' '$SCRATCH/bad-status.out' && ! grep -q Traceback '$SCRATCH/bad-status.out'"
+    bash "$INSTALL" >/dev/null 2>"$SCRATCH/bad-install.err"; rc=$?
+    check "${label}：安装器给可读错误且不改配置" \
+      "[ $rc -ne 0 ] && grep -q '$key 必须是 0-100 的数字' '$SCRATCH/bad-install.err' && ! grep -q Traceback '$SCRATCH/bad-install.err' && cmp -s '$CFG' '$SCRATCH/bad-cfg.json'"
+  done
+  flag="--${key//_/-}"
+  bash "$INSTALL" "$flag" 20 >/dev/null 2>&1; rc=$?
+  check "$key 写坏后用 $flag 重新指定即可修回" "[ $rc -eq 0 ] && grep -q '\"$key\": 20' '$CFG'"
+  for bad in inf nan 1e400 abc -5 500; do
+    cp "$CFG" "$SCRATCH/before-cli.json"
+    bash "$INSTALL" "$flag" "$bad" >/dev/null 2>"$SCRATCH/bad-cli.err"; rc=$?
+    check "$flag ${bad}：可读错误、非 0 退出、配置不变" \
+      "[ $rc -ne 0 ] && grep -q '必须是 0-100 的数字' '$SCRATCH/bad-cli.err' && ! grep -q Traceback '$SCRATCH/bad-cli.err' && cmp -s '$CFG' '$SCRATCH/before-cli.json'"
+  done
+done
+# 下限非法且被保留额压低：标注不能报一个与生效值矛盾的数字
+cp "$SCRATCH/good-cfg.json" "$CFG"
+py 'import json,sys;p=sys.argv[1];c=json.load(open(p));c["reserve_5h"]=10;c["reserve_floor_5h"]="abc";json.dump(c,open(p,"w"))' "$CFG"
+bash "$INSTALL" --status >"$SCRATCH/bad-status.out" 2>&1
+check "下限非法被保留额压低：只显示生效值 10%，不报默认 15%" \
+  "grep -q '5h 10%（reserve_floor_5h 配置非法，已回退默认值）' '$SCRATCH/bad-status.out'"
 rm -f "$CLAUDE_HOME/model-guard/rate-limits.json"
 
 # 7. 卸载后 settings.json 与安装前等价，软提示块移除，配置保留

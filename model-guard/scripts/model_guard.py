@@ -9,7 +9,6 @@
 只用标准库。任何意外都放行（fail open）：闸坏了不能把所有 session 一起锁死。
 环境变量 CLAUDE_HOME 可覆盖 ~/.claude（测试用）。
 """
-import hashlib
 import json
 import os
 import subprocess
@@ -36,11 +35,10 @@ DEFAULTS = {
     "statusline_original": None,
     "version": 1,
 }
+PERCENT_KEYS = ("reserve_5h", "reserve_7d", "reserve_floor_5h", "reserve_floor_7d")
 WINDOWS = (("five_hour", "5h", 18000, "reserve_5h"), ("seven_day", "7d", 604800, "reserve_7d"))
 SHORT_WINDOW_MINUTES = 360  # Codex 窗口不固定是 primary 还是 secondary，≤6 小时按 5h 口径
 STALE_SECONDS = 6 * 3600
-# transcript 增量超过此值就不做增量扫描，退回整段倒读（倒读本身最多读 8MB）
-MODEL_CACHE_MAX_DELTA = 8 << 20
 READ_LIMIT_MAX = 200
 # 强制分工期间仍放行的工具：问人、任务管理、计划、worktree、协作通信。
 # ToolSearch 只加载工具定义，不放行的话 EnterWorktree 这类延迟加载的白名单工具无法调用。
@@ -70,7 +68,9 @@ def load_config():
         with open(config_path(), encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict):
-            cfg.update({k: v for k, v in data.items() if v is not None or k == "statusline_original"})
+            # 百分比配置里的 null 保留下来交给 percent_setting 判为非法，不悄悄当成未配置
+            keep_null = ("statusline_original",) + PERCENT_KEYS
+            cfg.update({k: v for k, v in data.items() if v is not None or k in keep_null})
     except (OSError, ValueError):
         pass
     return cfg
@@ -82,8 +82,8 @@ def matches(model, names):
 
 
 # ── 当前模型 ──────────────────────────────────────────────────────
-def tail_lines(path, needle):
-    """倒序产出 JSONL 末尾含 needle 的行：(行起点偏移, 已解析的 dict)。窗口逐级放大，避免整文件加载。"""
+def tail_entries(path, needle):
+    """倒序产出 JSONL 末尾含 needle 的行（已解析）。窗口逐级放大，避免整文件加载。"""
     if not path:
         return
     try:
@@ -100,18 +100,8 @@ def tail_lines(path, needle):
             f.seek(offset)
             lines = f.read(end - offset).split(b"\n")
             # 非文件开头时第一段可能是被截断的行，留给下一轮更大的窗口
-            pos = offset
-            if offset:
-                first = lines.pop(0)
-                end = offset + len(first)
-                pos = end + 1
-            else:
-                end = 0
-            starts = []
-            for raw in lines:
-                starts.append(pos)
-                pos += len(raw) + 1
-            for line_pos, raw in zip(reversed(starts), reversed(lines)):
+            end = offset + len(lines.pop(0)) if offset else 0
+            for raw in reversed(lines):
                 if needle not in raw:
                     continue
                 try:
@@ -119,125 +109,21 @@ def tail_lines(path, needle):
                 except ValueError:
                     continue
                 if isinstance(entry, dict):
-                    yield line_pos, entry
+                    yield entry
             if not offset:
                 return
 
 
-def tail_entries(path, needle):
-    """倒序产出 JSONL 末尾含 needle 的行（已解析）。"""
-    for _, entry in tail_lines(path, needle):
-        yield entry
-
-
-def entry_model(entry):
-    message = entry.get("message")
-    if entry.get("type") != "assistant" or not isinstance(message, dict):
-        return None  # 畸形行跳过，继续往前找
-    model = message.get("model")
-    return model if isinstance(model, str) and model and model != "<synthetic>" else None
-
-
-def scan_model(path, before=None):
-    """整段倒读：transcript 最后一条 assistant 的 (行起点偏移, message.model)。
-    before 给定时只认起点在它之前的行（即带换行的完整行），与缓存增量扫描口径一致。"""
-    for pos, entry in tail_lines(path, b'"assistant"'):
-        if before is not None and pos >= before:
-            continue
-        model = entry_model(entry)
-        if model:
-            return pos, model
-    return None, None
-
-
-def model_cache_path(path):
-    key = hashlib.sha1(os.path.realpath(path).encode("utf-8", "surrogateescape")).hexdigest()[:20]
-    return os.path.join(claude_home(), "model-guard", "model-cache", key + ".json")
-
-
-def complete_end(f, size):
-    """文件里最后一个完整行的结尾偏移（transcript 只追加，之后的增量从这里读起不会切断行）。"""
-    pos = size
-    while pos > 0:
-        step = min(pos, 64 << 10)
-        f.seek(pos - step)
-        chunk = f.read(step)
-        i = chunk.rfind(b"\n")
-        if i >= 0:
-            return pos - step + i + 1
-        pos -= step
-    return 0
-
-
 def last_model(path):
-    """Claude Code transcript 最后一条 assistant 的 message.model。
-
-    每次工具调用都倒读大 transcript 曾耗 5.2 秒（hook 超时 5 秒），所以按 transcript 路径缓存
-    {模型, 模型所在行起点 pos, 已扫到的完整行结尾 end, [pos, end) 的 sha1}。缓存的结论
-    「[0, end) 里最后一条带模型的 assistant 行在 pos」只依赖 [pos, end) 这段字节，所以命中时
-    重算这段的哈希，对得上才信任，任何重写（含等长重写）都退回整段倒读。之后只扫 end 之后
-    新追加的行，新行里有 assistant 就以最新一条为准（/model 切换立即生效）。
-    文件变短、缓存损坏或要读的区间超过 8MB 时同样退回整段倒读。"""
-    try:
-        size = os.path.getsize(path)
-    except OSError:
-        return None
-    cache = model_cache_path(path)
-    cached = None
-    try:
-        with open(cache, encoding="utf-8") as f:
-            c = json.load(f)
-        c_model, c_pos, c_end, c_hash = c["model"], int(c["pos"]), int(c["end"]), str(c["hash"])
-        if (isinstance(c_model, str) and c_model and 0 <= c_pos < c_end <= size
-                and size - c_pos <= MODEL_CACHE_MAX_DELTA):
-            cached = (c_model, c_pos, c_end, c_hash)
-    except Exception:  # 缓存是自己写的、坏了就当没有（含 end 为 Infinity 时的 OverflowError）
-        pass
-    model = pos = digest = None
-    try:
-        with open(path, "rb") as f:
-            new_end = complete_end(f, size)
-            if cached and new_end >= cached[2]:
-                c_model, c_pos, c_end, c_hash = cached
-                f.seek(c_pos)
-                data = f.read(new_end - c_pos)
-                h = hashlib.sha1(data[:c_end - c_pos])
-                if h.hexdigest() == c_hash:
-                    model, pos = c_model, c_pos
-                    line_pos = c_end
-                    for raw in data[c_end - c_pos:].split(b"\n"):
-                        if b'"assistant"' in raw:
-                            try:
-                                entry = json.loads(raw)
-                            except ValueError:
-                                entry = None
-                            found = entry_model(entry) if isinstance(entry, dict) else None
-                            if found:
-                                model, pos = found, line_pos
-                        line_pos += len(raw) + 1
-                    if pos == c_pos:  # 模型行没变：在校验用的哈希上续算增量，不重读整段
-                        h.update(data[c_end - c_pos:])
-                        digest = h.hexdigest()
-                    else:
-                        digest = hashlib.sha1(data[pos - c_pos:]).hexdigest()
-            if model is None:
-                pos, model = scan_model(path, new_end)
-            if model is None or pos >= new_end:
-                return model
-            if digest is None:
-                f.seek(pos)
-                digest = hashlib.sha1(f.read(new_end - pos)).hexdigest()
-    except OSError:
-        return None
-    try:
-        os.makedirs(os.path.dirname(cache), exist_ok=True)
-        tmp = f"{cache}.{os.getpid()}.tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"model": model, "pos": pos, "end": new_end, "hash": digest}, f)
-        os.replace(tmp, cache)
-    except OSError:
-        pass  # 缓存写不进去只是慢，不影响判定
-    return model
+    """Claude Code transcript 最后一条 assistant 的 message.model。"""
+    for entry in tail_entries(path, b'"assistant"'):
+        message = entry.get("message")
+        if entry.get("type") != "assistant" or not isinstance(message, dict):
+            continue  # 畸形行跳过，继续往前找
+        model = message.get("model")
+        if isinstance(model, str) and model and model != "<synthetic>":
+            return model
+    return None
 
 
 def current_model(event):
@@ -331,22 +217,25 @@ def codex_windows(path, now):
     return []
 
 
+def valid_percent(value):
+    """百分比配置的唯一合法口径：int/float（bool 不算）、有限、0 ≤ x ≤ 100。
+    nan、inf 与超大整数在区间比较里恒为假，同样判为非法。"""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 100
+
+
 def percent_setting(cfg, key):
-    """读 0-100 的百分比配置。被手改坏（非数字、超大整数、越界）时回退默认值：
-    配置写坏不能让闸静默失效（否则 evaluate 抛错后 guard 走 fail open）。"""
-    try:
-        value = float(cfg.get(key, DEFAULTS[key]))
-        if not 0 <= value <= 100:
-            raise ValueError
-        return value
-    except (TypeError, ValueError, OverflowError):
-        return float(DEFAULTS[key])
+    """返回 (生效值, 配置是否合法)。配置写坏（字符串、布尔、null、越界等）时按默认值生效：
+    坏配置既不能让闸失效，也不能让 evaluate 抛错后 guard 走 fail open。"""
+    value = cfg.get(key, DEFAULTS[key])
+    if valid_percent(value):
+        return float(value), True
+    return float(DEFAULTS[key]), False
 
 
 def effective_floor(cfg, reserve_key):
     """实际生效的下限 = min(配置下限, 保留额)。"""
-    return min(percent_setting(cfg, reserve_key.replace("reserve_", "reserve_floor_")),
-               percent_setting(cfg, reserve_key))
+    return min(percent_setting(cfg, reserve_key.replace("reserve_", "reserve_floor_"))[0],
+               percent_setting(cfg, reserve_key)[0])
 
 
 def evaluate(windows, cfg, now):
@@ -362,7 +251,7 @@ def evaluate(windows, cfg, now):
             continue
         left = resets - now
         remaining = min(max(left / span, 0.0), 1.0)
-        reserve = percent_setting(cfg, reserve_key)
+        reserve = percent_setting(cfg, reserve_key)[0]
         floor = effective_floor(cfg, reserve_key)
         line = max(reserve * remaining, floor)
         results.append((label, u, max(left, 0), reserve, floor, line, (100 - u) < line))
