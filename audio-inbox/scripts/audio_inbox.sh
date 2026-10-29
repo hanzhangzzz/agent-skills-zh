@@ -7,6 +7,7 @@ set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 CONF="${1:?用法: audio_inbox.sh <配置文件>}"
+unset NOTIFY LOCK                          # 只认配置文件，不受外部同名环境变量影响
 # shellcheck source=/dev/null
 . "$CONF"                                  # 提供 INBOX OUT QUALITY LOG，可选 NOTIFY LOCK
 DONE="$INBOX/_done"

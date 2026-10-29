@@ -16,7 +16,9 @@
 #   EDITOR_HERE_APP  macOS 上要打开的应用，默认 "Visual Studio Code"
 #   EDITOR_HERE_CMD  直接指定打开命令（覆盖平台默认），如 "code" / "cursor" / "zed"
 #   EDITOR_HERE_DRY  设为 1 只打印目标路径，不真的打开
+#   EDITOR_HERE_OSASCRIPT  osascript 路径，默认 /usr/bin/osascript（测试换成记录桩，不碰真实终端和通知）
 set -u
+OSA="${EDITOR_HERE_OSASCRIPT:-/usr/bin/osascript}"
 
 LOG="${TMPDIR:-/tmp}/editor-here.log"
 STATE_DIR="${CLAUDE_HOME:-$HOME/.claude}/session-cwd"
@@ -82,19 +84,19 @@ fi
 
 if [ "$(uname -s)" = "Darwin" ]; then
   # ② iTerm2：session id 就是位置文件名的 UUID 段
-  key="$(/usr/bin/osascript -e 'tell application "iTerm2" to get id of current session of current window' 2>/dev/null | tr -d '\r\n')"
+  key="$("$OSA" -e 'tell application "iTerm2" to get id of current session of current window' 2>/dev/null | tr -d '\r\n')"
   try_state "$key" "iterm"
 
   # ③ iTerm2 没有窗口时再探测 Terminal.app，避免拿另一个应用的前台目录。
   if [ -z "$key" ]; then
-    key="$(/usr/bin/osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null | tr -d '\r\n')"
+    key="$("$OSA" -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null | tr -d '\r\n')"
     try_state "tty-${key##*/}" "terminal-app"
   fi
 fi
 
 # ④ 回退：终端自己的当前路径（旧行为）
 if [ "$(uname -s)" = "Darwin" ]; then
-  TERM_DIR="$(/usr/bin/osascript <<'OSA' 2>/dev/null
+  TERM_DIR="$("$OSA" <<'OSA' 2>/dev/null
 tell application "iTerm2"
   if (count of windows) is 0 then return ""
   tell current session of current window
@@ -116,5 +118,5 @@ OSA
 fi
 
 log "failed: 拿不到当前标签页的键，也拿不到终端路径"
-[ "$(uname -s)" = "Darwin" ] && /usr/bin/osascript -e 'display notification "拿不到当前路径，未打开编辑器" with title "editor-here"' >/dev/null 2>&1
+[ "$(uname -s)" = "Darwin" ] && [ "${EDITOR_HERE_DRY:-}" != "1" ] && "$OSA" -e 'display notification "拿不到当前路径，未打开编辑器" with title "editor-here"' >/dev/null 2>&1
 exit 1
