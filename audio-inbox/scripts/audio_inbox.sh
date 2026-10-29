@@ -8,9 +8,9 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 CONF="${1:?用法: audio_inbox.sh <配置文件>}"
 # shellcheck source=/dev/null
-. "$CONF"                                  # 提供 INBOX OUT QUALITY LOG，可选 NOTIFY
+. "$CONF"                                  # 提供 INBOX OUT QUALITY LOG，可选 NOTIFY LOCK
 DONE="$INBOX/_done"
-LOCK="/tmp/audio-inbox-$(id -u).lock"
+LOCK="${LOCK:-/tmp/audio-inbox-$(id -u).lock}"   # 配置可覆盖（测试用，避免与真实实例抢锁）
 EXTS="m4a aac wav flac ogg opus amr wma mp4 mov"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }

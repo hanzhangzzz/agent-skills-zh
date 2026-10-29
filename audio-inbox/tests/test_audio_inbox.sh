@@ -19,7 +19,7 @@ ffmpeg -v error -f lavfi -i "sine=f=330:d=2" -f lavfi -i "color=c=red:s=64x64:d=
 ffmpeg -v error -f lavfi -i "sine=f=550:d=2" -c:a aac "$W/in/_skip/no.m4a"
 echo "not audio" > "$W/in/broken.m4a"
 : > "$W/in/empty.m4a"
-printf 'INBOX=%q\nOUT=%q\nQUALITY=5\nLOG=%q\nNOTIFY=0\n' "$W/in" "$W/out" "$W/log" > "$W/config"
+printf 'INBOX=%q\nOUT=%q\nQUALITY=5\nLOG=%q\nNOTIFY=0\nLOCK=%q\n' "$W/in" "$W/out" "$W/log" "$W/lock" > "$W/config"
 
 bash "$HERE/scripts/audio_inbox.sh" "$W/config"
 echo "运行时："
@@ -39,14 +39,15 @@ sleep 1; mkdir -p "$W/in/周二"; ffmpeg -v error -f lavfi -i "sine=f=440:d=2" -
 wait $pid
 check "处理期间新放入的文件在同一轮被处理" '[ -f "$W/out/周二/mid.mp3" ] && [ -f "$W/out/first.mp3" ]'
 check "失败文件同一轮只尝试一次" '[ "$(grep -c "转换失败：broken.m4a" "$W/log")" -le 3 ]'
-mkdir "/tmp/audio-inbox-$(id -u).lock" 2>/dev/null && held=1 || held=0
+mkdir "$W/lock" 2>/dev/null && held=1 || held=0
 ffmpeg -v error -f lavfi -i "sine=f=440:d=1" -c:a aac "$W/in/later.m4a"
 bash "$HERE/scripts/audio_inbox.sh" "$W/config"
 check "已有实例运行时直接退出" '[ -f "$W/in/later.m4a" ]'
-[ "$held" = 1 ] && rmdir "/tmp/audio-inbox-$(id -u).lock"
+[ "$held" = 1 ] && rmdir "$W/lock"
 echo "not audio" > "$W/in/broken2.m4a"
 bash -x "$HERE/scripts/audio_inbox.sh" "$W/config" 2>"$W/trace" >/dev/null
 check "NOTIFY=0 时不调 osascript（测试不弹真实通知）" '! grep -q "/usr/bin/osascript" "$W/trace" && grep -q "转换失败：broken2.m4a" "$W/log"'
+check "测试用自己的锁，不碰真实实例的 /tmp 锁" '! grep -q "/tmp/audio-inbox-" "$W/trace"'
 
 echo "安装脚本拒绝路径（不安装）："
 bash "$HERE/scripts/install.sh" --inbox "$W/i2" >/dev/null 2>&1; rc=$?; check "缺 --out 退出码 2" '[ $rc -eq 2 ]'
