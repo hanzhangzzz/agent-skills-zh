@@ -270,6 +270,22 @@ Machine-readable index of every skill in this repository. Agents can parse this 
 }
 ```
 
+### session-handoff
+
+```json
+{
+  "name": "session-handoff",
+  "version": "1.0.0",
+  "description": "跨 session 续接任务：交接文件按仓库 origin 存放（目录改名不丢、同任务覆盖更新），resume 列出并接着干，find 在 Claude Code 与 Codex 会话记录里找回 session 并给出恢复命令",
+  "trigger": "/session-handoff",
+  "keywords": ["handoff", "resume", "session", "交接", "续接", "找回 session", "claude --resume", "codex resume"],
+  "compatibility": "Claude Code, Codex",
+  "install_path": "session-handoff/",
+  "repo": "https://github.com/hanzhangzzz/agent-skills-zh",
+  "license": "MIT"
+}
+```
+
 ### ci-review
 
 ```json

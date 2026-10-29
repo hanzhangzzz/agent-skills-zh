@@ -6,7 +6,7 @@ Agent skills for reading documents, saving content, and maintaining code, with w
 
 Install only what you need. Each skill has its own runtime requirements; choose a task before choosing an installation method.
 
-[![Skills](https://img.shields.io/badge/skills-22-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-23-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -21,7 +21,7 @@ Install only what you need. Each skill has its own runtime requirements; choose 
 | Keep online content locally | [WeChat](./wechat-article-md-local/SKILL.md) · [Xiaohongshu video](./xiaohongshu/SKILL.md) · [X content](./x-article-download/SKILL.md) |
 | Get an open-source project seen and tried | [Open-source README writing](./readme-craft/SKILL.md) · [Launch video](./launch-video/SKILL.md) |
 | Turn content into something readable or publishable | [Split reading view](./md2view/SKILL.md) · [WeChat layout](./hkr-render/SKILL.md) · [Image prompt](./gpt-image2-prompt-director/SKILL.md) |
-| Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [Prompt paradigm audit](./model-prompt-audit/SKILL.md) · [CI review](./ci-review/SKILL.md) · [Expensive-model budget guard](./model-guard/SKILL.md) |
+| Manage an agent's coding work | [Branches and worktrees](./repo-tidy/SKILL.md) · [Repository lookup](./repo-map/SKILL.md) · [Session handoff and recovery](./session-handoff/SKILL.md) · [Autonomous progress](./do-something/SKILL.md) · [Prompt paradigm audit](./model-prompt-audit/SKILL.md) · [CI review](./ci-review/SKILL.md) · [Expensive-model budget guard](./model-guard/SKILL.md) |
 
 Not sure where to start? The text-only example below uses your existing agent without image-generation access or a platform account.
 
@@ -157,6 +157,7 @@ Names link directly to instructions. Dependencies below are not automatically in
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | Idea → image-generation prompt | Text writing needs an agent; evaluator needs Node.js; actual images need a separate image tool |
 | [repo-tidy](./repo-tidy/SKILL.md) | Prepare branches/worktrees while retaining unverified work | Git, Python 3; hooks and terminal integrations need separate setup |
 | [repo-map](./repo-map/SKILL.md) | Repository name → local path and access role | Python 3, local repository index; automatic injection needs a Claude Code hook |
+| [session-handoff](./session-handoff/SKILL.md) | Handoff file with goal, status, the user's verbatim decisions and next steps; finds lost sessions in Claude Code and Codex logs with the resume command | Python 3 standard library; handoffs are keyed by git origin, so without an origin a directory rename changes the location; reads session logs only, the user runs the resume command |
 | [do-something](./do-something/SKILL.md) | Complete an evidence-backed improvement or return NO-OP | Git and a verification-capable agent; scheduling and MR mode require separate setup |
 | [model-prompt-audit](./model-prompt-audit/SKILL.md) | Current model guide → gap audit of global agent config with proposals | Python 3 and docs-site access; reads live docs only, edits after approval |
 | [harness](./harness/SKILL.md) | Inspect, implement, and review through a TODO board | Scripts use `claude -p`, requiring Claude Code CLI; scheduled mode needs a scheduler |

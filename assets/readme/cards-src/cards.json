@@ -170,6 +170,16 @@
     "tagline": "文档现取不用记忆，先提案后动手"
   },
   {
+    "name": "session-handoff",
+    "tag": "交接文件 · 找回 session",
+    "one": "任务跨 session 续接：交接文件按仓库 origin 存放，目录改名也找得到；找不到旧 session 时，在 Claude Code 与 Codex 记录里搜出来并给出恢复命令",
+    "input": "「存一下」→ 写交接文件\n  按仓库 origin 存放\n「接着上次」→ 复述后接着干\n\n「我路径改名前叫 data，\n  resume 不回来」\n→ handoff.py find code/data 价值",
+    "output": "[claude] b27c7289-…\n  cwd: ~/…/code/data  <warn>（目录已不存在）</warn>\n  仓库: gitlab.<内网>/<组>/data-construction\n  首条: 我们一步一步的夯实。先说价值……\n  末条: 给data这个路径改个名……\n  <hl>恢复: cd ~/…/code/data-construction && claude --resume b27c7289-…</hl>\n    原目录已不存在。上面的目录是该会话后来所在、同一仓库的现存目录\n\n[codex] 01a17723-…\n  <hl>恢复: cd ~/…/data-construction && codex resume 01a17723-…</hl>",
+    "out_label": "历史运行输出摘录",
+    "src": "2026-10-29 本机对真实会话记录只读运行 find 的输出（路径、域名、id 已缩写）",
+    "tagline": "存交接、续任务、找回 session"
+  },
+  {
     "name": "ci-review",
     "tag": "CI 里 · 验证型 CR",
     "one": "每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查",

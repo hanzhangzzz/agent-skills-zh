@@ -6,7 +6,7 @@
 
 面向中文开发者，按需安装。这里有翻译、OCR、内容存档、文档可视化和仓库维护工具；每项的运行环境不同，先选你要完成的任务。
 
-[![Skills](https://img.shields.io/badge/skills-22-blue)](#catalog)
+[![Skills](https://img.shields.io/badge/skills-23-blue)](#catalog)
 [![Hook plugins](https://img.shields.io/badge/hook_plugins-1-purple)](#hooks)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -21,7 +21,7 @@
 | 把文章、视频内容留到本地 | [公众号](./wechat-article-md-local/SKILL.md) · [小红书视频](./xiaohongshu/SKILL.md) · [X 内容](./x-article-download/SKILL.md) |
 | 让开源项目被看见、被试用 | [开源 README 写作](./readme-craft/SKILL.md) · [发布宣传视频](./launch-video/SKILL.md) |
 | 把已有内容变成可阅读、可发布的结果 | [双栏阅读视图](./md2view/SKILL.md) · [公众号排版](./hkr-render/SKILL.md) · [生图提示词](./gpt-image2-prompt-director/SKILL.md) |
-| 管好 Agent 的代码工作 | [分支与工作树](./repo-tidy/SKILL.md) · [跨仓库定位](./repo-map/SKILL.md) · [自主推进](./do-something/SKILL.md) · [提示词范式审计](./model-prompt-audit/SKILL.md) · [CI 审查](./ci-review/SKILL.md) · [贵模型预算闸](./model-guard/SKILL.md) |
+| 管好 Agent 的代码工作 | [分支与工作树](./repo-tidy/SKILL.md) · [跨仓库定位](./repo-map/SKILL.md) · [会话交接与找回](./session-handoff/SKILL.md) · [自主推进](./do-something/SKILL.md) · [提示词范式审计](./model-prompt-audit/SKILL.md) · [CI 审查](./ci-review/SKILL.md) · [贵模型预算闸](./model-guard/SKILL.md) |
 
 不知道先试哪个？下面的提示词示例只需要你已有的 Agent，不需要图片生成权限或平台账号。
 
@@ -156,6 +156,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 | [gpt-image2-prompt-director](./gpt-image2-prompt-director/SKILL.md) | 想法 → 生图提示词 | 文本编写只需 Agent；内置评测需 Node.js，实际生图另需图片工具 |
 | [repo-tidy](./repo-tidy/SKILL.md) | 安全准备分支/工作树，保留未证实合并的工作 | Git、Python 3；hook 与终端增强功能需单独配置 |
 | [repo-map](./repo-map/SKILL.md) | 仓库名 → 本地路径与读写角色 | Python 3、本地仓库索引；自动注入需 Claude Code hook |
+| [session-handoff](./session-handoff/SKILL.md) | 交接文件：目标、状态、用户裁决原话、下一步；在 Claude Code 与 Codex 会话记录里找回 session 并给出恢复命令 | Python 3 标准库；交接文件按 git origin 存放，没有 origin 时目录改名会换位置；只读会话记录，恢复命令由用户在终端运行 |
 | [do-something](./do-something/SKILL.md) | 根据证据完成一项有效改进，或明确 NO-OP | Git 与可运行验证的 Agent；定时执行需另配调度，MR 模式需单独启用 |
 | [model-prompt-audit](./model-prompt-audit/SKILL.md) | 当前模型官方指引 → 全局配置差距审计与提案 | Python 3、可访问文档站；只读取现取文档，批准后才改文件 |
 | [harness](./harness/SKILL.md) | 巡检、修复、复审共用 TODO 看板 | 脚本通过 `claude -p` 运行，需 Claude Code CLI；定时模式需相应调度能力 |
