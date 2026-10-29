@@ -189,5 +189,11 @@ REPO_TIDY_MENU_BUDGET=0 run "[tasks] 菜单总预算耗尽：全部标未判定�
   'hot--sq  \[task/sq\]  合并状态未判定' 'hot--open  \[task/open\]  合并状态未判定' \
   'hot--part  \[task/part\]  合并状态未判定' '!可回收|未推送|MR 待合'
 
+REAL_PY=$(command -v python3); mkdir -p "$WORK/crashbin"
+printf '#!/bin/bash\ncase "$*" in *--is-merged*) echo "Traceback: boom" >&2; exit 1;; esac\nexec %q "$@"\n' "$REAL_PY" > "$WORK/crashbin/python3"
+chmod +x "$WORK/crashbin/python3"
+PATH="$WORK/crashbin:$PATH" run "[tasks] 判定进程崩溃（退出 1 但没说未合并）：标未判定，不下否定结论" "$WORK/hot" \
+  'hot--open  \[task/open\]  合并状态未判定' '!未推送|MR 待合|可回收'
+
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]

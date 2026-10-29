@@ -83,12 +83,13 @@ if [ -n "$master" ]; then
         left=$(( menu_budget - (SECONDS - menu_start) ))
         mrc=2
         if [ "$left" -gt 0 ]; then
-          merged=$(REPO_TIDY_MERGE_BUDGET="${REPO_TIDY_MERGE_BUDGET:-$(( left < 3 ? left : 3 ))}" \
-            python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); mrc=$?
+          b=$(( left < 3 ? left : 3 ))   # 外部设的预算只能更短，不能把 hook 拖过 10s 上限
+          [ -n "${REPO_TIDY_MERGE_BUDGET:-}" ] && b=$(awk -v a="$REPO_TIDY_MERGE_BUDGET" -v b="$b" 'BEGIN{print (a+0<b)?a:b}')
+          merged=$(REPO_TIDY_MERGE_BUDGET="$b" python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); mrc=$?
         fi
         if [ "$mrc" = 0 ]; then
           state="${merged}，可回收"
-        elif [ "$mrc" = 2 ]; then
+        elif [ "$mrc" != 1 ] || [ "$merged" != "未合并" ]; then   # 超时、崩溃一律未判定，不下否定结论
           state="合并状态未判定（时间预算内没判完，跑 repo_tidy.py 查看）"
         else
           ahead=$(git rev-list --count "origin/$master..$wt_branch" 2>/dev/null || echo 0)

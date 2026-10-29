@@ -226,6 +226,26 @@ ok "hook 预算耗尽：--is-merged 退出 2（未判定），不报未合并" '
 OUT=$(REPO_TIDY_MERGE_BUDGET=0.001 $TIDY "$T/p9" --apply); echo "$OUT"
 ok "交互式 --apply 不受预算影响，rebase 合并的分支与 worktree 已回收" \
   '[ ! -d "$T/p9--rb" ] && ! git -C "$T/p9" show-ref -q refs/heads/task/rb'
+
+echo "== T13c 判定的鲁棒与严格：内容含任意字节不崩；只差空白的不算已合并 =="
+git -c init.defaultBranch=master init --bare -q "$T/r7.git"
+git -c init.defaultBranch=master clone -q "$T/r7.git" "$T/p10" 2>/dev/null
+git -C "$T/p10" config user.email t@t.t; git -C "$T/p10" config user.name t
+printf 'l1\n' > "$T/p10/f.txt"; printf 'b\n' > "$T/p10/w.txt"; git -C "$T/p10" add -A; git -C "$T/p10" commit -qm base; git -C "$T/p10" push -q origin master
+git -C "$T/p10" worktree add -q --no-track -b task/ctrl "$T/p10--ctrl" origin/master
+printf 'l1\nAAA\n' > "$T/p10--ctrl/f.txt"; git -C "$T/p10--ctrl" commit -qam branch
+git -C "$T/p10" worktree add -q --no-track -b task/ws "$T/p10--ws" origin/master
+printf 'b\nc\n' > "$T/p10--ws/w.txt"; git -C "$T/p10--ws" commit -qam ws
+printf 'l1\nBBB\001\n\001RTC x y\n' > "$T/p10/f.txt"; git -C "$T/p10" commit -qam ctrl   # 文件内容含裸 0x01 和伪造的提交标记
+printf 'b\nc \n' > "$T/p10/w.txt"; git -C "$T/p10" commit -qam "ws（多一个尾随空格）"
+git -C "$T/p10" push -q origin master
+$TIDY "$T/p10" --is-merged task/ctrl >/dev/null 2>"$T/ctrl.err"; rc=$?
+ok "文件含 0x01 / 伪造标记：--is-merged 不崩、判未合并" '[ $rc = 1 ] && ! grep -q Traceback "$T/ctrl.err"'
+$TIDY "$T/p10" --is-merged task/ws >/dev/null 2>&1; rc=$?
+ok "只差尾随空格（cherry 认等价）不算已合并" '[ $rc = 1 ]'
+OUT=$($TIDY "$T/p10" --apply 2>&1); echo "$OUT"
+ok "--apply 不崩，两个分支及 worktree 都保留" '! grep -q Traceback <<<"$OUT" && [ -d "$T/p10--ctrl" ] && [ -d "$T/p10--ws" ]'
+
 ok "空提交分支及 worktree 原样保留" 'git -C "$T/p8" show-ref -q refs/heads/task/empty && [ -d "$T/p8--empty" ]'
 
 echo; echo "结果: PASS=$PASS FAIL=$FAIL"

@@ -122,6 +122,14 @@ UNKNOWN = _Unknown()
 
 
 def merged_into(repo, branch, base, budget=None):
+    """见 _merged_into。任何解析或运行异常都返回 UNKNOWN：单个分支判不了不拖垮整个 tidy，也不当成「未合并」。"""
+    try:
+        return _merged_into(repo, branch, base, budget)
+    except Exception:
+        return UNKNOWN
+
+
+def _merged_into(repo, branch, base, budget=None):
     """「已合并」的唯一判定：tidy / --apply / --all、--new 的僵尸检查、[tasks] 菜单都走这里。
 
     返回理由字符串（已证实合并）、None（未合并）或 UNKNOWN（budget 秒内 git 没跑完）。只用本地对象，不调网络。
@@ -174,12 +182,10 @@ def merged_into(repo, branch, base, budget=None):
     want = edit_lines(run("-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--no-color",
                           fork, branch)[1])
     rc, out, _ = run("-c", "core.quotePath=false", "log", "--no-merges", "--no-renames", "--no-color",
-                     "-p", "-U0", "--format=%x01%H %T", f"{fork}..{base}", "--", *changed)
+                     "-p", "-U0", f"--format={COMMIT_MARK}%H %T", f"{fork}..{base}", "--", *changed)
     if rc == 124:
         return UNKNOWN
-    for block in out.split("\1")[1:]:
-        header, _, patch = block.partition("\n")
-        sha, tree = header.split()
+    for sha, tree, patch in split_commits(out):
         if edit_lines(patch) == want:
             rc, ok = merges_to(f"{sha}^", tree)
             if ok:
@@ -191,8 +197,47 @@ def merged_into(repo, branch, base, budget=None):
     if rc == 124:
         return UNKNOWN
     if rc == 0 and out and all(l.startswith("-") for l in out.splitlines()):
-        return reason
+        # cherry 按 patch-id 比对，忽略空白；删分支前逐字核对：分支改过的每个文件，
+        # 其最终版本（blob）必须在分叉点之后的默认分支上原样出现过（删除也要有对应删除）
+        rc, raw, _ = run("log", "--no-merges", "--no-renames", "--raw", "--no-abbrev", "-z", "--format=", f"{fork}..{base}",
+                         "--", *changed)
+        if rc == 124:
+            return UNKNOWN
+        landed = set()
+        fields = raw.split("\0")
+        for i in range(0, len(fields) - 1, 2):
+            meta, path = fields[i].lstrip("\n"), fields[i + 1]
+            if meta.startswith(":") and len(meta.split()) >= 4:
+                landed.add((path, meta.split()[3]))
+        rc, tree_out, _ = run("ls-tree", "-z", branch, "--", *changed)
+        if rc == 124:
+            return UNKNOWN
+        final = {path: "0" * 40 for path in changed}
+        for entry in tree_out.split("\0"):
+            meta, _, path = entry.partition("\t")
+            if path in final and len(meta.split()) == 3:
+                final[path] = meta.split()[2]
+        if all((path, blob) in landed for path, blob in final.items()):
+            return reason
     return None
+
+
+COMMIT_MARK = "\x01RTC "  # 只认行首；-p 输出里补丁内容行以 +/-/空格 开头，文件里的任何字节都不会被当成提交边界
+
+
+def split_commits(out):
+    """切开 `git log -p --format=<COMMIT_MARK>%H %T` 的输出，产出 (sha, tree, patch)；格式不对的块跳过。"""
+    block = None
+    for line in out.split("\n"):
+        if line.startswith(COMMIT_MARK):
+            if block:
+                yield block[0], block[1], "\n".join(block[2])
+            parts = line[len(COMMIT_MARK):].split()
+            block = (parts[0], parts[1], []) if len(parts) == 2 else None
+        elif block:
+            block[2].append(line)
+    if block:
+        yield block[0], block[1], "\n".join(block[2])
 
 
 def edit_lines(patch):
@@ -259,6 +304,9 @@ def analyze(repo: Path) -> RepoPlan:
             plan.keep.append((name, f"与 {base} 同点（刚切出的空任务分支）"))
             continue
         merged = merged_into(repo, name, base)
+        if merged is UNKNOWN:
+            plan.keep.append((name, "合并判定出错，保留（不当作已合并删除）"))
+            continue
         if merged:
             deletable.add(name)
             plan.del_branches.append((name, merged))
@@ -474,8 +522,7 @@ def main():
                              float(env_budget) if env_budget else None)
         if reason is UNKNOWN:
             sys.exit(2)
-        if reason:
-            print(reason)
+        print(reason or "未合并")  # 菜单只在看到「未合并」时下否定结论；崩溃也是退出 1，不能混为一谈
         sys.exit(0 if reason else 1)
 
     if args.all and args.new:
