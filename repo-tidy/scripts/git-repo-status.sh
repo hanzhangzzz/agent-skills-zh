@@ -68,7 +68,11 @@ echo "$line"
 # ── 任务菜单：worktree 就是任务登记表 ────────────────────────────────────
 # 让 session 开局就看见有哪些任务在进行，新任务/续任务的判断有据可依。
 if [ -n "$master" ]; then
+  # 「已合并」与 repo_tidy.py --apply 共用同一判定（含 squash 合并），菜单说可回收就真能回收
+  tidy="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repo_tidy.py"
   menu=""
+  # 合并判定的总预算（秒）：hook 上限 10s，菜单必须在超时前输出；预算用完的分支标「未判定」
+  menu_budget="${REPO_TIDY_MENU_BUDGET:-6}"; menu_start=$SECONDS
   while IFS= read -r wt_line; do
     case "$wt_line" in
       worktree\ *) wt_path="${wt_line#worktree }" ;;
@@ -76,8 +80,17 @@ if [ -n "$master" ]; then
         wt_branch="${wt_line#branch refs/heads/}"
         [ "$wt_path" = "$top" ] && continue          # 主检出本身不算任务
         state=""
-        if git merge-base --is-ancestor "$wt_branch" "origin/$master" 2>/dev/null; then
-          state="已合并进 master，可回收"
+        left=$(( menu_budget - (SECONDS - menu_start) ))
+        mrc=2
+        if [ "$left" -gt 0 ]; then
+          b=$(( left < 3 ? left : 3 ))   # 外部设的预算只能更短，不能把 hook 拖过 10s 上限
+          [ -n "${REPO_TIDY_MERGE_BUDGET:-}" ] && b=$(awk -v a="$REPO_TIDY_MERGE_BUDGET" -v b="$b" 'BEGIN{print (a+0<b)?a:b}')
+          merged=$(REPO_TIDY_MERGE_BUDGET="$b" python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); mrc=$?
+        fi
+        if [ "$mrc" = 0 ]; then
+          state="${merged}，可回收"
+        elif [ "$mrc" != 1 ] || [ "$merged" != "未合并" ]; then   # 超时、崩溃一律未判定，不下否定结论
+          state="合并状态未判定（时间预算内没判完，跑 repo_tidy.py 查看）"
         else
           ahead=$(git rev-list --count "origin/$master..$wt_branch" 2>/dev/null || echo 0)
           if git show-ref -q "refs/remotes/origin/$wt_branch"; then

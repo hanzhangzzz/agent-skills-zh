@@ -21,21 +21,22 @@ mkrepo() { # mkrepo <路径> <初始分支>
   git init -q -b "$2" "$1" && g "$1" commit -q --allow-empty -m init
 }
 
-# ── 场景 1：--new 在干净同步仓库 → 归位 + 开 task 分支 ──
+# ── 场景 1：--new 在干净同步仓库 → 建 sibling worktree，主检出不动 ──
 R1="$CODE/std"; mkrepo "$R1" master; mkorigin "$R1-origin.git"
 g "$R1" remote add origin "$R1-origin.git"
 g "$R1" push -q origin master
 out=$(python3 "$RT" "$R1" --new auth 2>&1); rc=$?
 cur=$(git -C "$R1" branch --show-current)
-if [ $rc -eq 0 ] && [ "$cur" = "task/auth" ]; then ok "--new 归位并开 task/auth"; else bad "--new 归位并开 task/auth" "rc=$rc cur=$cur out=${out:0:100}"; fi
+wt=$(git -C "$CODE/std--auth" branch --show-current 2>/dev/null)
+if [ $rc -eq 0 ] && [ "$cur" = "master" ] && [ "$wt" = "task/auth" ]; then ok "--new 建 worktree，主检出留在 master"; else bad "--new 建 worktree，主检出留在 master" "rc=$rc cur=$cur wt=$wt out=${out:0:100}"; fi
 
-# ── 场景 2：主检出被占用（干净地停在别的任务分支）→ sibling worktree ──
+# ── 场景 2：再开一个任务 → 另建 sibling worktree ──
 WT="$R1-auth-wt"; rm -rf "$WT"
 out=$(python3 "$RT" "$R1" --new api 2>&1); rc=$?
 # worktree 命名 = {仓库名}--{task}（双横线），位于仓库同级
 if [ $rc -eq 0 ] && git -C "$R1" worktree list | grep -q "task/api" && [ -d "$CODE/std--api" ]; then
-  ok "--new 主检出占用时建 sibling worktree"
-else bad "--new 主检出占用时建 sibling worktree" "rc=$rc FULL_OUT=$out"; fi
+  ok "--new 第二个任务另建 sibling worktree"
+else bad "--new 第二个任务另建 sibling worktree" "rc=$rc FULL_OUT=$out"; fi
 
 # ── 场景 3：已合并已推送分支 → dry-run 列出，--apply 删除 ──
 R3="$CODE/cleanup"; mkrepo "$R3" master; mkorigin "$R3-origin.git"

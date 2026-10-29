@@ -147,5 +147,53 @@ g "$WORK/std" worktree add -q "$WORK/wtm" master
 g "$WORK/wtm" reset -q --hard HEAD~1
 run "linked worktree 在 master 落后：不自动拉" "$WORK/wtm" '分支: master' 'behind 1' '!自动快进'
 
+# T13 [tasks] 菜单与 repo_tidy.py 共用「已合并」判定：squash 合并的 worktree 标可回收，未合并的不标
+mkrepo "$WORK/sq" master
+echo a > "$WORK/sq/a.txt"; g "$WORK/sq" add a.txt; g "$WORK/sq" commit -q -m base
+git init -q --bare "$WORK/sq-origin.git"
+git -C "$WORK/sq" remote add origin "$WORK/sq-origin.git"
+g "$WORK/sq" push -q origin master
+g "$WORK/sq" worktree add -q -b task/squashed "$WORK/sq--squashed" origin/master
+echo s >> "$WORK/sq--squashed/a.txt"; g "$WORK/sq--squashed" commit -q -am s1
+echo t > "$WORK/sq--squashed/t.txt"; g "$WORK/sq--squashed" add t.txt; g "$WORK/sq--squashed" commit -q -m s2
+g "$WORK/sq" worktree add -q -b task/open "$WORK/sq--open" origin/master
+echo o > "$WORK/sq--open/o.txt"; g "$WORK/sq--open" add o.txt; g "$WORK/sq--open" commit -q -m open
+g "$WORK/sq" merge -q --squash task/squashed >/dev/null 2>&1; g "$WORK/sq" commit -q -m "squash task/squashed"
+echo later >> "$WORK/sq/a.txt"; g "$WORK/sq" commit -q -am later   # squash 后默认分支又改了相邻行
+g "$WORK/sq" push -q origin master
+run "[tasks] squash 合并的 worktree 标可回收" "$WORK/sq" \
+  'sq--squashed  \[task/squashed\]  改动已全部进入 origin/master（squash/rebase 合并），可回收' \
+  'sq--open  \[task/open\]  未推送（ahead 1）' '!task/open.*可回收'
+
+# T14 热点文件：默认分支每个提交都改同一文件、任务分支也改它 → 候选成百上千。
+# squash 提交按内容（增删行）认出，rebase 合并靠 git cherry，热点文件上的日常提交不会逐个试；
+# 预算只给 git 调用设超时，超时标「未判定」，不能落成「未推送 / MR 待合」。断言不依赖机器快慢：预算直接压到近 0。
+mkrepo "$WORK/hot" master
+echo 0 > "$WORK/hot/hot.txt"; g "$WORK/hot" add hot.txt; g "$WORK/hot" commit -q -m base
+git init -q --bare "$WORK/hot-origin.git"; git -C "$WORK/hot" remote add origin "$WORK/hot-origin.git"
+for b in sq open part; do g "$WORK/hot" worktree add -q -b "task/$b" "$WORK/hot--$b" master
+  echo "work-$b" >> "$WORK/hot--$b/hot.txt"; g "$WORK/hot--$b" commit -q -am "$b"; done
+echo "more-part" >> "$WORK/hot--part/hot.txt"; g "$WORK/hot--part" commit -q -am "part 2"
+echo "work-sq" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "squash task/sq"   # task/sq 的 squash 提交，最老的候选
+for i in $(seq 1 150); do echo "$i" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "c$i"; done
+echo "work-part" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "task/part 的一半"     # 只合进一半：不能判已合并
+for i in $(seq 151 300); do echo "$i" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "c$i"; done
+g "$WORK/hot" push -q origin master
+run "[tasks] 热点文件：squash 按内容认出，未合并 / 部分合并的分支判未推送（默认预算）" "$WORK/hot" \
+  'hot--sq  \[task/sq\]  改动已全部进入 origin/master（squash/rebase 合并），可回收' \
+  'hot--open  \[task/open\]  未推送（ahead 1）' 'hot--part  \[task/part\]  未推送（ahead 2）'
+REPO_TIDY_MERGE_BUDGET=0.001 run "[tasks] 单分支预算耗尽：标未判定，不落成未推送 / MR 待合 / 可回收" "$WORK/hot" \
+  'hot--sq  \[task/sq\]  合并状态未判定' 'hot--open  \[task/open\]  合并状态未判定' \
+  'hot--part  \[task/part\]  合并状态未判定' '!可回收|未推送|MR 待合'
+REPO_TIDY_MENU_BUDGET=0 run "[tasks] 菜单总预算耗尽：全部标未判定，菜单照常输出" "$WORK/hot" \
+  'hot--sq  \[task/sq\]  合并状态未判定' 'hot--open  \[task/open\]  合并状态未判定' \
+  'hot--part  \[task/part\]  合并状态未判定' '!可回收|未推送|MR 待合'
+
+REAL_PY=$(command -v python3); mkdir -p "$WORK/crashbin"
+printf '#!/bin/bash\ncase "$*" in *--is-merged*) echo "Traceback: boom" >&2; exit 1;; esac\nexec %q "$@"\n' "$REAL_PY" > "$WORK/crashbin/python3"
+chmod +x "$WORK/crashbin/python3"
+PATH="$WORK/crashbin:$PATH" run "[tasks] 判定进程崩溃（退出 1 但没说未合并）：标未判定，不下否定结论" "$WORK/hot" \
+  'hot--open  \[task/open\]  合并状态未判定' '!未推送|MR 待合|可回收'
+
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]
