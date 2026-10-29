@@ -71,6 +71,8 @@ if [ -n "$master" ]; then
   # 「已合并」与 repo_tidy.py --apply 共用同一判定（含 squash 合并），菜单说可回收就真能回收
   tidy="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repo_tidy.py"
   menu=""
+  # 合并判定的总预算（秒）：hook 上限 10s，菜单必须在超时前输出；预算用完的分支标「未判定」
+  menu_budget="${REPO_TIDY_MENU_BUDGET:-6}"; menu_start=$SECONDS
   while IFS= read -r wt_line; do
     case "$wt_line" in
       worktree\ *) wt_path="${wt_line#worktree }" ;;
@@ -78,7 +80,10 @@ if [ -n "$master" ]; then
         wt_branch="${wt_line#branch refs/heads/}"
         [ "$wt_path" = "$top" ] && continue          # 主检出本身不算任务
         state=""
-        if merged=$(python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); then
+        left=$(( menu_budget - (SECONDS - menu_start) ))
+        if [ "$left" -le 0 ]; then
+          state="合并状态未判定（菜单时间预算已用完，跑 repo_tidy.py 查看）"
+        elif merged=$(REPO_TIDY_MERGE_BUDGET=$(( left < 3 ? left : 3 )) python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); then
           state="${merged}，可回收"
         else
           ahead=$(git rev-list --count "origin/$master..$wt_branch" 2>/dev/null || echo 0)

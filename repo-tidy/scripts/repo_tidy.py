@@ -13,6 +13,7 @@
 import argparse
 import os
 import subprocess
+import time
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -20,6 +21,7 @@ from pathlib import Path
 CODE_ROOT = Path.home() / "Desktop/Works/code"
 FETCH_TIMEOUT = 30
 SQUASH_SCAN = 2000  # 找 squash 提交时最多回看默认分支多少个提交，防止古老分支拖慢菜单
+MERGE_BUDGET = 3.0  # 单个分支找 squash 提交的墙钟预算（秒）；超时判「未证实」，绝不误判已合并
 TREE_TIMEOUT = 120  # switch / ff / worktree 这类要动工作区的操作，大仓库给足时间
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}  # 永不挂在交互认证上
 # 用户可能把 skill 软链到某个 worktree 里；回收前要查，否则软链悬空、skill「丢失」
@@ -111,7 +113,7 @@ def master_ref(repo):
     return None, False
 
 
-def merged_into(repo, branch, base):
+def merged_into(repo, branch, base, budget=MERGE_BUDGET):
     """「已合并」的唯一判定：tidy / --apply / --all、--new 的僵尸检查、[tasks] 菜单都走这里。
 
     返回理由（已证实合并）或 None（未证实）。只用本地对象，不调网络。
@@ -125,6 +127,8 @@ def merged_into(repo, branch, base):
        不用 git cherry / patch-id：squash 把多个提交压成一个，逐提交对不上；整体 diff 的
        patch-id 又会被默认分支在相邻行的改动打乱。merge-tree 冲突或结果不同一律判「未证实」。
     分支相对分叉点没有净改动（例如只有空提交）时内容证据为空，不据此判合并。
+    代价：每个候选一次 merge-tree。逐文件增删行数与分支净改动相同的候选（squash 提交的样子）先试，
+    整体受 budget 秒墙钟预算约束；超时返回 None（未证实），宁可漏判不误删。
     upstream 已删除（gone）不作依据：PR 关闭不合并时远端分支同样会被删。
     """
     if git(repo, "merge-base", "--is-ancestor", branch, base)[0] == 0:
@@ -132,8 +136,10 @@ def merged_into(repo, branch, base):
     rc, fork, _ = git(repo, "merge-base", base, branch)
     if rc != 0 or not fork:
         return None
-    rc, out, _ = git(repo, "diff", "--name-only", "--no-renames", fork, branch)
-    changed = set(out.splitlines())
+    deadline = time.monotonic() + budget
+    rc, out, _ = git(repo, "diff", "--numstat", "--no-renames", "-z", fork, branch)
+    numstat = parse_numstat(out)
+    changed = set(numstat)
     if rc != 0 or not changed:
         return None
     reason = f"改动已全部进入 {base}（squash/rebase 合并）"
@@ -146,13 +152,31 @@ def merged_into(repo, branch, base):
         return reason
     # 候选 S：分叉点之后默认分支上改过分支全部文件的非 merge 提交，新的在前
     rc, out, _ = git(repo, "log", "--no-merges", "--no-renames", f"--max-count={SQUASH_SCAN}",
-                     "--format=%x00%H %T", "--name-only", f"{fork}..{base}", timeout=60)
-    for block in out.split("\0")[1:]:  # NUL 分隔：文件名里可能有 @ 等任意可见字符
-        header, *paths = block.splitlines()
+                     "--format=%x01%H %T", "--numstat", "-z", f"{fork}..{base}", timeout=60)
+    exact, rest = [], []
+    for block in out.split("\1")[1:]:  # \1 分隔提交，-z 让文件名里的任意字符都安全
+        header, _, body = block.partition("\0")  # 头部以 NUL 结尾，其后是 numstat
         sha, tree = header.split()
-        if changed <= set(paths) and merges_to(f"{sha}^", tree):
+        stat = parse_numstat(body)
+        if changed <= set(stat):
+            (exact if stat == numstat else rest).append((sha, tree))
+    for sha, tree in exact + rest:
+        if time.monotonic() > deadline:
+            return None
+        if merges_to(f"{sha}^", tree):
             return reason
     return None
+
+
+def parse_numstat(out):
+    """解析 `--numstat -z` 输出为 {路径: "增 删"}；二进制文件记 "- -"。"""
+    stat, fields = {}, out.strip("\n\0").split("\0")
+    for f in fields:
+        f = f.lstrip("\n")
+        parts = f.split("\t", 2)
+        if len(parts) == 3 and parts[2]:
+            stat[parts[2]] = f"{parts[0]} {parts[1]}"
+    return stat
 
 
 class RepoPlan:
@@ -422,7 +446,8 @@ def main():
         master, has_remote = master_ref(top) if rc == 0 else (None, False)
         if master is None:
             sys.exit(1)
-        reason = merged_into(top, args.is_merged, f"origin/{master}" if has_remote else master)
+        budget = float(os.environ.get("REPO_TIDY_MERGE_BUDGET", MERGE_BUDGET))
+        reason = merged_into(top, args.is_merged, f"origin/{master}" if has_remote else master, budget)
         if reason:
             print(reason)
         sys.exit(0 if reason else 1)

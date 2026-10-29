@@ -165,5 +165,20 @@ run "[tasks] squash 合并的 worktree 标可回收" "$WORK/sq" \
   'sq--squashed  \[task/squashed\]  改动已全部进入 origin/master（squash/rebase 合并），可回收' \
   'sq--open  \[task/open\]  未推送（ahead 1）' '!task/open.*可回收'
 
+# T14 热点文件：默认分支每个提交都改同一文件、任务分支也改它 → squash 候选很多。
+# 合并判定受总预算约束，[tasks] 菜单必须照常输出全部 worktree，不能被 hook 超时整段吞掉
+mkrepo "$WORK/hot" master
+echo 0 > "$WORK/hot/hot.txt"; g "$WORK/hot" add hot.txt; g "$WORK/hot" commit -q -m base
+git init -q --bare "$WORK/hot-origin.git"; git -C "$WORK/hot" remote add origin "$WORK/hot-origin.git"
+for b in a b c; do g "$WORK/hot" worktree add -q -b "task/$b" "$WORK/hot--$b" master
+  echo "$b" >> "$WORK/hot--$b/hot.txt"; g "$WORK/hot--$b" commit -q -am "$b"; done
+for i in $(seq 1 300); do echo "$i" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "c$i"; done
+g "$WORK/hot" push -q origin master
+t0=$SECONDS
+REPO_TIDY_MENU_BUDGET=1 run "[tasks] 热点文件下合并判定受预算约束，菜单完整输出" "$WORK/hot" \
+  'hot--a  \[task/a\]' 'hot--b  \[task/b\]' 'hot--c  \[task/c\]' '!可回收'
+dt=$((SECONDS - t0))
+if [ "$dt" -le 4 ]; then echo "✓ 热点文件菜单耗时 ${dt}s（预算 1s）"; pass=$((pass+1)); else echo "✗ 热点文件菜单耗时 ${dt}s 超出预算"; fail=$((fail+1)); fi
+
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]
