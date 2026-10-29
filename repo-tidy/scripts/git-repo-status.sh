@@ -81,10 +81,15 @@ if [ -n "$master" ]; then
         [ "$wt_path" = "$top" ] && continue          # 主检出本身不算任务
         state=""
         left=$(( menu_budget - (SECONDS - menu_start) ))
-        if [ "$left" -le 0 ]; then
-          state="合并状态未判定（菜单时间预算已用完，跑 repo_tidy.py 查看）"
-        elif merged=$(REPO_TIDY_MERGE_BUDGET=$(( left < 3 ? left : 3 )) python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); then
+        mrc=2
+        if [ "$left" -gt 0 ]; then
+          merged=$(REPO_TIDY_MERGE_BUDGET="${REPO_TIDY_MERGE_BUDGET:-$(( left < 3 ? left : 3 ))}" \
+            python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); mrc=$?
+        fi
+        if [ "$mrc" = 0 ]; then
           state="${merged}，可回收"
+        elif [ "$mrc" = 2 ]; then
+          state="合并状态未判定（时间预算内没判完，跑 repo_tidy.py 查看）"
         else
           ahead=$(git rev-list --count "origin/$master..$wt_branch" 2>/dev/null || echo 0)
           if git show-ref -q "refs/remotes/origin/$wt_branch"; then

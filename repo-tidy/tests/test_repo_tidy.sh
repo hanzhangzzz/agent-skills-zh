@@ -208,6 +208,24 @@ ok "squash worktree 已回收"        '[ ! -d "$T/p8--sq" ] && [ ! -d "$T/p8--sq
 ok "squash 分支已删"                '! git -C "$T/p8" show-ref -q refs/heads/task/sq && ! git -C "$T/p8" show-ref -q refs/heads/task/sq2'
 ok "新提交分支及 worktree 原样保留" '[ "$(git -C "$T/p8" rev-parse task/more)" = "$MORE_TIP" ] && [ -f "$T/p8--more/m2.txt" ]'
 ok "未合并分支及 worktree 原样保留" '[ "$(git -C "$T/p8" rev-parse task/closed)" = "$CLOSED_TIP" ] && [ -f "$T/p8--closed/c1.txt" ]'
+
+echo "== T13b 热点文件上的 rebase 合并：hook 预算耗尽只报未判定，交互式 --apply 不受预算影响照常回收 =="
+git -c init.defaultBranch=master init --bare -q "$T/r6.git"
+git -c init.defaultBranch=master clone -q "$T/r6.git" "$T/p9" 2>/dev/null
+git -C "$T/p9" config user.email t@t.t; git -C "$T/p9" config user.name t
+echo 0 > "$T/p9/hot.txt"; git -C "$T/p9" add hot.txt; git -C "$T/p9" commit -qm base; git -C "$T/p9" push -q origin master
+git -C "$T/p9" worktree add -q --no-track -b task/rb "$T/p9--rb" origin/master
+for l in r1 r2; do echo "$l" >> "$T/p9--rb/hot.txt"; git -C "$T/p9--rb" commit -qam "$l"; done
+git -C "$T/p9--rb" push -qu origin task/rb 2>/dev/null
+# 默认分支：rebase 合并（逐个复制提交）之后，同一文件又被连续追加——直接合进 tip 会冲突，只能靠找到最后一个复制提交证实
+for l in r1 r2; do echo "$l" >> "$T/p9/hot.txt"; git -C "$T/p9" commit -qam "$l (rebased)"; done
+for i in $(seq 1 100); do echo "$i" >> "$T/p9/hot.txt"; git -C "$T/p9" commit -qam "c$i"; done
+git -C "$T/p9" push -q origin master
+REPO_TIDY_MERGE_BUDGET=0.001 $TIDY "$T/p9" --is-merged task/rb >/dev/null; rc=$?
+ok "hook 预算耗尽：--is-merged 退出 2（未判定），不报未合并" '[ $rc = 2 ]'
+OUT=$(REPO_TIDY_MERGE_BUDGET=0.001 $TIDY "$T/p9" --apply); echo "$OUT"
+ok "交互式 --apply 不受预算影响，rebase 合并的分支与 worktree 已回收" \
+  '[ ! -d "$T/p9--rb" ] && ! git -C "$T/p9" show-ref -q refs/heads/task/rb'
 ok "空提交分支及 worktree 原样保留" 'git -C "$T/p8" show-ref -q refs/heads/task/empty && [ -d "$T/p8--empty" ]'
 
 echo; echo "结果: PASS=$PASS FAIL=$FAIL"

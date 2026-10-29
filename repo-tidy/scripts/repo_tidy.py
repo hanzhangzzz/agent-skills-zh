@@ -20,8 +20,6 @@ from pathlib import Path
 
 CODE_ROOT = Path.home() / "Desktop/Works/code"
 FETCH_TIMEOUT = 30
-SQUASH_SCAN = 2000  # 找 squash 提交时最多回看默认分支多少个提交，防止古老分支拖慢菜单
-MERGE_BUDGET = 3.0  # 单个分支找 squash 提交的墙钟预算（秒）；超时判「未证实」，绝不误判已合并
 TREE_TIMEOUT = 120  # switch / ff / worktree 这类要动工作区的操作，大仓库给足时间
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}  # 永不挂在交互认证上
 # 用户可能把 skill 软链到某个 worktree 里；回收前要查，否则软链悬空、skill「丢失」
@@ -113,70 +111,94 @@ def master_ref(repo):
     return None, False
 
 
-def merged_into(repo, branch, base, budget=MERGE_BUDGET):
+class _Unknown:
+    """merged_into 在时间预算内没判完。布尔值为假：任何 `if merged:` 都不会把它当成已合并去删东西；
+    要区分「未判定」和「未合并」的调用方（[tasks] 菜单）用 `is UNKNOWN` 判断。"""
+    def __bool__(self):
+        return False
+
+
+UNKNOWN = _Unknown()
+
+
+def merged_into(repo, branch, base, budget=None):
     """「已合并」的唯一判定：tidy / --apply / --all、--new 的僵尸检查、[tasks] 菜单都走这里。
 
-    返回理由（已证实合并）或 None（未证实）。只用本地对象，不调网络。
+    返回理由字符串（已证实合并）、None（未合并）或 UNKNOWN（budget 秒内 git 没跑完）。只用本地对象，不调网络。
     1. 祖先关系：普通 merge / fast-forward 合并。
-    2. 内容已进入默认分支：squash / rebase 合并后任务分支的提交不是默认分支的祖先，
-       改用 `git merge-tree --write-tree` 在内存里做三方合并，满足任一条即证实：
-       a. 把分支合进默认分支当前 tip，结果树不变——分支的改动现在都在默认分支里；
-       b. 默认分支上某个提交 S 恰好等于「把分支合进 S 的父提交」——S 就是这个分支
-          的 squash 提交（GitHub/GitLab 的 squash 正是这样生成的），或 rebase 合并的最后一个提交。
-          b 是为了覆盖 squash 之后默认分支又改了相邻行、a 因冲突证不出来的常见情况。
-       不用 git cherry / patch-id：squash 把多个提交压成一个，逐提交对不上；整体 diff 的
-       patch-id 又会被默认分支在相邻行的改动打乱。merge-tree 冲突或结果不同一律判「未证实」。
+    2. 内容已进入默认分支（squash / rebase 合并后任务分支的提交不是默认分支的祖先）：
+       a. `git merge-tree --write-tree` 把分支合进默认分支 tip，结果树不变。
+       b. squash 合并：默认分支上找「增删行（不含上下文）与分支净改动完全相同」的提交 S，
+          再用 merge-tree 确认 S 恰好等于「把分支合进 S 的父提交」。一次 `git log -p -U0` 取全部候选，
+          按内容筛，热点文件上的日常提交内容不同、直接排除，不会逐个 merge-tree。
+          覆盖 squash 之后默认分支又改了相邻行、a 因冲突证不出来的常见情况。
+       c. rebase 合并：`git cherry` 显示分支每个提交在默认分支上都有等价补丁。
+    没有逐候选试错的循环，判定本身有界；budget 只给每次 git 调用设超时（hook 有 10s 上限），
+    超时返回 UNKNOWN。budget=None（交互式 --apply / --all）不设预算：时间不决定合没合。
     分支相对分叉点没有净改动（例如只有空提交）时内容证据为空，不据此判合并。
-    代价：每个候选一次 merge-tree。逐文件增删行数与分支净改动相同的候选（squash 提交的样子）先试，
-    整体受 budget 秒墙钟预算约束；超时返回 None（未证实），宁可漏判不误删。
     upstream 已删除（gone）不作依据：PR 关闭不合并时远端分支同样会被删。
     """
-    if git(repo, "merge-base", "--is-ancestor", branch, base)[0] == 0:
+    deadline = None if budget is None else time.monotonic() + budget
+
+    def run(*args, timeout=60):
+        if deadline is not None:
+            timeout = min(timeout, deadline - time.monotonic())
+            if timeout <= 0:
+                return 124, "", "timeout"
+        return git(repo, *args, timeout=timeout)
+
+    rc, _, _ = run("merge-base", "--is-ancestor", branch, base)
+    if rc == 0:
         return f"已合并进 {base}"
-    rc, fork, _ = git(repo, "merge-base", base, branch)
+    rc, fork, _ = run("merge-base", base, branch)
+    if rc == 124:
+        return UNKNOWN
     if rc != 0 or not fork:
         return None
-    deadline = time.monotonic() + budget
-    rc, out, _ = git(repo, "diff", "--numstat", "--no-renames", "-z", fork, branch)
-    numstat = parse_numstat(out)
-    changed = set(numstat)
+    rc, out, _ = run("diff", "--name-only", "--no-renames", "-z", fork, branch)
+    changed = sorted({f for f in out.split("\0") if f})
+    if rc == 124:
+        return UNKNOWN
     if rc != 0 or not changed:
         return None
     reason = f"改动已全部进入 {base}（squash/rebase 合并）"
 
     def merges_to(ours, tree):
-        rc, out, _ = git(repo, "merge-tree", "--write-tree", "--no-messages", ours, branch, timeout=60)
-        return rc == 0 and bool(out) and out.splitlines()[0] == tree
+        rc, out, _ = run("merge-tree", "--write-tree", "--no-messages", ours, branch)
+        return rc, rc == 0 and bool(out) and out.splitlines()[0] == tree
 
-    if merges_to(base, git(repo, "rev-parse", f"{base}^{{tree}}")[1]):
+    rc, ok = merges_to(base, run("rev-parse", f"{base}^{{tree}}")[1])
+    if ok:
         return reason
-    # 候选 S：分叉点之后默认分支上改过分支全部文件的非 merge 提交，新的在前
-    rc, out, _ = git(repo, "log", "--no-merges", "--no-renames", f"--max-count={SQUASH_SCAN}",
-                     "--format=%x01%H %T", "--numstat", "-z", f"{fork}..{base}", timeout=60)
-    exact, rest = [], []
-    for block in out.split("\1")[1:]:  # \1 分隔提交，-z 让文件名里的任意字符都安全
-        header, _, body = block.partition("\0")  # 头部以 NUL 结尾，其后是 numstat
+    # b. squash 提交：按内容找
+    want = edit_lines(run("-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--no-color",
+                          fork, branch)[1])
+    rc, out, _ = run("-c", "core.quotePath=false", "log", "--no-merges", "--no-renames", "--no-color",
+                     "-p", "-U0", "--format=%x01%H %T", f"{fork}..{base}", "--", *changed)
+    if rc == 124:
+        return UNKNOWN
+    for block in out.split("\1")[1:]:
+        header, _, patch = block.partition("\n")
         sha, tree = header.split()
-        stat = parse_numstat(body)
-        if changed <= set(stat):
-            (exact if stat == numstat else rest).append((sha, tree))
-    for sha, tree in exact + rest:
-        if time.monotonic() > deadline:
-            return None
-        if merges_to(f"{sha}^", tree):
-            return reason
+        if edit_lines(patch) == want:
+            rc, ok = merges_to(f"{sha}^", tree)
+            if ok:
+                return reason
+            if rc == 124:
+                return UNKNOWN
+    # c. rebase 合并：每个提交都有等价补丁
+    rc, out, _ = run("cherry", base, branch)
+    if rc == 124:
+        return UNKNOWN
+    if rc == 0 and out and all(l.startswith("-") for l in out.splitlines()):
+        return reason
     return None
 
 
-def parse_numstat(out):
-    """解析 `--numstat -z` 输出为 {路径: "增 删"}；二进制文件记 "- -"。"""
-    stat, fields = {}, out.strip("\n\0").split("\0")
-    for f in fields:
-        f = f.lstrip("\n")
-        parts = f.split("\t", 2)
-        if len(parts) == 3 and parts[2]:
-            stat[parts[2]] = f"{parts[0]} {parts[1]}"
-    return stat
+def edit_lines(patch):
+    """-U0 补丁里的增删行（不含上下文和文件头），排序后用于按内容比对。"""
+    return sorted(l for l in patch.splitlines()
+                  if l[:1] in ("+", "-") and not l.startswith(("+++ ", "--- ")))
 
 
 class RepoPlan:
@@ -438,7 +460,8 @@ def main():
                     help="归位后开新任务：一律建 sibling worktree <仓库>--<task>，主检出不动（隐含 --apply）")
     ap.add_argument("--is-merged", metavar="BRANCH",
                     help="只判定 BRANCH 是否已合并进默认分支（不 fetch、不动分支和工作区）：已合并打印理由、退出 0，"
-                         "否则退出 1。供 [tasks] 菜单与 tidy 共用同一判定")
+                         "未合并退出 1；环境变量 REPO_TIDY_MERGE_BUDGET 给了秒数且没判完退出 2（未判定）。"
+                         "供 [tasks] 菜单与 tidy 共用同一判定")
     args = ap.parse_args()
 
     if args.is_merged:
@@ -446,8 +469,11 @@ def main():
         master, has_remote = master_ref(top) if rc == 0 else (None, False)
         if master is None:
             sys.exit(1)
-        budget = float(os.environ.get("REPO_TIDY_MERGE_BUDGET", MERGE_BUDGET))
-        reason = merged_into(top, args.is_merged, f"origin/{master}" if has_remote else master, budget)
+        env_budget = os.environ.get("REPO_TIDY_MERGE_BUDGET")  # hook 传秒级预算；不设 = 不限时
+        reason = merged_into(top, args.is_merged, f"origin/{master}" if has_remote else master,
+                             float(env_budget) if env_budget else None)
+        if reason is UNKNOWN:
+            sys.exit(2)
         if reason:
             print(reason)
         sys.exit(0 if reason else 1)

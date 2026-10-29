@@ -165,20 +165,29 @@ run "[tasks] squash 合并的 worktree 标可回收" "$WORK/sq" \
   'sq--squashed  \[task/squashed\]  改动已全部进入 origin/master（squash/rebase 合并），可回收' \
   'sq--open  \[task/open\]  未推送（ahead 1）' '!task/open.*可回收'
 
-# T14 热点文件：默认分支每个提交都改同一文件、任务分支也改它 → squash 候选很多。
-# 合并判定受总预算约束，[tasks] 菜单必须照常输出全部 worktree，不能被 hook 超时整段吞掉
+# T14 热点文件：默认分支每个提交都改同一文件、任务分支也改它 → 候选成百上千。
+# squash 提交按内容（增删行）认出，rebase 合并靠 git cherry，热点文件上的日常提交不会逐个试；
+# 预算只给 git 调用设超时，超时标「未判定」，不能落成「未推送 / MR 待合」。断言不依赖机器快慢：预算直接压到近 0。
 mkrepo "$WORK/hot" master
 echo 0 > "$WORK/hot/hot.txt"; g "$WORK/hot" add hot.txt; g "$WORK/hot" commit -q -m base
 git init -q --bare "$WORK/hot-origin.git"; git -C "$WORK/hot" remote add origin "$WORK/hot-origin.git"
-for b in a b c; do g "$WORK/hot" worktree add -q -b "task/$b" "$WORK/hot--$b" master
-  echo "$b" >> "$WORK/hot--$b/hot.txt"; g "$WORK/hot--$b" commit -q -am "$b"; done
-for i in $(seq 1 300); do echo "$i" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "c$i"; done
+for b in sq open part; do g "$WORK/hot" worktree add -q -b "task/$b" "$WORK/hot--$b" master
+  echo "work-$b" >> "$WORK/hot--$b/hot.txt"; g "$WORK/hot--$b" commit -q -am "$b"; done
+echo "more-part" >> "$WORK/hot--part/hot.txt"; g "$WORK/hot--part" commit -q -am "part 2"
+echo "work-sq" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "squash task/sq"   # task/sq 的 squash 提交，最老的候选
+for i in $(seq 1 150); do echo "$i" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "c$i"; done
+echo "work-part" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "task/part 的一半"     # 只合进一半：不能判已合并
+for i in $(seq 151 300); do echo "$i" >> "$WORK/hot/hot.txt"; g "$WORK/hot" commit -q -am "c$i"; done
 g "$WORK/hot" push -q origin master
-t0=$SECONDS
-REPO_TIDY_MENU_BUDGET=1 run "[tasks] 热点文件下合并判定受预算约束，菜单完整输出" "$WORK/hot" \
-  'hot--a  \[task/a\]' 'hot--b  \[task/b\]' 'hot--c  \[task/c\]' '!可回收'
-dt=$((SECONDS - t0))
-if [ "$dt" -le 4 ]; then echo "✓ 热点文件菜单耗时 ${dt}s（预算 1s）"; pass=$((pass+1)); else echo "✗ 热点文件菜单耗时 ${dt}s 超出预算"; fail=$((fail+1)); fi
+run "[tasks] 热点文件：squash 按内容认出，未合并 / 部分合并的分支判未推送（默认预算）" "$WORK/hot" \
+  'hot--sq  \[task/sq\]  改动已全部进入 origin/master（squash/rebase 合并），可回收' \
+  'hot--open  \[task/open\]  未推送（ahead 1）' 'hot--part  \[task/part\]  未推送（ahead 2）'
+REPO_TIDY_MERGE_BUDGET=0.001 run "[tasks] 单分支预算耗尽：标未判定，不落成未推送 / MR 待合 / 可回收" "$WORK/hot" \
+  'hot--sq  \[task/sq\]  合并状态未判定' 'hot--open  \[task/open\]  合并状态未判定' \
+  'hot--part  \[task/part\]  合并状态未判定' '!可回收|未推送|MR 待合'
+REPO_TIDY_MENU_BUDGET=0 run "[tasks] 菜单总预算耗尽：全部标未判定，菜单照常输出" "$WORK/hot" \
+  'hot--sq  \[task/sq\]  合并状态未判定' 'hot--open  \[task/open\]  合并状态未判定' \
+  'hot--part  \[task/part\]  合并状态未判定' '!可回收|未推送|MR 待合'
 
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]
