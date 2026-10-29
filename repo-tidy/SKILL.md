@@ -112,7 +112,7 @@ Codex 声明改为 `codex-<thread ID>.task`，cwd 存在 `codex-<thread ID>`。�
 export SESSION_KEY_CMD="tmux display-message -p '#{pane_id}'"
 ```
 
-环境变量：`EDITOR_HERE_APP`（macOS 上要打开的应用，默认 VS Code）、`EDITOR_HERE_CMD`（直接指定打开命令，如 `cursor` / `zed`）、`EDITOR_HERE_DRY=1`（只打印路径不打开，排错用）。
+环境变量：`EDITOR_HERE_APP`（macOS 上要打开的应用，默认 VS Code）、`EDITOR_HERE_CMD`（直接指定打开命令，如 `cursor` / `zed`）、`EDITOR_HERE_DRY=1`（只打印路径不打开、不弹通知，排错用）、`EDITOR_HERE_OSASCRIPT`（osascript 路径，测试换成记录桩）。
 
 ### 排错
 

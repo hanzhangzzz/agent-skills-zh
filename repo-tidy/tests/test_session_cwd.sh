@@ -203,10 +203,16 @@ out=$(env LC_ALL=en_US.UTF-8 HOME="$FAKE_HOME" SESSION_KEY_CMD="echo LOC" EDITOR
 [ "$out" = "$TARGET" ] && ok "读写两侧 locale 不同仍能匹配 owner" || bad "locale" "实际: $out"
 
 
-# 拿不到任何路径的失败分支（dry 模式）：不弹通知；整份测试从未调用真实 osascript
-env HOME="$SCRATCH/empty-home" SESSION_KEY_CMD="echo NOPE" EDITOR_HERE_DRY=1 bash "$EDITOR" >/dev/null 2>&1; rc=$?
-[ $rc -ne 0 ] && ! grep -q "display notification" "$OSA_LOG" \
-  && ok "失败分支 dry 模式不弹通知，测试只走 osascript 记录桩" || bad "测试弹了通知" "rc=$rc; $(grep -c 'display notification' "$OSA_LOG") 条"
+# 拿不到任何路径的失败分支（dry 模式）：不弹通知，且 osascript 调用全部落到记录桩。
+# uname 伪造成 Darwin，让 Linux CI 也真正走进 macOS 分支；桩对查询一律失败，逼出失败分支。
+mkdir -p "$SCRATCH/fakebin"
+printf '#!/bin/bash\n[ "$1" = "-s" ] && { echo Darwin; exit 0; }\nexec /usr/bin/uname "$@"\n' > "$SCRATCH/fakebin/uname"
+chmod +x "$SCRATCH/fakebin/uname"; : > "$OSA_LOG"
+env PATH="$SCRATCH/fakebin:$PATH" HOME="$SCRATCH/empty-home" SESSION_KEY_CMD="echo NOPE" EDITOR_HERE_DRY=1 \
+  bash "$EDITOR" >/dev/null 2>&1; rc=$?
+[ $rc -ne 0 ] && [ -s "$OSA_LOG" ] && ! grep -q "display notification" "$OSA_LOG" \
+  && ok "失败分支 dry 模式不弹通知，osascript 调用全部落到记录桩" \
+  || bad "通知守卫" "rc=$rc; 桩调用 $(wc -l < "$OSA_LOG") 次; 通知 $(grep -c 'display notification' "$OSA_LOG") 条"
 
 echo "── 通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ]
