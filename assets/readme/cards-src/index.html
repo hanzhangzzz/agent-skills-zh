@@ -340,6 +340,30 @@ bash worker-reviewer.sh --loop</pre></div>
   <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
 </div>
 <div class="card">
+  <div class="top"><span class="name">session-handoff</span><span class="tag">交接文件 · 找回 session</span></div>
+  <div class="one">任务跨 session 续接：交接文件按仓库 origin 存放，目录改名也找得到；找不到旧 session 时，在 Claude Code 与 Codex 记录里搜出来并给出恢复命令</div>
+  <div class="grid">
+    <div class="pane in"><h4>输入 · 触发</h4><pre>「存一下」→ 写交接文件
+  按仓库 origin 存放
+「接着上次」→ 复述后接着干
+
+「我路径改名前叫 data，
+  resume 不回来」
+→ handoff.py find code/data 价值</pre></div>
+    <div class="pane"><h4>历史运行输出摘录</h4><pre>[claude] b27c7289-…
+  cwd: ~/…/code/data  <span class="warn">（目录已不存在）</span>
+  仓库: gitlab.&lt;内网&gt;/&lt;组&gt;/data-construction
+  首条: 我们一步一步的夯实。先说价值……
+  末条: 给data这个路径改个名……
+  <span class="hl">恢复: cd ~/…/code/data-construction &amp;&amp; claude --resume b27c7289-…</span>
+    原目录已不存在。上面的目录是该会话后来所在、同一仓库的现存目录
+
+[codex] 01a17723-…
+  <span class="hl">恢复: cd ~/…/data-construction &amp;&amp; codex resume 01a17723-…</span></pre><div class="src">2026-10-29 本机对真实会话记录只读运行 find 的输出（路径、域名、id 已缩写）</div></div>
+  </div>
+  <div class="foot">agent-skills-zh · 流程与输出格式说明，非运行截图</div>
+</div>
+<div class="card">
   <div class="top"><span class="name">ci-review</span><span class="tag">CI 里 · 验证型 CR</span></div>
   <div class="one">每个 PR/MR 审执行，机器人分支另审价值；Markdown 行为文件同样审查</div>
   <div class="grid">

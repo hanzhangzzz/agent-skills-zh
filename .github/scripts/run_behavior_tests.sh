@@ -27,6 +27,7 @@ run "repo-tidy installer" bash repo-tidy/tests/test_install.sh "$WORK/repo-tidy-
 run "model-guard rules" bash model-guard/tests/test_guard.sh "$WORK/model-guard-rules"
 run "model-guard installer" bash model-guard/tests/test_install.sh "$WORK/model-guard-install"
 run "repo-map" bash repo-map/scripts/test_repo_map.sh
+run "session-handoff" python3 session-handoff/tests/test_handoff.py
 run "harness" bash harness/scripts/test_harness.sh
 run "hkr-render network" python3 hkr-render/scripts/test_publish_network.py
 run "wechat article wrapper" python3 wechat-article-md-local/tests/test_download_wrapper.py

@@ -258,6 +258,16 @@
       ]
     },
     {
+      "name": "session-handoff",
+      "source": "./",
+      "strict": false,
+      "description": "Carry a task across sessions in Claude Code and Codex: save a handoff file keyed by the repo's git origin (survives directory renames, one file per task), resume from it, and find lost sessions in both tools' logs with the exact resume command. 跨 session 交接与找回",
+      "version": "1.0.0",
+      "skills": [
+        "./session-handoff"
+      ]
+    },
+    {
       "name": "x-post",
       "source": "./",
       "strict": false,
