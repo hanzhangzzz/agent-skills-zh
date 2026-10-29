@@ -14,6 +14,10 @@ bad()  { echo "✗ $1"; echo "    $2"; FAIL=$((FAIL+1)); }
 
 # 用假 HOME 隔离，绝不碰真实 ~/.claude/session-cwd
 FAKE_HOME="$SCRATCH/home"; mkdir -p "$FAKE_HOME"
+# osascript 换成记录桩：测试不查询真实 iTerm/Terminal，也不弹真实桌面通知
+OSA_LOG="$SCRATCH/osascript.log"; : > "$OSA_LOG"
+printf '#!/bin/bash\necho "$*" >> %q\nexit 1\n' "$OSA_LOG" > "$SCRATCH/fake-osascript"; chmod +x "$SCRATCH/fake-osascript"
+export EDITOR_HERE_OSASCRIPT="$SCRATCH/fake-osascript"
 run_cwd() {  # run_cwd <会话id> <json> ; 回显 stdout
   printf '%s' "$2" | env HOME="$FAKE_HOME" TERM_SESSION_ID="$1" ITERM_SESSION_ID="$1" bash "$CWD_HOOK" --agent claude
 }
@@ -197,6 +201,18 @@ printf '%s\nowner %s %s\n' "$STALE" "$dead" "$OLD_START" > "$SD/tty-ttys888"
 run_cwd_tty "w0t0p1:LOC" "{\"cwd\":\"$TARGET\"}" zh_CN.UTF-8 >/dev/null
 out=$(env LC_ALL=en_US.UTF-8 HOME="$FAKE_HOME" SESSION_KEY_CMD="echo LOC" EDITOR_HERE_DRY=1 bash "$EDITOR" 2>/dev/null)
 [ "$out" = "$TARGET" ] && ok "读写两侧 locale 不同仍能匹配 owner" || bad "locale" "实际: $out"
+
+
+# 拿不到任何路径的失败分支（dry 模式）：不弹通知，且 osascript 调用全部落到记录桩。
+# uname 伪造成 Darwin，让 Linux CI 也真正走进 macOS 分支；桩对查询一律失败，逼出失败分支。
+mkdir -p "$SCRATCH/fakebin"
+printf '#!/bin/bash\n[ "$1" = "-s" ] && { echo Darwin; exit 0; }\nexec /usr/bin/uname "$@"\n' > "$SCRATCH/fakebin/uname"
+chmod +x "$SCRATCH/fakebin/uname"; : > "$OSA_LOG"
+env PATH="$SCRATCH/fakebin:$PATH" HOME="$SCRATCH/empty-home" SESSION_KEY_CMD="echo NOPE" EDITOR_HERE_DRY=1 \
+  bash "$EDITOR" >/dev/null 2>&1; rc=$?
+[ $rc -ne 0 ] && [ -s "$OSA_LOG" ] && ! grep -q "display notification" "$OSA_LOG" \
+  && ok "失败分支 dry 模式不弹通知，osascript 调用全部落到记录桩" \
+  || bad "通知守卫" "rc=$rc; 桩调用 $(wc -l < "$OSA_LOG") 次; 通知 $(grep -c 'display notification' "$OSA_LOG") 条"
 
 echo "── 通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ]

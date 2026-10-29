@@ -7,16 +7,18 @@ set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 CONF="${1:?用法: audio_inbox.sh <配置文件>}"
+unset NOTIFY LOCK                          # 只认配置文件，不受外部同名环境变量影响
 # shellcheck source=/dev/null
-. "$CONF"                                  # 提供 INBOX OUT QUALITY LOG
+. "$CONF"                                  # 提供 INBOX OUT QUALITY LOG，可选 NOTIFY LOCK
 DONE="$INBOX/_done"
-LOCK="/tmp/audio-inbox-$(id -u).lock"
+LOCK="${LOCK:-/tmp/audio-inbox-$(id -u).lock}"   # 配置可覆盖（测试用，避免与真实实例抢锁）
 EXTS="m4a aac wav flac ogg opus amr wma mp4 mov"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
-# 通知内容通过 argv 传入 AppleScript，文件名不会被当作代码执行
+# 通知内容通过 argv 传入 AppleScript，文件名不会被当作代码执行；配置里 NOTIFY=0 则不弹（测试用）
 notify() {
+  [ "${NOTIFY:-1}" = 0 ] && return 0
   /usr/bin/osascript - "$1" "$2" >/dev/null 2>&1 <<'EOF' || true
 on run argv
   display notification (item 2 of argv) with title "音频收件箱" subtitle (item 1 of argv)
