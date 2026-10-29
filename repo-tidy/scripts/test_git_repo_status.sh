@@ -147,5 +147,23 @@ g "$WORK/std" worktree add -q "$WORK/wtm" master
 g "$WORK/wtm" reset -q --hard HEAD~1
 run "linked worktree 在 master 落后：不自动拉" "$WORK/wtm" '分支: master' 'behind 1' '!自动快进'
 
+# T13 [tasks] 菜单与 repo_tidy.py 共用「已合并」判定：squash 合并的 worktree 标可回收，未合并的不标
+mkrepo "$WORK/sq" master
+echo a > "$WORK/sq/a.txt"; g "$WORK/sq" add a.txt; g "$WORK/sq" commit -q -m base
+git init -q --bare "$WORK/sq-origin.git"
+git -C "$WORK/sq" remote add origin "$WORK/sq-origin.git"
+g "$WORK/sq" push -q origin master
+g "$WORK/sq" worktree add -q -b task/squashed "$WORK/sq--squashed" origin/master
+echo s >> "$WORK/sq--squashed/a.txt"; g "$WORK/sq--squashed" commit -q -am s1
+echo t > "$WORK/sq--squashed/t.txt"; g "$WORK/sq--squashed" add t.txt; g "$WORK/sq--squashed" commit -q -m s2
+g "$WORK/sq" worktree add -q -b task/open "$WORK/sq--open" origin/master
+echo o > "$WORK/sq--open/o.txt"; g "$WORK/sq--open" add o.txt; g "$WORK/sq--open" commit -q -m open
+g "$WORK/sq" merge -q --squash task/squashed >/dev/null 2>&1; g "$WORK/sq" commit -q -m "squash task/squashed"
+echo later >> "$WORK/sq/a.txt"; g "$WORK/sq" commit -q -am later   # squash 后默认分支又改了相邻行
+g "$WORK/sq" push -q origin master
+run "[tasks] squash 合并的 worktree 标可回收" "$WORK/sq" \
+  'sq--squashed  \[task/squashed\]  改动已全部进入 origin/master（squash/rebase 合并），可回收' \
+  'sq--open  \[task/open\]  未推送（ahead 1）' '!task/open.*可回收'
+
 echo "── 通过 $pass / 失败 $fail"
 [ "$fail" -eq 0 ]

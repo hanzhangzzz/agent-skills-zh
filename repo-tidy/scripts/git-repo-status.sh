@@ -68,6 +68,8 @@ echo "$line"
 # ── 任务菜单：worktree 就是任务登记表 ────────────────────────────────────
 # 让 session 开局就看见有哪些任务在进行，新任务/续任务的判断有据可依。
 if [ -n "$master" ]; then
+  # 「已合并」与 repo_tidy.py --apply 共用同一判定（含 squash 合并），菜单说可回收就真能回收
+  tidy="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/repo_tidy.py"
   menu=""
   while IFS= read -r wt_line; do
     case "$wt_line" in
@@ -76,8 +78,8 @@ if [ -n "$master" ]; then
         wt_branch="${wt_line#branch refs/heads/}"
         [ "$wt_path" = "$top" ] && continue          # 主检出本身不算任务
         state=""
-        if git merge-base --is-ancestor "$wt_branch" "origin/$master" 2>/dev/null; then
-          state="已合并进 master，可回收"
+        if merged=$(python3 "$tidy" "$top" --is-merged "$wt_branch" 2>/dev/null); then
+          state="${merged}，可回收"
         else
           ahead=$(git rev-list --count "origin/$master..$wt_branch" 2>/dev/null || echo 0)
           if git show-ref -q "refs/remotes/origin/$wt_branch"; then

@@ -9,7 +9,7 @@ description: "Prepare safe task branches/worktrees, preserve active or unverifie
 
 组件（脚本就地运行于 skill 目录，不复制副本）：
 - `scripts/repo_tidy.py` —— 核心：tidy / `--all` / `--new`
-- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净；主检出在 master/main 且已跟踪文件干净时先限时 3s `git pull --ff-only`，拉不下来退回按上次 fetch 本地快进，失败只报告；远端挂起时每个 session 开局多等约 3s）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏），供判断续任务还是开新任务
+- `scripts/git-repo-status.sh` —— SessionStart hook：注入 `[repo-status]`（分支/ahead-behind/脏净；主检出在 master/main 且已跟踪文件干净时先限时 3s `git pull --ff-only`，拉不下来退回按上次 fetch 本地快进，失败只报告；远端挂起时每个 session 开局多等约 3s）+ `[tasks]` 菜单（各 worktree 的分支与状态：已合并可回收 / 已推送 MR 待合 / 未推送 / 工作区脏；「已合并」调 `repo_tidy.py --is-merged`，与 `--apply` 同一判定），供判断续任务还是开新任务
 - `scripts/session-cwd.sh` —— Claude Code 按终端键记录 cwd；Codex 用 `--agent codex` 按真实 thread ID 隔离。静默输出（挂在 SessionStart/UserPromptSubmit 上，stdout 会被注入上下文）
 - `scripts/codex-session.py` —— 保存 Codex 会话目录及终端绑定，按客户端 PID、启动时间校验归属；共享后端继承的终端环境变量不能作为绑定依据
 - `scripts/worktree-fetch.sh` —— PreToolUse(EnterWorktree) 先 `fetch --prune`，保证新任务分支从最新的 origin/<默认分支> 切出
@@ -52,8 +52,8 @@ Codex 运行中不能切工作目录，但**能用绝对路径在别的目录里
    ```bash
    python3 "$SKILL_DIR/scripts/repo_tidy.py" . --new <task>
    ```
-   主检出空闲就原地切分支（此时 cwd 就是任务目录，第 3 步可跳过）；被占用则建 worktree 并输出路径
-3. 若拿到的是 worktree 路径，声明它，好让用户的编辑器快捷键跟过去：
+   一律建 sibling worktree 并输出路径，主检出不动
+3. 声明这个 worktree 路径，好让用户的编辑器快捷键跟过去：
    ```bash
    bash "$SKILL_DIR/scripts/task-here.sh" <worktree 路径>
    ```
@@ -154,7 +154,9 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" --all
 
 核对 dry-run 清单与授权范围。已授权的单仓库清理或按项目规则启动新任务，可直接处理已核实安全的对象，不因换轮次重复询问。未推送、未合并、脏工作区、活跃任务或归属不明的对象保留；范围扩大或存在数据丢失风险时说明影响并确认。
 
-`upstream 已删除` 本身不能证明工作已合并。脚本只自动清理已证实为默认分支祖先的分支；未证实合并的 gone 分支保留并报告；其关联 worktree 同样保留，但不单独列出目录。不阻塞 `--new` 创建新任务。squash 等不能由祖先关系证实的情况，也不自动删除；需要另行核实内容保留证据和清理授权。
+「已合并」只认两类本地证据（不调网络、不调 gh/glab）：分支是默认分支的祖先（普通 merge / ff）；或分支的改动已进入默认分支（squash / rebase 合并）——用 `git merge-tree` 在内存里把分支合进默认分支 tip 结果不变，或在默认分支上找到恰好等于「把分支合进其父提交」的那个 squash 提交。squash 之后分支又有新提交、只有空提交、合并有冲突的，都判未证实。
+
+`upstream 已删除` 本身不能证明工作已合并（PR 关闭不合并时远端分支同样会被删）。未证实合并的 gone 分支保留并报告；其关联 worktree 同样保留，但不单独列出目录。不阻塞 `--new` 创建新任务。
 
 ```bash
 python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --apply
@@ -178,16 +180,15 @@ python3 "$SKILL_DIR/scripts/repo_tidy.py" <repo-path> --new <task>
 ```
 
 - 先对该仓库执行一次归位（等价 `--apply`，安全边界相同）
-- 主检出空闲（在默认分支且无 tracked 改动）→ 原地 `switch -c task/<task> origin/<默认分支>`，**这会占用主检出**
-- 主检出被占用 → 创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径
-- 若占用主检出的分支**已经合并进默认分支**（任务做完没归位的僵尸），会明确报出来并给归位命令，而不是默默绕开——绕开正是主检出被长期霸占的原因：每个新任务都躲去 worktree，没人回来收拾
+- 一律创建 sibling worktree `<仓库>--<task>`（基于最新 origin/<默认分支>）并输出 `cd` 路径；**主检出不动**，不论它是否空闲
+- 若主检出停在**已经合并进默认分支**的分支上（任务做完没归位、且有未提交改动所以没被自动切回），会明确报出来并给归位命令，而不是默默绕开
 - `<task>` 含 `/` 时按原样作分支名，否则加 `task/` 前缀
 
 ## 脚本行为（安全边界）
 
 | 对象 | 条件 | 动作 |
 |------|------|------|
-| 本地分支 | 已合并进 origin/<默认分支> | 删除 |
+| 本地分支 | 已合并进 origin/<默认分支>（祖先关系，或 squash/rebase 后改动已全部进入） | 删除 |
 | 本地分支 | upstream 已删除 | 已证实合并则按上一行清理，否则保留并报告 |
 | 本地分支 | 有未推提交 / 从未推送 / MR 进行中 | **保留并报告** |
 | 本地分支 | 与 origin/<默认分支> 同点且未推送过（刚切出的空任务分支） | **保留**（并行 session 可能正要用） |

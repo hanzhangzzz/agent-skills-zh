@@ -19,6 +19,7 @@ from pathlib import Path
 
 CODE_ROOT = Path.home() / "Desktop/Works/code"
 FETCH_TIMEOUT = 30
+SQUASH_SCAN = 2000  # 找 squash 提交时最多回看默认分支多少个提交，防止古老分支拖慢菜单
 TREE_TIMEOUT = 120  # switch / ff / worktree 这类要动工作区的操作，大仓库给足时间
 GIT_ENV = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}  # 永不挂在交互认证上
 # 用户可能把 skill 软链到某个 worktree 里；回收前要查，否则软链悬空、skill「丢失」
@@ -110,6 +111,50 @@ def master_ref(repo):
     return None, False
 
 
+def merged_into(repo, branch, base):
+    """「已合并」的唯一判定：tidy / --apply / --all、--new 的僵尸检查、[tasks] 菜单都走这里。
+
+    返回理由（已证实合并）或 None（未证实）。只用本地对象，不调网络。
+    1. 祖先关系：普通 merge / fast-forward 合并。
+    2. 内容已进入默认分支：squash / rebase 合并后任务分支的提交不是默认分支的祖先，
+       改用 `git merge-tree --write-tree` 在内存里做三方合并，满足任一条即证实：
+       a. 把分支合进默认分支当前 tip，结果树不变——分支的改动现在都在默认分支里；
+       b. 默认分支上某个提交 S 恰好等于「把分支合进 S 的父提交」——S 就是这个分支
+          的 squash 提交（GitHub/GitLab 的 squash 正是这样生成的），或 rebase 合并的最后一个提交。
+          b 是为了覆盖 squash 之后默认分支又改了相邻行、a 因冲突证不出来的常见情况。
+       不用 git cherry / patch-id：squash 把多个提交压成一个，逐提交对不上；整体 diff 的
+       patch-id 又会被默认分支在相邻行的改动打乱。merge-tree 冲突或结果不同一律判「未证实」。
+    分支相对分叉点没有净改动（例如只有空提交）时内容证据为空，不据此判合并。
+    upstream 已删除（gone）不作依据：PR 关闭不合并时远端分支同样会被删。
+    """
+    if git(repo, "merge-base", "--is-ancestor", branch, base)[0] == 0:
+        return f"已合并进 {base}"
+    rc, fork, _ = git(repo, "merge-base", base, branch)
+    if rc != 0 or not fork:
+        return None
+    rc, out, _ = git(repo, "diff", "--name-only", "--no-renames", fork, branch)
+    changed = set(out.splitlines())
+    if rc != 0 or not changed:
+        return None
+    reason = f"改动已全部进入 {base}（squash/rebase 合并）"
+
+    def merges_to(ours, tree):
+        rc, out, _ = git(repo, "merge-tree", "--write-tree", "--no-messages", ours, branch, timeout=60)
+        return rc == 0 and bool(out) and out.splitlines()[0] == tree
+
+    if merges_to(base, git(repo, "rev-parse", f"{base}^{{tree}}")[1]):
+        return reason
+    # 候选 S：分叉点之后默认分支上改过分支全部文件的非 merge 提交，新的在前
+    rc, out, _ = git(repo, "log", "--no-merges", "--no-renames", f"--max-count={SQUASH_SCAN}",
+                     "--format=%x00%H %T", "--name-only", f"{fork}..{base}", timeout=60)
+    for block in out.split("\0")[1:]:  # NUL 分隔：文件名里可能有 @ 等任意可见字符
+        header, *paths = block.splitlines()
+        sha, tree = header.split()
+        if changed <= set(paths) and merges_to(f"{sha}^", tree):
+            return reason
+    return None
+
+
 class RepoPlan:
     def __init__(self, repo):
         self.repo = repo
@@ -167,10 +212,10 @@ def analyze(repo: Path) -> RepoPlan:
             # 注：switch -c X origin/master 会自动把 upstream 设成 origin/master，故不能只判空
             plan.keep.append((name, f"与 {base} 同点（刚切出的空任务分支）"))
             continue
-        merged = git(repo, "merge-base", "--is-ancestor", name, base)[0] == 0
+        merged = merged_into(repo, name, base)
         if merged:
             deletable.add(name)
-            plan.del_branches.append((name, f"已合并进 {base}"))
+            plan.del_branches.append((name, merged))
         elif info["track"] == "[gone]":
             # 远端删分支不能证明内容已合并（也可能是误删或未保留的提交）。
             plan.keep.append((name, "upstream 已删除但未证实合并，保留本地提交"))
@@ -287,7 +332,7 @@ def apply_plan(plan: RepoPlan):
 
 
 def start_task(repo: Path, task: str):
-    """归位后开新任务：主检出空闲则原地切分支，被占用则建 sibling worktree。"""
+    """归位后开新任务：一律建 sibling worktree，主检出不动——它恒定停在默认分支，只作阅读窗口。"""
     master, has_remote = master_ref(repo)
     if master is None:
         print("❌ 未识别出 master/main 分支，无法开任务", file=sys.stderr)
@@ -299,15 +344,12 @@ def start_task(repo: Path, task: str):
         sys.exit(1)
 
     head = git(repo, "rev-parse", "--abbrev-ref", "HEAD")[1]
-    rc_st, out_st, _ = git(repo, "status", "--porcelain", "--untracked-files=no", timeout=60)
-    busy = head != master or rc_st != 0 or bool(out_st)
+    _, out_st, _ = git(repo, "status", "--porcelain", "--untracked-files=no", timeout=60)
 
-    # 占着主检出的分支到底还活着吗？只看「脏不脏」会把做完没收拾的僵尸任务
-    # 当成「有人在用」，于是新任务绕去 worktree，而主检出从此没人还回来。
-    # 这种情况必须说出来，不能默默绕开。
-    if busy and head != master and has_remote:
-        merged = git(repo, "merge-base", "--is-ancestor", head, f"origin/{master}")[0] == 0
-        if merged:
+    # 主检出停在已合并的分支上 = 任务做完没归位（干净的通常已在上面的归位里切回）。
+    # 必须说出来，不能默默绕开，否则主检出从此没人还回来。
+    if head != master and has_remote:
+        if merged_into(repo, head, f"origin/{master}"):
             dirty = [l for l in out_st.splitlines() if l.strip()]
             stale = []
             for line in dirty:
@@ -326,26 +368,18 @@ def start_task(repo: Path, task: str):
             else:
                 print(f"    工作区干净，直接归位：cd {repo} && git switch {master} && "
                       f"git merge --ff-only origin/{master}")
-            print(f"    归位后重跑本命令，新任务就能用上主检出；现在先建并行 worktree。")
+            print(f"    归位后主检出回到 {master}，只作阅读窗口；新任务不受影响，照常建并行 worktree。")
 
-    if not busy:
-        rc, _, err = git(repo, "switch", "--no-track", "-c", branch, base, timeout=TREE_TIMEOUT)
-        if rc != 0:
-            print(f"❌ 建分支失败: {fatal_line(err, err)}", file=sys.stderr)
-            sys.exit(1)
-        print(f"✅ 已在主检出创建 {branch}（基于 {base}）\n目录: {repo}")
-    else:
-        wt = repo.parent / f"{repo.name}--{task.replace('/', '-')}"
-        if wt.exists():
-            print(f"❌ 目录已存在: {wt}", file=sys.stderr)
-            sys.exit(1)
-        rc, _, err = git(repo, "worktree", "add", "--no-track", "-b", branch, str(wt), base,
-                         timeout=TREE_TIMEOUT)
-        if rc != 0:
-            print(f"❌ 建 worktree 失败: {fatal_line(err, err)}", file=sys.stderr)
-            sys.exit(1)
-        why = "工作区有未提交改动" if head == master else f"停在 {head}"
-        print(f"✅ 主检出被占用（{why}），已建并行 worktree（分支 {branch}，基于 {base}）\ncd {wt}")
+    wt = repo.parent / f"{repo.name}--{task.replace('/', '-')}"
+    if wt.exists():
+        print(f"❌ 目录已存在: {wt}", file=sys.stderr)
+        sys.exit(1)
+    rc, _, err = git(repo, "worktree", "add", "--no-track", "-b", branch, str(wt), base,
+                     timeout=TREE_TIMEOUT)
+    if rc != 0:
+        print(f"❌ 建 worktree 失败: {fatal_line(err, err)}", file=sys.stderr)
+        sys.exit(1)
+    print(f"✅ 已建并行 worktree（分支 {branch}，基于 {base}），主检出保持不动\ncd {wt}")
 
 
 def render(plan: RepoPlan, applied: bool):
@@ -377,8 +411,21 @@ def main():
     ap.add_argument("--all", action="store_true", help=f"扫描 {CODE_ROOT} 下全部仓库")
     ap.add_argument("--apply", action="store_true", help="真正执行（默认 dry-run）")
     ap.add_argument("--new", metavar="TASK",
-                    help="归位后开新任务分支；主检出被占用时自动建 sibling worktree（隐含 --apply）")
+                    help="归位后开新任务：一律建 sibling worktree <仓库>--<task>，主检出不动（隐含 --apply）")
+    ap.add_argument("--is-merged", metavar="BRANCH",
+                    help="只判定 BRANCH 是否已合并进默认分支（不 fetch、不动分支和工作区）：已合并打印理由、退出 0，"
+                         "否则退出 1。供 [tasks] 菜单与 tidy 共用同一判定")
     args = ap.parse_args()
+
+    if args.is_merged:
+        rc, top, _ = git(Path(args.path).resolve(), "rev-parse", "--show-toplevel")
+        master, has_remote = master_ref(top) if rc == 0 else (None, False)
+        if master is None:
+            sys.exit(1)
+        reason = merged_into(top, args.is_merged, f"origin/{master}" if has_remote else master)
+        if reason:
+            print(reason)
+        sys.exit(0 if reason else 1)
 
     if args.all and args.new:
         print("❌ --new 只支持单仓库", file=sys.stderr)
