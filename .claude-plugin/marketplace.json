@@ -286,6 +286,16 @@
       "skills": [
         "./agent-chrome"
       ]
+    },
+    {
+      "name": "chatspss",
+      "source": "./",
+      "strict": false,
+      "description": "本地数据分析：运行 22 类统计任务、展示完整结果表并解释；复杂方法识别后说明实现范围。",
+      "version": "0.2.5",
+      "skills": [
+        "./chatspss"
+      ]
     }
   ]
 }

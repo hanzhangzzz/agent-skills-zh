@@ -140,6 +140,7 @@ test -f ~/.claude/skills/doc-reader/SKILL.md
 
 | 技能 / 插件 | 得到什么 | 使用条件与限制 |
 | --- | --- | --- |
+| [ChatSPSS](./chatspss/SKILL.md) | 本地运行 22 类基础统计分析，完整展示 Markdown 结果表后解释 | Python 3.12/3.13 与 requirements.txt 科学计算依赖；复杂模型按参考说明，不声称已实现 |
 | [doc-reader](./doc-reader/SKILL.md) | 英文网页/PDF → 中文译文与对照预览 | Python 与抓取依赖；生图另需已登录且可使用 imagegen 的 Codex CLI，`--no-ppt` 可跳过。图片下载失败时保留原链接 |
 | [scanned-book-ocr](./scanned-book-ocr/SKILL.md) | 扫描 PDF → 带页码的文本与校验记录 | Apple Silicon macOS、Python 3.12+、pdftoppm、OCR 模型；结果需抽检 |
 | [pdf-triptych](./pdf-triptych/SKILL.md) | 标准/规范 PDF → 骨架、细节、例子三联图 | 可读取的 PDF、全文理解与浏览器渲染检查；不是普通 OCR |
