@@ -100,17 +100,36 @@ def value_display(df, column, value):
     return str(value) if pd.notna(value) else 'NaN'
 
 
-# Public formatting helpers for ordinary Markdown output.
+# Only explicitly constructed statistical markup may bypass text escaping.
+class TrustedMarkdown(str):
+    pass
+
+
+def md_text(value):
+    text = str(value).replace('\\', '\\\\')  # must precede pipe escaping
+    text = text.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ')
+    text = text.replace('&', '&amp;').replace('<', '&lt;')
+    text = re.sub(r'([`*\[\]!|])', r'\\\1', text)
+    text = re.sub(r'(?<!\w)_|_(?!\w)', r'\\_', text)
+    # GFM uses two or more tildes for strikethrough; a single '~' is literal.
+    text = re.sub(r'~{2,}', lambda m: ''.join('\\~' for _ in m.group()), text)
+    # Protect a dynamic fragment even when it begins a paragraph on its own.
+    text = re.sub(r'^( {0,3})(#{1,6}|>|[-+]|\d+[.)])(?=\s)',
+                  lambda m: m.group(1) + re.sub(r'([#>+.)-])', r'\\\1', m.group(2)), text)
+    # Break automatic URL/email detection without changing rendered text.
+    return re.sub(r'(?i)(?:[a-z][a-z0-9+.-]*://|[a-z0-9._%+\-]+@)[^\s<>]*|(?<![\w\\])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?!\w)', lambda m: re.sub(r'([:.@])', r'\\\1', m.group()), text)
+
+
 def md_table(headers, rows, alignments=None, group_header=None):
     def escape(value):
-        return str(value).replace('|', chr(92)+'|').replace(chr(13)+chr(10), ' ').replace(chr(13), ' ').replace(chr(10), ' ')
+        return str(value) if isinstance(value, TrustedMarkdown) else md_text(value)
     alignments = alignments or ['c'] * len(headers)
     positions = {'l': ':---', 'c': ':---:', 'r': '---:'}
     lines = []
     if group_header:
         groups = [v.strip().replace('**','').replace('*','') for v in group_header.strip().strip('|').split('|') if v.strip() and v.strip() != '<']
         if groups:
-            lines += ['**'+' ｜ '.join(groups)+'**', '']
+            lines += ['**'+' ｜ '.join(md_text(v) for v in groups)+'**', '']
     lines += ['| '+' | '.join(escape(v) for v in headers)+' |', '| '+' | '.join(positions.get(v, ':---:') for v in alignments)+' |']
     lines += ['| '+' | '.join(escape(v) for v in row)+' |' for row in rows]
     return '\n'.join(lines)
@@ -126,11 +145,11 @@ def fmt_num(value, decimals=3):
 
 def fmt_p(value):
     if value < .001:
-        return '<0.001**'
+        return TrustedMarkdown('<0.001**')
     if value < .01:
-        return f'{value:.3f}**'
+        return TrustedMarkdown(f'{value:.3f}**')
     if value < .05:
-        return f'{value:.3f}*'
+        return TrustedMarkdown(f'{value:.3f}*')
     return f'{value:.3f}'
 
 
@@ -190,7 +209,7 @@ def frequency(df, names):
     if not rows:
         return '没有有效的列可供频数分析。'
     if len(names) == 1:
-        rows.append(['**总计**', '', f'**{total}**', '**100.00%**', ''])
+        rows.append([TrustedMarkdown('**总计**'), '', TrustedMarkdown(f'**{total}**'), TrustedMarkdown('**100.00%**'), ''])
     return '## 频数分析结果\n\n' + md_table(['变量', '选项', '频数', '百分比(%)', '累积百分比(%)'], rows, ['l', 'l', 'c', 'c', 'c'])
 
 
@@ -288,7 +307,7 @@ def correlation(df, names, method='pearson'):
         row = [f'{i+1}.{variable_display(df, name)}', fmt_num(data[name].mean()), fmt_num(data[name].std())]
         for j, other in enumerate(data):
             if i == j:
-                row.append('**1**')
+                row.append(TrustedMarkdown('**1**'))
             elif i < j:
                 row.append('')
             else:
@@ -297,7 +316,7 @@ def correlation(df, names, method='pearson'):
                     row.append('-')
                 else:
                     r, p = (stats.pearsonr if method == 'pearson' else stats.spearmanr)(pair[name], pair[other])
-                    row.append(f'{r:.3f}{fmt_sig(p)}')
+                    row.append(TrustedMarkdown(f'{r:.3f}{fmt_sig(p)}'))
         rows.append(row)
     parts = []
     missing = int(data.isna().any(axis=1).sum())
@@ -317,7 +336,7 @@ def two_group(df, outcome, group):
         return '所有因变量的t检验均失败，请检查数据。'
     t, p = stats.ttest_ind(a, b)
     table = md_table(['变量', f'{value_display(df, group, groups[0])}(n={len(a)})', f'{value_display(df, group, groups[1])}(n={len(b)})', 't', 'p'], [[variable_display(df, outcome), f'{fmt_num(a.mean(), 2)}±{fmt_num(a.std(), 2)}', f'{fmt_num(b.mean(), 2)}±{fmt_num(b.std(), 2)}', fmt_num(t), fmt_p(p)]], ['l'] + ['c'] * 4)
-    return f'## 独立样本t检验结果\n\n分组变量: {variable_display(df, group)}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；t自由度：{variable_display(df, outcome)} df={len(a)+len(b)-2}'
+    return f'## 独立样本t检验结果\n\n分组变量: {md_text(variable_display(df, group))}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；t自由度：{md_text(variable_display(df, outcome))} df={len(a)+len(b)-2}'
 
 
 def paired(df, before, after):
@@ -329,7 +348,7 @@ def paired(df, before, after):
     t, p = stats.ttest_rel(a, b)
     row = [f'{variable_display(df, before)} 配对 {variable_display(df, after)}', f'{fmt_num(a.mean(), 2)}±{fmt_num(a.std(), 2)}', f'{fmt_num(b.mean(), 2)}±{fmt_num(b.std(), 2)}', fmt_num((a-b).mean()), fmt_num(t), fmt_p(p)]
     table = md_table(['配对变量', '配对1(M±SD)', '配对2(M±SD)', '均值差', 't', 'p'], [row], ['l'] + ['c'] * 5)
-    return f"## 配对样本t检验结果\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；t自由度：{variable_display(df, before)}配{variable_display(df, after)} df={len(data)-1}"
+    return f"## 配对样本t检验结果\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；t自由度：{md_text(variable_display(df, before))}配{md_text(variable_display(df, after))} df={len(data)-1}"
 
 
 def chi_square(df, row, col):
@@ -349,7 +368,7 @@ def chi_square(df, row, col):
         cells = [f'{int(cross.loc[label, c])}({cross.loc[label, c] / cross[c].sum() * 100:.2f}%)' for c in columns]
         rows.append([variable_display(df, row) if i == 0 else '', value_display(df, row, label), *cells, str(int(cross.loc[label].sum())), fmt_num(chi) if i == 0 else '', fmt_p(p) if i == 0 else ''])
     table = md_table(['变量', '类别'] + [value_display(df, col, c) for c in columns] + ['合计', 'χ²', 'p'], rows, ['l', 'l'] + ['c'] * (len(columns)+3))
-    return f"## 卡方检验结果\n\n列变量: {variable_display(df, col)}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；频数格式为 频数(列百分比%)\n\n注：{variable_display(df, row)}：Cramer's V = {fmt_num(v)}，df = {dof}，N = {n}；最小期望频数 = {expected.min():.2f}；期望频数 <5 的单元格 {int((expected < 5).sum())}/{expected.size} 个"
+    return f"## 卡方检验结果\n\n列变量: {md_text(variable_display(df, col))}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；频数格式为 频数(列百分比%)\n\n注：{md_text(variable_display(df, row))}：Cramer's V = {fmt_num(v)}，df = {dof}，N = {n}；最小期望频数 = {expected.min():.2f}；期望频数 <5 的单元格 {int((expected < 5).sum())}/{expected.size} 个"
 
 
 def anova(df, outcome, group):
@@ -369,7 +388,7 @@ def anova(df, outcome, group):
     headers = ['变量'] + [f'{value_display(df, group, g)}(n={len(x)})' for g, x in zip(groups, samples)] + ['F', 'p']
     row = [variable_display(df, outcome)] + [f'{fmt_num(x.mean(), 2)}±{fmt_num(x.std(), 2)}' for x in samples] + [fmt_num(f), fmt_p(p)]
     table = md_table(headers, [row], ['l'] + ['c'] * (len(groups)+2))
-    return f'## 单因素方差分析结果\n\n分组变量: {variable_display(df, group)}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；{variable_display(df, outcome)}：F df1={len(groups)-1}, df2={len(data)-len(groups)}'
+    return f'## 单因素方差分析结果\n\n分组变量: {md_text(variable_display(df, group))}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；{md_text(variable_display(df, outcome))}：F df1={len(groups)-1}, df2={len(data)-len(groups)}'
 
 
 def nonparametric(df, outcome, group):
@@ -380,7 +399,7 @@ def nonparametric(df, outcome, group):
     samples = [_basic_num(df.loc[df[group] == g], outcome) for g in groups]
     def median_iqr(x):
         return f'{fmt_num(x.median())}({fmt_num(x.quantile(.25))}, {fmt_num(x.quantile(.75))})'
-    prefix = f'## 非参数检验结果\n\n分组变量: {variable_display(df, group)}\n\n\n### '
+    prefix = f'## 非参数检验结果\n\n分组变量: {md_text(variable_display(df, group))}\n\n\n### '
     if len(groups) == 2:
         a, b = samples
         if min(len(a), len(b)) < 1:
@@ -400,7 +419,7 @@ def nonparametric(df, outcome, group):
     headers = ['变量'] + [f'M(P25,P75) {chr(65+i)}.{value_display(df, group, g)}(n={len(x)})' for i, g, x in populated] + ['H', 'p', 'η²']
     row = [variable_display(df, outcome)] + [median_iqr(x) for _, _, x in populated] + [fmt_num(h), fmt_p(p), fmt_num(h/(n-1))]
     table = md_table(headers, [row], ['l'] + ['c'] * (len(populated)+3))
-    return prefix + 'Kruskal-Wallis H 检验\n\n' + table + f'\n\n\\* p<0.05 \\*\\* p<0.01 \\*\\*\\* p<0.001; η² = H/(N-1), 0.01 small / 0.06 medium / 0.14 large；H自由度：{variable_display(df, outcome)} df={len(populated)-1}'
+    return prefix + 'Kruskal-Wallis H 检验\n\n' + table + f'\n\n\\* p<0.05 \\*\\* p<0.01 \\*\\*\\* p<0.001; η² = H/(N-1), 0.01 small / 0.06 medium / 0.14 large；H自由度：{md_text(variable_display(df, outcome))} df={len(populated)-1}'
 
 
 def word_frequency(df, column, top=30):
@@ -439,7 +458,7 @@ def word_frequency(df, column, top=30):
     if not total:
         return '错误：分词后没有有效词语（可能全部被停用词过滤）。'
     rows = [[str(i), w, str(n), fmt_num(n/total*100, 2)] for i, (w, n) in enumerate(counts.most_common(top), 1)]
-    parts = ['## 词频分析结果\n', '### 数据概览\n', f'分析列: {variable_display(df, column)}', f'文本条数: {len(texts)}', f'有效词语总数: {total}', f'去重词语数: {len(counts)}', f'分词工具: {tool}\n', f'### 高频词表（Top {min(top, len(counts))}）\n', md_table(['排名', '词语', '频次', '占比(%)'], rows, ['c', 'l', 'c', 'c'])]
+    parts = ['## 词频分析结果\n', '### 数据概览\n', f'分析列: {md_text(variable_display(df, column))}', f'文本条数: {len(texts)}', f'有效词语总数: {total}', f'去重词语数: {len(counts)}', f'分词工具: {tool}\n', f'### 高频词表（Top {min(top, len(counts))}）\n', md_table(['排名', '词语', '频次', '占比(%)'], rows, ['c', 'l', 'c', 'c'])]
     if len(counts) >= 10:
         values = list(counts.values())
         bins = [sum(n == 1 for n in values), sum(2 <= n <= 5 for n in values), sum(6 <= n <= 20 for n in values), sum(n > 20 for n in values)]
@@ -577,7 +596,7 @@ def regression(df, outcome, predictors):
             results = model.fit()
         except Exception as e:
             msg = f'线性回归模型拟合失败: {e}'
-            print(f'[error] {msg}', file=sys.stderr)
+            print(md_text(f'[error] {msg}'), file=sys.stderr)
             _state['warnings'].append(msg)
             return f'错误：{msg}'
         vif_values = {}
@@ -587,7 +606,7 @@ def regression(df, outcome, predictors):
                 vif_values[var] = variance_inflation_factor(X_const.values, col_idx)
             except Exception as e:
                 msg = 'VIF 计算失败（变量 {variable}）: {error}'.format(variable=var, error=e)
-                print(f'[warning] {msg}', file=sys.stderr)
+                print(md_text(f'[warning] {msg}'), file=sys.stderr)
                 _state['warnings'].append(msg)
                 vif_values[var] = float('nan')
         dw_stat = durbin_watson(results.resid)
@@ -604,13 +623,13 @@ def regression(df, outcome, predictors):
         def _fmt_b_with_sig(b_value, p_value):
             b_str = fmt_num(b_value)
             if p_value < 0.01:
-                return f'{b_str}\\*\\*'
+                return TrustedMarkdown(f'{b_str}\\*\\*')
             elif p_value < 0.05:
-                return f'{b_str}\\*'
+                return TrustedMarkdown(f'{b_str}\\*')
             return b_str
         n_cols = 8
         group_header = '| | **非标准化系数** | < | **标准化系数** | < | < | **共线性诊断** | < |'
-        headers = ['**变量**', '**B**', '**标准误**', '**Beta**', '**t**', '**p**', '**VIF**', '**容差**']
+        headers = [TrustedMarkdown('**变量**'), TrustedMarkdown('**B**'), TrustedMarkdown('**标准误**'), TrustedMarkdown('**Beta**'), TrustedMarkdown('**t**'), TrustedMarkdown('**p**'), TrustedMarkdown('**VIF**'), TrustedMarkdown('**容差**')]
         alignments = ['l', 'r', 'r', 'c', 'r', 'c', 'r', 'r']
         rows = []
         rows.append(['(常数)', fmt_num(results.params.at[intercept_name]), fmt_num(results.bse.at[intercept_name]), '—', fmt_num(results.tvalues.at[intercept_name]), fmt_p(results.pvalues.at[intercept_name]), '—', '—'])
@@ -631,15 +650,15 @@ def regression(df, outcome, predictors):
         _tail = ' |  |  |  |  |  |  |'
         tail_lines = [f'| R² | {fmt_num(results.rsquared)}{_tail}', f"| {'调整 R²'} | {fmt_num(results.rsquared_adj)}{_tail}", f'| F | F({df1},{df2})={fmt_num(f_stat)}, {f_p_inline}{_tail}', f"| {'D-W 值'} | {fmt_num(dw_stat)}{_tail}", f'| N | {n_samples}{_tail}']
         table_md = table_md + '\n' + '\n'.join(tail_lines)
-        trailing = '\n\n**备注：** 因变量 = {dependent_variable}。\n\n**显著性：** \\* p<0.05，\\*\\* p<0.01。\n'.format(dependent_variable=dep_display)
+        trailing = '\n\n**备注：** 因变量 = {dependent_variable}。\n\n**显著性：** \\* p<0.05，\\*\\* p<0.01。\n'.format(dependent_variable=md_text(dep_display))
         parts.append(table_md + trailing)
         high_vif = [(var, vif_values[var]) for var in x_cols if not np.isnan(vif_values[var]) and vif_values[var] > 10]
         if high_vif:
-            vif_warning = ', '.join((f'{variable_display(df, v)}(VIF={fmt_num(val)})' for v, val in high_vif))
+            vif_warning = ', '.join((f'{md_text(variable_display(df, v))}(VIF={fmt_num(val)})' for v, val in high_vif))
             parts.append('\n> 注意：以下变量存在严重多重共线性问题（VIF>10）：{variables}'.format(variables=vif_warning))
         return '\n'.join(parts)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def logistic(df, outcome, predictors):
@@ -712,7 +731,7 @@ def logistic(df, outcome, predictors):
                 if len(encoding_map) > 5:
                     encoding_desc += '...'
                 msg = "自变量 '{variable}' 为分类变量，已自动编码: {encoding}".format(variable=display, encoding=encoding_desc)
-                print(f'[info] {msg}', file=sys.stderr)
+                print(md_text(f'[info] {msg}'), file=sys.stderr)
                 _state['warnings'].append(msg)
                 _state['warnings'].append("注意：'{variable}' 已使用顺序编码（1,2,3...），若为名义变量（无序分类），建议改用哑变量编码以避免引入虚假排序关系。".format(variable=display))
             else:
@@ -730,7 +749,7 @@ def logistic(df, outcome, predictors):
             nagelkerke = cox_snell / max_cs if max_cs != 0 else 0.0
             return {'mcfadden': mcfadden, 'cox_snell': cox_snell, 'nagelkerke': nagelkerke}
         except Exception as e:
-            print(f"[warning] {'伪R2计算失败: {error}'.format(error=e)}", file=sys.stderr)
+            print(md_text(f"[warning] {'伪R2计算失败: {error}'.format(error=e)}"), file=sys.stderr)
             return {'mcfadden': 0.0, 'cox_snell': 0.0, 'nagelkerke': 0.0}
 
     def _preflight_design_matrix(X, y, *, check_rank):
@@ -884,7 +903,7 @@ def logistic(df, outcome, predictors):
             return str(e)
         except Exception as e:
             msg = f'仅截距模型拟合失败: {e}'
-            print(f'[error] {msg}', file=sys.stderr)
+            print(md_text(f'[error] {msg}'), file=sys.stderr)
             return f'错误：{msg}'
         if selected_vars:
             X_final, final_intercept_name = _with_internal_intercept(X[selected_vars])
@@ -894,7 +913,7 @@ def logistic(df, outcome, predictors):
                 return str(e)
             except Exception as e:
                 msg = f'逻辑回归模型拟合失败: {e}'
-                print(f'[error] {msg}', file=sys.stderr)
+                print(md_text(f'[error] {msg}'), file=sys.stderr)
                 return f'错误：{msg}'
         else:
             final_model = null_model
@@ -908,7 +927,7 @@ def logistic(df, outcome, predictors):
         dep_display = variable_display(df, y_col)
         parts = []
         parts.append('## 二元逻辑回归分析结果\n')
-        parts.append('因变量: {dependent}，分析方法: {method}，候选变量: {candidates} 个，最终保留: {retained} 个\n'.format(dependent=dep_display, method=method_cn, candidates=len(x_cols), retained=len(selected_vars)))
+        parts.append('因变量: {dependent}，分析方法: {method}，候选变量: {candidates} 个，最终保留: {retained} 个\n'.format(dependent=md_text(dep_display), method=method_cn, candidates=len(x_cols), retained=len(selected_vars)))
         parts.append('### 模型似然比检验\n')
         lrt_headers = ['模型', '-2倍对数似然值', '卡方值', 'df', 'p', 'AIC 值', 'BIC 值']
         lrt_rows = [['仅截距', fmt_num(-2 * ll_null), '-', '-', '-', '-', '-'], ['最终模型', fmt_num(-2 * ll_final), fmt_num(chi2), str(df_model), fmt_p(chi2_p), fmt_num(float(final_model.aic)), fmt_num(float(final_model.bic))]]
@@ -918,9 +937,9 @@ def logistic(df, outcome, predictors):
         def _fmt_b_sig(b_val, p_val):
             b_str = fmt_num(b_val)
             if p_val < 0.01:
-                return f'{b_str}\\*\\*'
+                return TrustedMarkdown(f'{b_str}\\*\\*')
             if p_val < 0.05:
-                return f'{b_str}\\*'
+                return TrustedMarkdown(f'{b_str}\\*')
             return b_str
         coef_headers = ['变量', '回归系数', '标准误', 'z 值', 'Wald χ²', 'p 值', 'OR 值', 'OR值95% CI']
         coef_alignments = ['l', 'r', 'r', 'r', 'r', 'c', 'r', 'c']
@@ -949,10 +968,10 @@ def logistic(df, outcome, predictors):
             coef_rows.append(['(截距)', _fmt_b_sig(c_coef, c_p), fmt_num(c_se), fmt_num(c_z), fmt_num(c_wald), fmt_p(c_p), fmt_num(c_or), f'{fmt_num(_safe_exp(c_ci[0]))} ~ {fmt_num(_safe_exp(c_ci[1]))}'])
         parts.append(md_table(coef_headers, coef_rows, coef_alignments))
         parts.append(f"\n\nMcFadden R² = {fmt_num(r2['mcfadden'])}, Cox & Snell R² = {fmt_num(r2['cox_snell'])}, Nagelkerke R² = {fmt_num(r2['nagelkerke'])}, N = {n_samples}")
-        parts.append('\n\n**备注：** 因变量 = {dependent}。\n\n**显著性：** \\* p<0.05，\\*\\* p<0.01。'.format(dependent=dep_display))
+        parts.append('\n\n**备注：** 因变量 = {dependent}。\n\n**显著性：** \\* p<0.05，\\*\\* p<0.01。'.format(dependent=md_text(dep_display)))
         return '\n'.join(parts)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def ordinal(df, outcome, predictors):
@@ -1023,7 +1042,7 @@ def ordinal(df, outcome, predictors):
                 if len(encoding_map) > 5:
                     encoding_desc += '...'
                 msg = "自变量 '{variable}' 为分类变量，已自动编码: {encoding}".format(variable=display, encoding=encoding_desc)
-                print(f'[info] {msg}', file=sys.stderr)
+                print(md_text(f'[info] {msg}'), file=sys.stderr)
                 _state['warnings'].append(msg)
                 _state['warnings'].append("注意：'{variable}' 已使用顺序编码（1,2,3...），若为名义变量（无序分类），建议改用哑变量编码以避免引入虚假排序关系。".format(variable=display))
             else:
@@ -1082,7 +1101,7 @@ def ordinal(df, outcome, predictors):
             nagelkerke = max(0.0, min(1.0, nagelkerke))
             return {'mcfadden': mcfadden, 'cox_snell': cox_snell, 'nagelkerke': nagelkerke}
         except Exception as e:
-            print(f"[warning] {'伪R2计算失败: {error}'.format(error=e)}", file=sys.stderr)
+            print(md_text(f"[warning] {'伪R2计算失败: {error}'.format(error=e)}"), file=sys.stderr)
             return {'mcfadden': 0.0, 'cox_snell': 0.0, 'nagelkerke': 0.0}
 
     def _parallel_lines_test(y, X, selected_vars):
@@ -1193,7 +1212,7 @@ def ordinal(df, outcome, predictors):
                 final_model = _fit_converged_model(y, X[selected_vars])
             except ValueError as exc:
                 msg = f'有序逻辑回归模型拟合失败: {exc}'
-                print(f'[error] {msg}', file=sys.stderr)
+                print(md_text(f'[error] {msg}'), file=sys.stderr)
                 return f'错误：{msg}'
         else:
             final_model = None
@@ -1221,7 +1240,7 @@ def ordinal(df, outcome, predictors):
         n_categories = len(_state['ordered_categories'])
         parts = []
         parts.append('## 有序逻辑回归分析结果\n')
-        parts.append('因变量: {dependent}（{categories} 个有序类别），分析方法: {method}，候选变量: {candidates} 个，最终保留: {retained} 个\n'.format(dependent=dep_display, categories=n_categories, method=method_cn, candidates=len(x_cols), retained=len(selected_vars)))
+        parts.append('因变量: {dependent}（{categories} 个有序类别），分析方法: {method}，候选变量: {candidates} 个，最终保留: {retained} 个\n'.format(dependent=md_text(dep_display), categories=n_categories, method=method_cn, candidates=len(x_cols), retained=len(selected_vars)))
         if selected_vars:
             optimizer = str(final_model.mle_settings.get('optimizer', '')).upper()
             parts.append(f'估计状态：已收敛（{optimizer}；最大迭代次数 {1000}）。')
@@ -1242,11 +1261,11 @@ def ordinal(df, outcome, predictors):
             def _fmt_b_sig(b_val, p_val):
                 b_str = fmt_num(b_val)
                 if p_val < 0.001:
-                    return f'{b_str}\\*\\*\\*'
+                    return TrustedMarkdown(f'{b_str}\\*\\*\\*')
                 if p_val < 0.01:
-                    return f'{b_str}\\*\\*'
+                    return TrustedMarkdown(f'{b_str}\\*\\*')
                 if p_val < 0.05:
-                    return f'{b_str}\\*'
+                    return TrustedMarkdown(f'{b_str}\\*')
                 return b_str
             coef_headers = ['变量', '回归系数', '标准误', 'z 值', 'Wald χ²', 'p 值', 'OR值', 'OR值95% CI']
             coef_alignments = ['l', 'r', 'r', 'r', 'r', 'c', 'r', 'c']
@@ -1317,7 +1336,7 @@ def ordinal(df, outcome, predictors):
         removed_vars = [v for v in x_cols if v not in selected_vars]
         return '\n'.join(parts)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def reliability(df, names):
@@ -1360,7 +1379,7 @@ def reliability(df, names):
                     numeric_data[req_item] = series
                 except Exception as e:
                     msg = "处理列 '{column}' 时发生错误: {error}".format(column=actual_col, error=e)
-                    print(f'[warning] {msg}', file=sys.stderr)
+                    print(md_text(f'[warning] {msg}'), file=sys.stderr)
                     _state['warnings'].append(msg)
             if len(numeric_data) < 2:
                 _state['warnings'].append("维度 '{dimension}' 有效题项少于 2 个，跳过信度分析".format(dimension=dim_name))
@@ -1413,7 +1432,7 @@ def reliability(df, names):
                         total_item_count = total_df.shape[1]
             except Exception as e:
                 msg = '计算总量表信度时发生错误: {error}'.format(error=e)
-                print(f'[warning] {msg}', file=sys.stderr)
+                print(md_text(f'[warning] {msg}'), file=sys.stderr)
                 _state['warnings'].append(msg)
         out = _format_simple(dim_results, total_alpha, total_n, total_item_count)
         return out
@@ -1424,11 +1443,11 @@ def reliability(df, names):
         for dim_name, res in dim_results.items():
             rows.append([dim_name, str(res['item_count']), str(res['sample_size']), fmt_num(res['alpha'])])
         if total_alpha is not None:
-            rows.append(['**总量表**', str(total_item_count), str(total_n), fmt_num(total_alpha)])
+            rows.append([TrustedMarkdown('**总量表**'), str(total_item_count), str(total_n), fmt_num(total_alpha)])
         parts = ['## 信度分析结果\n', md_table(headers, rows, ['l', 'c', 'c', 'c'])]
         return '\n'.join(parts)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def pca(df, names, n_factors=None):
@@ -1478,7 +1497,7 @@ def pca(df, names, n_factors=None):
                 _state['warnings'].append('Bartlett 球形度检验不显著（p = {p} > 0.05）：变量相关性证据不足；结果仍输出，请谨慎解读。'.format(p=fmt_p(bartlett_p)))
         except ImportError:
             msg = 'factor_analyzer 未安装，KMO 检验已跳过。安装: pip install factor_analyzer'
-            print(f'[warning] {msg}', file=sys.stderr)
+            print(md_text(f'[warning] {msg}'), file=sys.stderr)
             _state['warnings'].append(msg)
             try:
                 from scipy import stats as sp_stats
@@ -1491,15 +1510,15 @@ def pca(df, names, n_factors=None):
                         _state['warnings'].append('Bartlett 球形度检验不显著（p = {p} > 0.05）：变量相关性证据不足；结果仍输出，请谨慎解读。'.format(p=fmt_p(bartlett_p)))
                 else:
                     msg_det = '相关矩阵接近奇异（行列式 <= 0），Bartlett 检验无法计算'
-                    print(f'[warning] {msg_det}', file=sys.stderr)
+                    print(md_text(f'[warning] {msg_det}'), file=sys.stderr)
                     _state['warnings'].append(msg_det)
             except Exception as e:
                 msg_b = 'Bartlett 降级计算也失败: {error}'.format(error=e)
-                print(f'[warning] {msg_b}', file=sys.stderr)
+                print(md_text(f'[warning] {msg_b}'), file=sys.stderr)
                 _state['warnings'].append(msg_b)
         except Exception as e:
             msg = 'KMO/Bartlett 计算失败: {error}'.format(error=e)
-            print(f'[warning] {msg}', file=sys.stderr)
+            print(md_text(f'[warning] {msg}'), file=sys.stderr)
             _state['warnings'].append(msg)
         corr_matrix = df_items.corr()
         eigenvalues_raw, eigenvectors_raw = np.linalg.eigh(corr_matrix.values)
@@ -1567,7 +1586,7 @@ def pca(df, names, n_factors=None):
         parts.append('\n注：载荷绝对值 > 0.4 通常认为变量与该主成分存在较强对应关系；共同度为提取主成分解释该变量方差的比例。')
         return '\n'.join(parts)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def cluster(df, names, k):
@@ -1624,7 +1643,7 @@ def cluster(df, names, k):
             from sklearn.cluster import KMeans
             from sklearn.preprocessing import StandardScaler
         except ImportError:
-            print('聚类分析需要 scikit-learn: pip install scikit-learn', file=sys.stderr)
+            print(md_text('聚类分析需要 scikit-learn: pip install scikit-learn'), file=sys.stderr)
             raise ImportError('缺少 scikit-learn，请执行: pip install scikit-learn')
         data = _prepare_data()
         needed = list(_state['matched_columns'].values())
@@ -1673,7 +1692,7 @@ def cluster(df, names, k):
                     row.append(fmt_p(p_val))
                 except Exception as e:
                     warning = "变量 '{variable}' ANOVA 失败: {error}".format(variable=display, error=e)
-                    print(f'[warning] {warning}', file=sys.stderr)
+                    print(md_text(f'[warning] {warning}'), file=sys.stderr)
                     _state['warnings'].append(warning)
                     row.extend(['-', '-'])
             else:
@@ -1682,7 +1701,7 @@ def cluster(df, names, k):
             anova_rows.append(row)
         return (anova_headers, anova_rows)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def roc(df, outcome, score):
@@ -1748,7 +1767,7 @@ def roc(df, outcome, score):
                     plot_df = plot_df.iloc[::max(1, len(plot_df) // 1000)]
                 _state['plot_data_list'].append({'name': display_name, 'data': plot_df.to_dict(orient='list')})
             except Exception as e:
-                print("[warning] 变量 '{variable}' ROC 分析失败: {error}".format(variable=name, error=e), file=sys.stderr)
+                print(md_text("[warning] 变量 '{variable}' ROC 分析失败: {error}".format(variable=name, error=e)), file=sys.stderr)
                 _state['warnings'].append("变量 '{variable}' 分析失败: {error}".format(variable=name, error=e))
         if not auc_results:
             raise ValueError('所有变量分析均失败')
@@ -1760,7 +1779,7 @@ def roc(df, outcome, score):
         if image_path:
             parts.append('![ROC曲线]({path})'.format(path=image_path) + '\n')
         freq_headers = ['因变量: {variable}'.format(variable=dep_display), '频数', '百分比(%)']
-        freq_rows = [['阳性 ({label})'.format(label=pos_label), str(n_pos), f'{n_pos / len(y_true):.2%}'], ['阴性 ({label})'.format(label=neg_label), str(n_neg), f'{n_neg / len(y_true):.2%}'], ['**总计**', f'**{len(y_true)}**', '**100%**']]
+        freq_rows = [['阳性 ({label})'.format(label=pos_label), str(n_pos), f'{n_pos / len(y_true):.2%}'], ['阴性 ({label})'.format(label=neg_label), str(n_neg), f'{n_neg / len(y_true):.2%}'], [TrustedMarkdown('**总计**'), TrustedMarkdown(f'**{len(y_true)}**'), TrustedMarkdown('**100%**')]]
         parts.append('### 因变量频数分布' + '\n')
         parts.append(md_table(freq_headers, freq_rows, ['l', 'r', 'r']))
         auc_headers = ['变量', 'AUC', '标准误(S.E.)', 'p值', '95% CI']
@@ -1808,7 +1827,7 @@ def roc(df, outcome, score):
                 predictors[var_name] = data[col_name]
         return predictors
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def tree(df, outcome, predictors):
@@ -1885,7 +1904,7 @@ def tree(df, outcome, predictors):
         task_label = '分类' if is_clf else '回归'
         parts = []
         parts.append('## 决策树{task}分析结果'.format(task=task_label) + '\n')
-        parts.append('目标变量: {variable}'.format(variable=dep_display) + '\n')
+        parts.append('目标变量: {variable}'.format(variable=md_text(dep_display)) + '\n')
         parts.append('### 特征权重值' + '\n')
         parts.append(_importance_table(feat_display, importances))
         if is_clf:
@@ -1948,7 +1967,7 @@ def tree(df, outcome, predictors):
         rows = [['模型参数设置', '数据预处理', 'None'], ['模型参数设置', '训练集比例', f"{1 - _state['test_size']:.1f}"], ['模型参数设置', '交叉验证', '不进行'], ['模型参数设置', '节点分裂标准', tree.criterion], ['模型参数设置', '节点划分方式', tree.splitter], ['模型参数设置', '节点分裂最小样本数', str(tree.min_samples_split)], ['模型参数设置', '叶节点最小样本数', str(tree.min_samples_leaf)], ['模型参数设置', '树最大深度', str(_state['max_depth']) if _state['max_depth'] else '不限制'], ['模型评估效果', 'R2', fmt_num(metrics['R2'], 4)], ['模型评估效果', 'RMSE', fmt_num(metrics['RMSE'], 4)], ['模型评估效果', 'MAE', fmt_num(metrics['MAE'], 4)]]
         return md_table(['名称', '参数名', '参数值'], rows, ['l', 'l', 'l'])
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def sample_size(effect, alpha, power):
@@ -1977,7 +1996,7 @@ def sample_size(effect, alpha, power):
             total_n = n_per_group * 2
         except Exception as e:
             msg = f'样本量计算失败: {e}'
-            print(f'[error] {msg}', file=sys.stderr)
+            print(md_text(f'[error] {msg}'), file=sys.stderr)
             return f'错误：{msg}'
         parts = []
         parts.append('## 样本量计算结果\n')
@@ -1987,7 +2006,7 @@ def sample_size(effect, alpha, power):
         param_rows = [['检验类型', test_label, ''], ['效应量', str(_state['effect_size']), f"{ref['name']}"], ['显著性水平(alpha)', str(_state['alpha']), '双尾检验'], ['统计功效(1-beta)', str(_state['power']), '']]
         param_rows.append(['分配比例', '1:1', '等组设计'])
         param_rows.append(['每组所需样本量', str(n_per_group), ''])
-        param_rows.append(['**总样本量**', f'**{total_n}**', ''])
+        param_rows.append([TrustedMarkdown('**总样本量**'), TrustedMarkdown(f'**{total_n}**'), ''])
         parts.append(md_table(param_headers, param_rows, param_alignments))
         parts.append('\n### 效应量参考标准\n')
         ref_headers = ['统计方法', '效应量', '小效应', '中效应', '大效应']
@@ -2000,7 +2019,7 @@ def sample_size(effect, alpha, power):
         parts.append('\n注：效应量来源优先级 - 文献 Meta 分析 > 预实验数据 > Cohen 惯例标准')
         return '\n'.join(parts)
     result = _analyze_and_format()
-    notices = list(dict.fromkeys(str(v) for v in _state["warnings"]))
+    notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 
@@ -2206,8 +2225,8 @@ def efa(df, names, factors=None, rotation="varimax", extraction="principal"):
     parts.append(f"\n### {label}\n")
     rows=[]
     for name,load,h in zip(names,rotated,communalities):
-        cells=[f"**{fmt_num(float(v))}**" if abs(v)>.4 else fmt_num(float(v)) for v in load]
-        htext=fmt_num(float(h)); htext=f"_{htext}_" if h<.4 else htext
+        cells=[TrustedMarkdown(f"**{fmt_num(float(v))}**") if abs(v)>.4 else fmt_num(float(v)) for v in load]
+        htext=fmt_num(float(h)); htext=TrustedMarkdown(f"_{htext}_") if h<.4 else htext
         rows.append([variable_display(df, name)]+cells+[htext])
     parts.append(md_table(["名称"]+[f"因子{i+1}" for i in range(factors)]+["共同度(公因子方差)"],rows,["l"]+["c"]*(factors+1)))
     parts.append("\n注：加粗载荷表示绝对值 > 0.4；斜体共同度表示 < 0.4")
@@ -2255,7 +2274,6 @@ def show_result(out):
     if out.lstrip().startswith("错误"):
         raise ValueError(out)
     print(out)
-    print("\n\n---\n[INSTRUCTION]\n请将上方全部用户可见 Markdown 表格原样渲染在回复中，再紧跟解读。保留表头、列序、数值精度、显著性星号、标题、单位和注释；不加代码围栏，不删表，不只交付路径。本内部说明不展示给用户。\n[/INSTRUCTION]")
 
 
 def main():
@@ -2299,5 +2317,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
-        print(f"ChatSPSS error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(md_text(f"ChatSPSS error: {type(exc).__name__}: {exc}"), file=sys.stderr)
         raise SystemExit(1)
