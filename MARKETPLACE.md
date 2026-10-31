@@ -457,7 +457,7 @@ Install the "hkr-render" skill from https://github.com/hanzhangzzz/agent-skills-
 ```json
 {
   "name": "chatspss",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "ChatSPSS：在本地对 CSV、Excel、SPSS 或 Stata 数据运行 22 类基础统计分析，完整展示结果表后解释。超出范围的复杂模型只说明未实现边界。",
   "trigger": "/chatspss",
   "keywords": ["ChatSPSS", "statistics", "data analysis", "SPSS", "Stata", "EFA", "CSV", "Excel", "统计分析", "数据分析", "因子分析"],

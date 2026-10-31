@@ -120,6 +120,17 @@ def md_text(value):
     return re.sub(r'(?i)(?:[a-z][a-z0-9+.-]*://|[a-z0-9._%+\-]+@)[^\s<>]*|(?<![\w\\])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?!\w)', lambda m: re.sub(r'([:.@])', r'\\\1', m.group()), text)
 
 
+class Failure(str):
+    """An analysis failure, escaped once for safe Markdown display."""
+    def __new__(cls, message):
+        return super().__new__(cls, md_text(message))
+
+    @classmethod
+    def with_notices(cls, notices, failure):
+        # Both parts have already been escaped individually.
+        return str.__new__(cls, ("\n\n".join(notices) + "\n\n" if notices else "") + failure)
+
+
 def md_table(headers, rows, alignments=None, group_header=None):
     def escape(value):
         return str(value) if isinstance(value, TrustedMarkdown) else md_text(value)
@@ -178,7 +189,7 @@ def overview(df, names):
         if len(x):
             rows.append([variable_display(df, name), str(len(x)), *[fmt_num(v) for v in (x.min(), x.max(), x.mean(), x.std(), x.median())]])
     if not rows:
-        return '没有有效的数值列可供描述性统计分析。'
+        return Failure('没有有效的数值列可供描述性统计分析。')
     return '## 描述性统计分析结果\n' + md_table(['变量', 'N', '最小值', '最大值', '均值', '标准差', '中位数'], rows, ['l'] + ['c'] * 6)
 
 
@@ -207,7 +218,7 @@ def frequency(df, names):
             cumulative += pct
             rows.append([variable_display(df, name) if i == 0 else '', label, str(count), f'{pct:.2f}%', f'{100.0 if i == len(items)-1 else cumulative:.2f}%'])
     if not rows:
-        return '没有有效的列可供频数分析。'
+        return Failure('没有有效的列可供频数分析。')
     if len(names) == 1:
         rows.append([TrustedMarkdown('**总计**'), '', TrustedMarkdown(f'**{total}**'), TrustedMarkdown('**100.00%**'), ''])
     return '## 频数分析结果\n\n' + md_table(['变量', '选项', '频数', '百分比(%)', '累积百分比(%)'], rows, ['l', 'l', 'c', 'c', 'c'])
@@ -229,10 +240,10 @@ def multiple_choice(df, names):
         selected |= yes
         counts.append((name, int(yes.sum())))
     if not counts:
-        return '没有有效的二分类虚拟变量可用于多选题分析。'
+        return Failure('没有有效的二分类虚拟变量可用于多选题分析。')
     n = int(selected.sum())
     if not n:
-        return '没有样本选择了任何选项。'
+        return Failure('没有样本选择了任何选项。')
     total = sum(c for _, c in counts)
     rows = [[variable_display(df, name), str(c), f'{round(c / total * 100, 2):.2f}%', f'{round(c / n * 100, 2):.2f}%'] for name, c in counts]
     rows.append(['汇总', str(total), '100.00%', f'{round(total / n * 100, 2):.2f}%'])
@@ -244,7 +255,7 @@ def norm_reference(df, names, means=None, sds=None):
     data = [(name, _basic_num(df, name)) for name in _basic_names(names)]
     data = [(name, x) for name, x in data if len(x) >= 3]
     if not data:
-        return '错误：没有足够样本量的变量可供分析。'
+        return Failure('错误：没有足够样本量的变量可供分析。')
     parts = ['## 常模分析结果\n']
     if means and sds:
         norm_means = [float(v) for v in means.split(',') if v.strip()] if isinstance(means, str) else list(means)
@@ -287,7 +298,7 @@ def normality(df, names):
         conclusion = '符合正态分布' if p >= .05 else ('基本符合正态分布（依据偏度/峰度判据，非显著性 p 值）' if abs(skew) < 3 and abs(kurtosis) < 10 else '不符合正态分布')
         results.append((header, [variable_display(df, name), str(len(x)), *[fmt_num(v) for v in (x.mean(), x.std(), skew, kurtosis, statistic)], fmt_p(p), conclusion]))
     if not results:
-        return '没有有效的数值列可供正态性检验分析。'
+        return Failure('没有有效的数值列可供正态性检验分析。')
     header = results[0][0] if len(set(r[0] for r in results)) == 1 else '统计量'
     return '## 正态性检验分析结果\n\n' + md_table(['变量', 'N', '均值', '标准差', '偏度', '峰度', header, 'p值', '结论'], [r[1] for r in results], ['l'] + ['c'] * 7 + ['l']) + '\n\n注：\\* p<0.05 \\*\\* p<0.01'
 
@@ -299,9 +310,9 @@ def correlation(df, names, method='pearson'):
         raise ValueError("method 参数必须是 'pearson' 或 'spearman'")
     data = pd.DataFrame({name: pd.to_numeric(df[name], errors='coerce') for name in _basic_names(names) if not pd.to_numeric(df[name], errors='coerce').isna().all()})
     if len(data.columns) < 2:
-        return '错误：相关分析至少需要 2 个数值型变量。'
+        return Failure('错误：相关分析至少需要 2 个数值型变量。')
     if data.notna().sum().min() < 3:
-        return '错误：有效数据不足 3 行。'
+        return Failure('错误：有效数据不足 3 行。')
     rows = []
     for i, name in enumerate(data):
         row = [f'{i+1}.{variable_display(df, name)}', fmt_num(data[name].mean()), fmt_num(data[name].std())]
@@ -333,7 +344,7 @@ def two_group(df, outcome, group):
         raise ValueError('独立样本t检验需要恰好 2 个组。')
     a, b = [_basic_num(df.loc[df[group] == value], outcome) for value in groups]
     if len(a) < 2 or len(b) < 2:
-        return '所有因变量的t检验均失败，请检查数据。'
+        return Failure('所有因变量的t检验均失败，请检查数据。')
     t, p = stats.ttest_ind(a, b)
     table = md_table(['变量', f'{value_display(df, group, groups[0])}(n={len(a)})', f'{value_display(df, group, groups[1])}(n={len(b)})', 't', 'p'], [[variable_display(df, outcome), f'{fmt_num(a.mean(), 2)}±{fmt_num(a.std(), 2)}', f'{fmt_num(b.mean(), 2)}±{fmt_num(b.std(), 2)}', fmt_num(t), fmt_p(p)]], ['l'] + ['c'] * 4)
     return f'## 独立样本t检验结果\n\n分组变量: {md_text(variable_display(df, group))}\n\n{table}\n\n注：\\* p<0.05 \\*\\* p<0.01；t自由度：{md_text(variable_display(df, outcome))} df={len(a)+len(b)-2}'
@@ -343,7 +354,7 @@ def paired(df, before, after):
     from scipy import stats
     data = df[[before, after]].apply(pd.to_numeric, errors='coerce').dropna()
     if len(data) < 3:
-        return '所有配对变量的t检验均失败，请检查数据。'
+        return Failure('所有配对变量的t检验均失败，请检查数据。')
     a, b = data[before], data[after]
     t, p = stats.ttest_rel(a, b)
     row = [f'{variable_display(df, before)} 配对 {variable_display(df, after)}', f'{fmt_num(a.mean(), 2)}±{fmt_num(a.std(), 2)}', f'{fmt_num(b.mean(), 2)}±{fmt_num(b.std(), 2)}', fmt_num((a-b).mean()), fmt_num(t), fmt_p(p)]
@@ -375,14 +386,14 @@ def anova(df, outcome, group):
     from scipy import stats
     data = df[[group, outcome]].dropna()
     if len(data) < 5:
-        return '所有因变量的方差分析均失败，请检查数据。'
+        return Failure('所有因变量的方差分析均失败，请检查数据。')
     data = data.assign(**{outcome: pd.to_numeric(data[outcome], errors='coerce')}).dropna()
     try:
         groups = sorted(data[group].unique())
     except TypeError:
         groups = sorted(data[group].unique(), key=lambda v: (str(v).casefold(), type(v).__name__, repr(v)))
     if len(groups) < 2:
-        return '所有因变量的方差分析均失败，请检查数据。'
+        return Failure('所有因变量的方差分析均失败，请检查数据。')
     samples = [data.loc[data[group] == g, outcome] for g in groups]
     f, p = stats.f_oneway(*samples)
     headers = ['变量'] + [f'{value_display(df, group, g)}(n={len(x)})' for g, x in zip(groups, samples)] + ['F', 'p']
@@ -403,7 +414,7 @@ def nonparametric(df, outcome, group):
     if len(groups) == 2:
         a, b = samples
         if min(len(a), len(b)) < 1:
-            return '所有因变量的非参数检验均失败，请检查数据。'
+            return Failure('所有因变量的非参数检验均失败，请检查数据。')
         u, p = stats.mannwhitneyu(a, b, alternative='two-sided')
         z = (u - len(a)*len(b)/2) / np.sqrt(len(a)*len(b)*(len(a)+len(b)+1)/12)
         effect = abs(z) / np.sqrt(len(a)+len(b))
@@ -413,7 +424,7 @@ def nonparametric(df, outcome, group):
         return prefix + 'Mann-Whitney U 检验\n\n' + table + '\n\n\\* p<0.05 \\*\\* p<0.01 \\*\\*\\* p<0.001; r = \\|z\\|/sqrt(N), 0.1 small / 0.3 medium / 0.5 large'
     populated = [(i, g, x) for i, (g, x) in enumerate(zip(groups, samples)) if len(x)]
     if len(populated) < 2:
-        return '所有因变量的非参数检验均失败，请检查数据。'
+        return Failure('所有因变量的非参数检验均失败，请检查数据。')
     h, p = stats.kruskal(*[x for _, _, x in populated])
     n = sum(len(x) for _, _, x in populated)
     headers = ['变量'] + [f'M(P25,P75) {chr(65+i)}.{value_display(df, group, g)}(n={len(x)})' for i, g, x in populated] + ['H', 'p', 'η²']
@@ -438,9 +449,9 @@ def word_frequency(df, column, top=30):
         'him her us them my your his its our their mine yours hers ours theirs').split())
     texts = df[column].dropna().astype(str).tolist()
     if not texts:
-        return '错误：指定列中没有有效文本数据。'
+        return Failure('错误：指定列中没有有效文本数据。')
     if not ' '.join(texts).strip():
-        return '错误：文本内容为空。'
+        return Failure('错误：文本内容为空。')
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', message='pkg_resources is deprecated as an API.*', category=UserWarning)
@@ -456,7 +467,7 @@ def word_frequency(df, column, top=30):
         counts.update(w.strip() for w in segment(text) if len(w.strip()) >= 2 and w.strip().lower() not in stopwords)
     total = sum(counts.values())
     if not total:
-        return '错误：分词后没有有效词语（可能全部被停用词过滤）。'
+        return Failure('错误：分词后没有有效词语（可能全部被停用词过滤）。')
     rows = [[str(i), w, str(n), fmt_num(n/total*100, 2)] for i, (w, n) in enumerate(counts.most_common(top), 1)]
     parts = ['## 词频分析结果\n', '### 数据概览\n', f'分析列: {md_text(variable_display(df, column))}', f'文本条数: {len(texts)}', f'有效词语总数: {total}', f'去重词语数: {len(counts)}', f'分词工具: {tool}\n', f'### 高频词表（Top {min(top, len(counts))}）\n', md_table(['排名', '词语', '频次', '占比(%)'], rows, ['c', 'l', 'c', 'c'])]
     if len(counts) >= 10:
@@ -530,7 +541,7 @@ def _am_check_rank(X, variable_display_names=None):
         redundant = [c for c in cols if c != 'const']
     involved = [names_map.get(c, c) for c in redundant]
     involved_str = '、'.join((str(v) for v in involved))
-    return f'错误：自变量之间存在完全共线关系（设计矩阵不满秩：秩 {rank} / 需要 {n_cols} 列），模型无法估计。涉及的自变量：{involved_str}。常见原因：把同一个类别变量的全部类别哑变量（含参照组）都当成独立自变量传入——应只保留其中 k-1 个哑变量，去掉一个作参照组；或其中存在两个完全线性相关/重复的变量。请去掉其中冗余的变量后重新分析。'
+    return Failure(f'错误：自变量之间存在完全共线关系（设计矩阵不满秩：秩 {rank} / 需要 {n_cols} 列），模型无法估计。涉及的自变量：{involved_str}。常见原因：把同一个类别变量的全部类别哑变量（含参照组）都当成独立自变量传入——应只保留其中 k-1 个哑变量，去掉一个作参照组；或其中存在两个完全线性相关/重复的变量。请去掉其中冗余的变量后重新分析。')
 
 def regression(df, outcome, predictors):
     import sys
@@ -545,12 +556,12 @@ def regression(df, outcome, predictors):
     def _analyze_and_format():
         lang = 'zh'
         if not _state['matched_dependent']:
-            return '错误：因变量未匹配。'
+            return Failure('错误：因变量未匹配。')
         y_col = _state['matched_dependent']
         x_cols = list(_state['matched_independent'].values())
         dup_cols = _am_duplicates([y_col] + x_cols)
         if dup_cols:
-            return '错误：因变量与自变量中有多个被解析到同一实际列（' + '、'.join(dup_cols) + '），会导致因变量被当成自变量之一参与回归。请检查 --dependent-var与 --independent-vars 中的名称是否重复，或存在拼写/标点差异导致被合并为同一列。'
+            return Failure('错误：因变量与自变量中有多个被解析到同一实际列（' + '、'.join(dup_cols) + '），会导致因变量被当成自变量之一参与回归。请检查 --dependent-var与 --independent-vars 中的名称是否重复，或存在拼写/标点差异导致被合并为同一列。')
         data_cols = [y_col] + x_cols
         valid_data = _state['df'][data_cols].copy()
         X = valid_data[x_cols].copy()
@@ -563,7 +574,7 @@ def regression(df, outcome, predictors):
                 if len(non_null) == 0:
                     continue
                 display = variable_display(df, col)
-                return f"错误：自变量 '{display}' 是非数值分类列，线性回归不自动决定编码。请先由 AI 在分析前完成可复核的外部预处理：名义分类（如城市）展开为哑变量并保留基准组；有序分类按明确顺序编码，再传入生成的数值列。若确认该列确有顺序，先按已确认的类别顺序生成数值列再运行。"
+                return Failure(f"错误：自变量 '{display}' 是非数值分类列，线性回归不自动决定编码。请先由 AI 在分析前完成可复核的外部预处理：名义分类（如城市）展开为哑变量并保留基准组；有序分类按明确顺序编码，再传入生成的数值列。若确认该列确有顺序，先按已确认的类别顺序生成数值列再运行。")
             else:
                 X[col] = numeric_series
         if not pd.api.types.is_numeric_dtype(y):
@@ -574,7 +585,7 @@ def regression(df, outcome, predictors):
         n_samples = len(combined)
         min_required = len(x_cols) + 2
         if n_samples < min_required:
-            return f'错误：有效样本量不足（当前 {n_samples}，至少需要 {min_required}）。请检查因变量是否为数值型，或自变量是否包含过多缺失值。'
+            return Failure(f'错误：有效样本量不足（当前 {n_samples}，至少需要 {min_required}）。请检查因变量是否为数值型，或自变量是否包含过多缺失值。')
         X_before_dropna = X
         X = combined[x_cols]
         y = combined[y_col]
@@ -589,7 +600,7 @@ def regression(df, outcome, predictors):
             if became_constant_after_dropna:
                 names = [variable_display(df, c) for c in became_constant_after_dropna]
                 detail_bits.append(f"{'、'.join(names)}：该列本身有变化，但与其它列联合剔除缺失值后，剩余{n_samples} 个有效样本里只剩 1 个唯一取值——不是这批原始数据本身的问题，是当前自变量组合下的有效样本范围过窄；请检查为什么这么多行被联合剔除（缺失值集中在哪些列），或减少同时使用的自变量数量")
-            return '错误：以下自变量在有效样本中是常数（没有变化），不能用于线性回归——' + '；'.join(detail_bits) + '。请移除这些列后重试，或调整自变量组合。'
+            return Failure('错误：以下自变量在有效样本中是常数（没有变化），不能用于线性回归——' + '；'.join(detail_bits) + '。请移除这些列后重试，或调整自变量组合。')
         try:
             X_const, intercept_name = _am_intercept(X)
             model = sm.OLS(y, X_const)
@@ -598,7 +609,7 @@ def regression(df, outcome, predictors):
             msg = f'线性回归模型拟合失败: {e}'
             print(md_text(f'[error] {msg}'), file=sys.stderr)
             _state['warnings'].append(msg)
-            return f'错误：{msg}'
+            return Failure(f'错误：{msg}')
         vif_values = {}
         for var in x_cols:
             try:
@@ -659,6 +670,8 @@ def regression(df, outcome, predictors):
         return '\n'.join(parts)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def logistic(df, outcome, predictors):
@@ -756,7 +769,7 @@ def logistic(df, outcome, predictors):
         zero_variance = [col for col in X.columns if X[col].nunique(dropna=True) <= 1]
         if zero_variance:
             names = [col for col in zero_variance]
-            return '错误：以下自变量在有效样本中没有变化，不能用于二元逻辑回归：' + '、'.join(names) + '。请移除后重试。'
+            return Failure('错误：以下自变量在有效样本中没有变化，不能用于二元逻辑回归：' + '、'.join(names) + '。请移除后重试。')
         columns = list(X.columns)
         if check_rank:
             duplicate_pairs = []
@@ -766,7 +779,7 @@ def logistic(df, outcome, predictors):
                         duplicate_pairs.append((left, right))
             if duplicate_pairs:
                 pairs = [f'{left} 与 {right}' for left, right in duplicate_pairs]
-                return '错误：检测到重复的自变量（' + '；'.join(pairs) + '），会导致模型不可估计。请只保留其中一个。'
+                return Failure('错误：检测到重复的自变量（' + '；'.join(pairs) + '），会导致模型不可估计。请只保留其中一个。')
             relative_singular_tolerance = float(np.sqrt(np.finfo(float).eps))
 
             def _is_rank_deficient(frame):
@@ -791,22 +804,22 @@ def logistic(df, outcome, predictors):
                         kept.append(col)
                 names = [col for col in redundant]
                 detail = '、'.join(names) if names else '相关自变量'
-                return '错误：自变量设计矩阵秩不足；按当前变量顺序识别到可移除的冗余变量，涉及的自变量：' + detail + '。变量之间存在完全或数值上近乎完全线性相关，或有效样本相对于自变量数量不足。请先移除这些变量后重试；若仍失败，再尝试中心化变量、调整计量单位并检查相关性。'
+                return Failure('错误：自变量设计矩阵秩不足；按当前变量顺序识别到可移除的冗余变量，涉及的自变量：' + detail + '。变量之间存在完全或数值上近乎完全线性相关，或有效样本相对于自变量数量不足。请先移除这些变量后重试；若仍失败，再尝试中心化变量、调整计量单位并检查相关性。')
         for col in columns:
             values = X[col]
             zero_values = values[y == 0]
             one_values = values[y == 1]
             if zero_values.max() < one_values.min() or one_values.max() < zero_values.min():
-                return '错误：自变量「' + col + '」存在可完全分隔两类结局的阈值，属于完全分离，二元逻辑回归系数无法有限估计。请检查分组边界、增加重叠样本，或移除该变量后重试。'
+                return Failure('错误：自变量「' + col + '」存在可完全分隔两类结局的阈值，属于完全分离，二元逻辑回归系数无法有限估计。请检查分组边界、增加重叠样本，或移除该变量后重试。')
         return None
 
     def _recoverable_fit_error(exc):
         detail = str(exc)
         lowered = detail.lower()
         if isinstance(exc, PerfectSeparationError) or 'perfect separation' in lowered:
-            return '错误：检测到完全或近完全分离：预测变量几乎能完全区分两类结局，二元逻辑回归系数无法稳定估计。请合并稀疏类别、增加重叠样本，或减少相关自变量后重试。'
+            return Failure('错误：检测到完全或近完全分离：预测变量几乎能完全区分两类结局，二元逻辑回归系数无法稳定估计。请合并稀疏类别、增加重叠样本，或减少相关自变量后重试。')
         if 'singular matrix' in lowered:
-            return '错误：逻辑回归设计矩阵不可逆（Singular matrix）。这可能来自未被预检捕获的线性相关、稀疏类别或分离问题，无法仅凭该错误确定唯一原因。请检查自变量相关性、类别交叉表和两类结局的重叠情况后重试。'
+            return Failure('错误：逻辑回归设计矩阵不可逆（Singular matrix）。这可能来自未被预检捕获的线性相关、稀疏类别或分离问题，无法仅凭该错误确定唯一原因。请检查自变量相关性、类别交叉表和两类结局的重叠情况后重试。')
         return None
 
     def _fit_logit_once(y, design, **fit_kwargs):
@@ -839,7 +852,7 @@ def logistic(df, outcome, predictors):
         except Exception as exc:
             recovered = _recoverable_fit_error(exc)
             if recovered:
-                raise ValueError(recovered) from None
+                raise ValueError(str(recovered)) from None
             raise
         if _has_separation_warning(caught):
             raise ValueError('错误：检测到完全或近完全分离：预测变量几乎能完全区分两类结局，二元逻辑回归系数无法稳定估计。请合并稀疏类别、增加重叠样本，或减少相关自变量后重试。')
@@ -851,12 +864,12 @@ def logistic(df, outcome, predictors):
 
     def _analyze_and_format():
         if not _state['matched_dependent']:
-            return '错误：因变量未匹配。'
+            return Failure('错误：因变量未匹配。')
         y_col = _state['matched_dependent']
         x_cols = list(_state['matched_independent'].values())
         duplicate_roles = _am_duplicates([y_col] + x_cols)
         if duplicate_roles:
-            return '错误：因变量和自变量中有多个请求被解析到同一实际列（' + '、'.join(duplicate_roles) + '），请检查变量名是否重复或存在拼写/标点差异。'
+            return Failure('错误：因变量和自变量中有多个请求被解析到同一实际列（' + '、'.join(duplicate_roles) + '），请检查变量名是否重复或存在拼写/标点差异。')
         data = _state['df'][[y_col] + x_cols].copy()
         data = _encode_categorical_x(data)
         original_count = len(data)
@@ -867,11 +880,11 @@ def logistic(df, outcome, predictors):
         if original_count != final_count:
             _state['warnings'].append('数据清理：移除了 {rows} 行包含缺失值的数据'.format(rows=original_count - final_count))
         if final_count < 30:
-            return f'错误：有效数据量不足 30 行（当前 {final_count} 行），无法进行可靠的逻辑回归分析。'
+            return Failure(f'错误：有效数据量不足 30 行（当前 {final_count} 行），无法进行可靠的逻辑回归分析。')
         try:
             y = _validate_binary_y(data[y_col])
         except ValueError as e:
-            return f'错误：{e}'
+            return Failure(f'错误：{e}')
         data = data.loc[y.index]
         X = data[x_cols]
         for col in x_cols:
@@ -884,7 +897,7 @@ def logistic(df, outcome, predictors):
         y = combined[y_col].astype('float64')
         n_samples = len(combined)
         if n_samples < 30:
-            return f'错误：有效样本量不足 30（当前 {n_samples}），无法进行可靠的逻辑回归分析。'
+            return Failure(f'错误：有效样本量不足 30（当前 {n_samples}），无法进行可靠的逻辑回归分析。')
         preflight_error = _preflight_design_matrix(X, y, check_rank=True)
         if preflight_error:
             return preflight_error
@@ -900,21 +913,21 @@ def logistic(df, outcome, predictors):
         try:
             null_model = _fit_logit_or_raise_recoverable(y, X_null)
         except ValueError as e:
-            return str(e)
+            return Failure(str(e))
         except Exception as e:
             msg = f'仅截距模型拟合失败: {e}'
             print(md_text(f'[error] {msg}'), file=sys.stderr)
-            return f'错误：{msg}'
+            return Failure(f'错误：{msg}')
         if selected_vars:
             X_final, final_intercept_name = _with_internal_intercept(X[selected_vars])
             try:
                 final_model = _fit_logit_or_raise_recoverable(y, X_final)
             except ValueError as e:
-                return str(e)
+                return Failure(str(e))
             except Exception as e:
                 msg = f'逻辑回归模型拟合失败: {e}'
                 print(md_text(f'[error] {msg}'), file=sys.stderr)
-                return f'错误：{msg}'
+                return Failure(f'错误：{msg}')
         else:
             final_model = null_model
             final_intercept_name = null_intercept_name
@@ -972,6 +985,8 @@ def logistic(df, outcome, predictors):
         return '\n'.join(parts)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def ordinal(df, outcome, predictors):
@@ -1163,12 +1178,12 @@ def ordinal(df, outcome, predictors):
 
     def _analyze_and_format():
         if not _state['matched_dependent']:
-            return '错误：因变量未匹配。'
+            return Failure('错误：因变量未匹配。')
         y_col = _state['matched_dependent']
         x_cols = list(_state['matched_independent'].values())
         dup_cols = _am_duplicates([y_col] + x_cols)
         if dup_cols:
-            return '错误：因变量/自变量中有多个被解析到同一实际列（' + '、'.join(dup_cols) + '），请检查变量名是否重复或存在拼写/标点差异导致被合并为同一列。'
+            return Failure('错误：因变量/自变量中有多个被解析到同一实际列（' + '、'.join(dup_cols) + '），请检查变量名是否重复或存在拼写/标点差异导致被合并为同一列。')
         data = _state['df'][[y_col] + x_cols].copy()
         data = _encode_categorical_x(data)
         original_count = len(data)
@@ -1179,11 +1194,11 @@ def ordinal(df, outcome, predictors):
         if original_count != final_count:
             _state['warnings'].append('数据清理：移除了 {rows} 行包含缺失值的数据'.format(rows=original_count - final_count))
         if final_count < 20:
-            return f'错误：有效数据量不足 20 行（当前 {final_count} 行），无法进行可靠的有序逻辑回归分析。'
+            return Failure(f'错误：有效数据量不足 20 行（当前 {final_count} 行），无法进行可靠的有序逻辑回归分析。')
         try:
             y = _validate_ordinal_y(data[y_col])
         except ValueError as e:
-            return f'错误：{e}'
+            return Failure(f'错误：{e}')
         data = data.loc[y.index]
         X = data[x_cols].copy()
         for col in x_cols:
@@ -1196,11 +1211,11 @@ def ordinal(df, outcome, predictors):
         y = combined[y_col]
         n_samples = len(combined)
         if n_samples < 20:
-            return f'错误：有效样本量不足 20（当前 {n_samples}），无法进行可靠的有序逻辑回归分析。'
+            return Failure(f'错误：有效样本量不足 20（当前 {n_samples}），无法进行可靠的有序逻辑回归分析。')
         try:
             selected_vars = _select_variables(X, y)
         except ValueError as exc:
-            return f'错误：有序逻辑回归变量选择失败: {exc}'
+            return Failure(f'错误：有序逻辑回归变量选择失败: {exc}')
         method_cn = '全进入法'
         if not selected_vars:
             _state['warnings'].append('所有变量均不显著，最终模型仅包含截距项')
@@ -1213,7 +1228,7 @@ def ordinal(df, outcome, predictors):
             except ValueError as exc:
                 msg = f'有序逻辑回归模型拟合失败: {exc}'
                 print(md_text(f'[error] {msg}'), file=sys.stderr)
-                return f'错误：{msg}'
+                return Failure(f'错误：{msg}')
         else:
             final_model = None
         ll_null = null_ll
@@ -1337,6 +1352,8 @@ def ordinal(df, outcome, predictors):
         return '\n'.join(parts)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def reliability(df, names):
@@ -1362,7 +1379,7 @@ def reliability(df, names):
 
     def _analyze_and_format():
         if not _state['matched_dimensions']:
-            return '没有有效的维度进行信度分析。请确认 --columns 中的题项名称能匹配数据列。'
+            return Failure('没有有效的维度进行信度分析。请确认 --columns 中的题项名称能匹配数据列。')
         dim_results = {}
         all_dimension_data = {}
         for dim_name, matched_items in _state['matched_dimensions'].items():
@@ -1412,7 +1429,7 @@ def reliability(df, names):
                 item_stats.append({'display': display_name, 'mean': float(df_items[col].mean()), 'std': float(df_items[col].std()), 'item_total_corr': item_total_corr, 'alpha_if_deleted': alpha_if_deleted, 'n': len(df_items)})
             dim_results[dim_name] = {'alpha': alpha, 'item_count': len(df_items.columns), 'sample_size': len(df_items), 'item_stats': item_stats}
         if not dim_results:
-            return '没有维度能够进行有效的信度分析。请检查题项是否为数值编码；如果数据中是文本选项，需要先转换为数值编码后再做 Cronbach α。'
+            return Failure('没有维度能够进行有效的信度分析。请检查题项是否为数值编码；如果数据中是文本选项，需要先转换为数值编码后再做 Cronbach α。')
         total_alpha = None
         total_n = 0
         total_item_count = 0
@@ -1448,6 +1465,8 @@ def reliability(df, names):
         return '\n'.join(parts)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def pca(df, names, n_factors=None):
@@ -1459,7 +1478,7 @@ def pca(df, names, n_factors=None):
 
     def _analyze_and_format():
         if len(_state['matched_columns']) < 2:
-            return '错误：主成分分析至少需要 2 个变量。'
+            return Failure('错误：主成分分析至少需要 2 个变量。')
         numeric_data = {}
         var_display_names = {}
         for req_col, actual_col in _state['matched_columns'].items():
@@ -1471,12 +1490,12 @@ def pca(df, names, n_factors=None):
             numeric_data[actual_col] = series
             var_display_names[actual_col] = display_name
         if len(numeric_data) < 2:
-            return '错误：至少需要 2 个有效的数值型变量进行主成分分析。'
+            return Failure('错误：至少需要 2 个有效的数值型变量进行主成分分析。')
         df_items, _notice_df_items = _am_drop_na(pd.DataFrame(numeric_data))
         if _notice_df_items:
             _state['warnings'].append(_notice_df_items)
         if len(df_items) < 10:
-            return '错误：有效数据不足 10 行，无法进行主成分分析。'
+            return Failure('错误：有效数据不足 10 行，无法进行主成分分析。')
         n_vars = len(df_items.columns)
         n_samples = len(df_items)
         kmo_val = None
@@ -1587,6 +1606,8 @@ def pca(df, names, n_factors=None):
         return '\n'.join(parts)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def cluster(df, names, k):
@@ -1702,6 +1723,8 @@ def cluster(df, names, k):
         return (anova_headers, anova_rows)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def roc(df, outcome, score):
@@ -1828,6 +1851,8 @@ def roc(df, outcome, score):
         return predictors
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def tree(df, outcome, predictors):
@@ -1850,12 +1875,12 @@ def tree(df, outcome, predictors):
 
     def _analyze_and_format():
         if not _state['dep_var_actual']:
-            return '错误：决策树分析需要 --dependent-var 指定目标变量。'
+            return Failure('错误：决策树分析需要 --dependent-var 指定目标变量。')
         if not 0 < _state['test_size'] < 1:
-            return '错误：--test-size 必须介于 0 和 1 之间。'
+            return Failure('错误：--test-size 必须介于 0 和 1 之间。')
         feature_cols = [c for c in _state['matched_columns'].values() if c != _state['dep_var_actual']]
         if not feature_cols:
-            return '错误：除因变量外至少需要 1 个特征变量。'
+            return Failure('错误：除因变量外至少需要 1 个特征变量。')
         target = _state['df'][_state['dep_var_actual']].copy()
         features = _state['df'][feature_cols].copy()
         for col in feature_cols:
@@ -1876,7 +1901,7 @@ def tree(df, outcome, predictors):
         if _notice_df_work:
             _state['warnings'].append(_notice_df_work)
         if len(df_work) < 20:
-            return f'错误：有效样本量不足（{len(df_work)}），决策树分析至少需要 20 个样本。'
+            return Failure(f'错误：有效样本量不足（{len(df_work)}），决策树分析至少需要 20 个样本。')
         X = df_work[feature_cols].values
         y = df_work['__target__']
         is_clf = _is_classification(y)
@@ -1968,6 +1993,8 @@ def tree(df, outcome, predictors):
         return md_table(['名称', '参数名', '参数值'], rows, ['l', 'l', 'l'])
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 def sample_size(effect, alpha, power):
@@ -1982,7 +2009,7 @@ def sample_size(effect, alpha, power):
         try:
             from statsmodels.stats.power import TTestIndPower, TTestPower, FTestAnovaPower, GofChisquarePower, FTestPower, NormalIndPower
         except ImportError:
-            return '错误：需要安装 statsmodels。运行: pip install statsmodels'
+            return Failure('错误：需要安装 statsmodels。运行: pip install statsmodels')
         if _state['effect_size'] is None:
             ref = _effect_reference.get('t', _effect_reference['t'])
             _state['effect_size'] = ref['medium']
@@ -1997,7 +2024,7 @@ def sample_size(effect, alpha, power):
         except Exception as e:
             msg = f'样本量计算失败: {e}'
             print(md_text(f'[error] {msg}'), file=sys.stderr)
-            return f'错误：{msg}'
+            return Failure(f'错误：{msg}')
         parts = []
         parts.append('## 样本量计算结果\n')
         parts.append('### 计算参数与结果\n')
@@ -2020,6 +2047,8 @@ def sample_size(effect, alpha, power):
         return '\n'.join(parts)
     result = _analyze_and_format()
     notices = list(dict.fromkeys(md_text(v) for v in _state["warnings"]))
+    if isinstance(result, Failure):
+        return Failure.with_notices(notices, result)
     return ("\n\n".join(notices) + "\n\n" if notices else "") + result
 
 
@@ -2242,8 +2271,14 @@ def efa(df, names, factors=None, rotation="varimax", extraction="principal"):
 
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: error: {md_text(message)}\n")
+
+
 def parser():
-    p = argparse.ArgumentParser(description="ChatSPSS public baseline analysis helper")
+    p = SafeArgumentParser(description="ChatSPSS public baseline analysis helper")
     p.add_argument("--task", required=True, choices=["overview", "frequency", "multiple_choice", "word_frequency", "norm_reference", "normality", "correlation", "independent_ttest", "paired_ttest", "chi_square", "anova", "nonparametric", "linear_regression", "binary_logistic", "ordinal_logistic", "reliability", "efa", "pca", "cluster", "roc", "decision_tree", "sample_size"])
     p.add_argument("--file")
     p.add_argument("--columns")
@@ -2269,10 +2304,11 @@ def parser():
 
 
 def show_result(out):
-    if not out or not any(line.startswith("|") for line in out.splitlines()):
-        raise ValueError(out or "分析未产生结果表")
-    if out.lstrip().startswith("错误"):
-        raise ValueError(out)
+    if isinstance(out, Failure):
+        print(out, file=sys.stderr)
+        raise SystemExit(1)
+    if not isinstance(out, str) or not out:
+        raise ValueError("分析未产生结果")
     print(out)
 
 
